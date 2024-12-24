@@ -2,7 +2,7 @@ import React from "react";
 import { SocialLink } from "./SocialLink";
 import { AppDownload } from "./AppDownload";
 import { NavLink } from "./NavLink";
-import { HeroSection } from "./HeroSection";
+import { HeroSection } from "../sections/HeroSection";
 import { FeatureCard } from "./FeatureCard";
 import { Statistic } from "./Statistic";
 import { TeamMember } from "./TeamMember";

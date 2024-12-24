@@ -1,6 +1,6 @@
 import React from "react";
 import { HeroSectionProps } from "../ComponentTypes";
-import { AppDownload } from "./AppDownload";
+import { AppDownload } from "../components/AppDownload";
 
 export const HeroSection: React.FC<HeroSectionProps> = ({
   title,

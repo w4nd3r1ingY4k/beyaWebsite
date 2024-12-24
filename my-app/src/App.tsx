@@ -1,12 +1,10 @@
-import { AppDownload } from "./components/AppDownload";
-import { NavLink } from "./components/NavLink";
-import { HeroSection } from "./components/HeroSection";
-import { FeatureCard } from "./components/FeatureCard";
-import { Statistic } from "./components/Statistic";
-import { TeamMember } from "./components/TeamMember";
-import { BlogPost } from "./components/BlogPost";
 import { Footer } from "./components/Footer";
-import { SocialLink } from "./components/SocialLink";
+import { FeaturesSection } from "./sections/FeaturesSection";
+import { NavSection } from "./sections/NavSection";
+import { HeroSection } from "./sections/HeroSection";
+import { StatisticsSection } from "./sections/StatisticsSection";
+import { TeamSection } from "./sections/TeamSection";
+import { BlogSection } from "./sections/BlogSection";
 import { AppFeatures } from "./components/AppFeatures";
 
 function App() {
@@ -121,93 +119,21 @@ function App() {
       copyrightText: "Copyright 2024. All Rights Reserved.",
     };
   
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <header className="bg-indigo-600">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex justify-between items-center">
-              <div className="flex gap-8">
-                <SocialLink
-                  icon="https://cdn.builder.io/api/v1/image/assets/TEMP/bc92248466791d4dd34da0cb79c7e53c5956555af5212e86809cb59928e72800?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac"
-                  text="Info@youremail.com"
-                  href="mailto:info@youremail.com"
-                  ariaLabel="Email us"
-                />
-                <SocialLink
-                  icon="https://cdn.builder.io/api/v1/image/assets/TEMP/9aa51f778c5227a5a003590f4e6c3f6376e293a47c328bdf865f8c364377ecd0?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac"
-                  text="(480) 555-0103"
-                  href="tel:4805550103"
-                  ariaLabel="Call us"
-                />
-              </div>
-            </div>
-          </div>
-        </header>
-  
-        <nav className="sticky top-0 bg-white shadow-sm z-50">
-          <div className="container mx-auto px-4">
-            <div className="flex justify-between items-center h-20">
-              <div className="flex gap-8">
-                {footerData.quickLinks.map((link, index) => (
-                  <NavLink key={index} {...link} />
-                ))}
-              </div>
-              <AppDownload {...heroData.appDownload} />
-            </div>
-          </div>
-        </nav>
-  
-        <main>
-          <HeroSection {...heroData} />
-  
-          <section className="py-20">
-            <div className="container mx-auto px-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {features.map((feature, index) => (
-                  <FeatureCard key={index} {...feature} />
-                ))}
-              </div>
-            </div>
-          </section>
-  
-          <section className="bg-indigo-600 py-20">
-          <AppFeatures />
-            <div className="container mx-auto px-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {statistics.map((statistic, index) => (
-                  <Statistic key={index} {...statistic} />
-                ))}
-              </div>
-            </div>
-          </section>
-          <section className="py-20">
-            <div className="container mx-auto px-4">
-              <h2 className="text-3xl font-bold text-center mb-12">Our Team</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {teamMembers.map((member, index) => (
-                  <TeamMember key={index} {...member} />
-                ))}
-              </div>
-            </div>
-          </section>
-  
-          <section className="py-20 bg-gray-50">
-            <div className="container mx-auto px-4">
-              <h2 className="text-3xl font-bold text-center mb-12">
-                Latest Blog Posts
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                {blogPosts.map((post, index) => (
-                  <BlogPost key={index} {...post} />
-                ))}
-              </div>
-            </div>
-          </section>
-        </main>
-  
-        <Footer {...footerData} />
-      </div>
-    );
+      return (
+    <div className="min-h-screen bg-gray-50">
+      <NavSection
+        quickLinks={footerData.quickLinks}
+        appDownload={heroData.appDownload}
+      />
+      <HeroSection {...heroData} />
+      <FeaturesSection features={features} />
+      <AppFeatures />
+      <StatisticsSection statistics={statistics} />
+      <TeamSection teamMembers={teamMembers} />
+      <BlogSection blogPosts={blogPosts} /> */
+      <Footer {...footerData} />
+    </div>
+  );
   };
   
 
