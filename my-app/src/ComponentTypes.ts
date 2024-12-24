@@ -62,3 +62,15 @@ export interface FooterProps {
   newsletterDescription: string;
   copyrightText: string;
 }
+
+export  interface Feature {
+  icon?: string;
+  title?: string;
+  description?: string;
+  centerImage?: string;
+}
+
+export interface FeatureColumnProps {
+  position: "left" | "center" | "right";
+  features: Feature[];
+}
