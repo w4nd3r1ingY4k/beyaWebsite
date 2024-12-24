@@ -91,7 +91,7 @@ export const teamMembers = [
     image: "assets/headshots/austin_headshot.png",
     name: "Austin Liu",
     role: "Software Engineer",
-    description: "Sophomore at Brown University",
+    description: "Sophomore studying CS & Econ",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/austin-liu-797877262/",
