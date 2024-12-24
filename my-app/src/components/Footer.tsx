@@ -1,15 +1,12 @@
 import React from "react";
 import { FooterProps } from "../ComponentTypes";
-import { SocialLink } from "./SocialLink";
-import { NavLink } from "./navigation/NavLink";
 import { NewsletterForm } from "./NewsletterForm";
-import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn } from "react-icons/fa";
+import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn, FaEnvelope } from "react-icons/fa";
 
 export const Footer: React.FC<FooterProps> = ({
   logo,
   description,
   socialLinks,
-  quickLinks,
   newsletterTitle,
   newsletterDescription,
   copyrightText,
@@ -21,11 +18,16 @@ export const Footer: React.FC<FooterProps> = ({
           <img src={logo} alt="Company logo" className="h-8 mb-6" />
           <p className="text-gray-400 mb-6">{description}</p>
 
-          {/* Social Links */}
-          <div className="flex gap-4 mb-6">
-            {socialLinks.map((link, index) => (
-              <SocialLink key={index} {...link} />
-            ))}
+          {/* Email Link */}
+          <div className="flex gap-2 mb-6 items-center">
+            <a
+              href="mailto:akbar@usebeya.com"
+              aria-label="Email"
+              className="flex items-center gap-2 hover:text-pink-500"
+            >
+              <FaEnvelope className="w-5 h-5" />
+              <span>akbar@usebeya.com</span>
+            </a>
           </div>
         </div>
 

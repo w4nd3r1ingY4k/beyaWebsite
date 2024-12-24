@@ -1,5 +1,4 @@
 export interface SocialLinkProps {
-  icon: string;
   text: string;
   href: string;
   ariaLabel?: string;

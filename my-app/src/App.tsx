@@ -6,7 +6,7 @@ import { TeamSection } from "./sections/TeamSection";
 import { BlogSection } from "./sections/BlogSection";
 import { AppFeatures } from "./components/ui/AppFeatures";
 import { NavigationBar } from "./components/navigation/NavigationBar";
-import { heroData, footerData } from "./ContentData";
+import { heroData, footerData, teamMembers } from "./ContentData";
 
 
 function App() {
@@ -18,8 +18,8 @@ function App() {
       {/* <FeaturesSection features={features} />
       <AppFeatures />
       <StatisticsSection statistics={statistics} />
-      <TeamSection teamMembers={teamMembers} />
       <BlogSection blogPosts={blogPosts} />  */}
+      <TeamSection teamMembers={teamMembers} />
       <Footer {...footerData} />
     </div>
   );

@@ -1,27 +1,24 @@
 import React from "react";
-import { TeamMemberProps } from "../../ComponentTypes";
 import { SocialLink } from "../SocialLink";
 
-export const TeamMember: React.FC<TeamMemberProps> = ({
-  image,
-  name,
-  role,
-  description,
-  socialLinks,
-}) => (
-  <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-    <img
-      src={image}
-      alt={name}
-      className="w-32 h-32 rounded-full mx-auto mb-6 object-cover"
-    />
-    <h3 className="text-2xl font-bold text-gray-800 mb-2">{name}</h3>
-    <p className="text-xl text-indigo-600 mb-4">{role}</p>
-    <p className="text-neutral-500 mb-6">{description}</p>
-    <div className="flex justify-center gap-4">
-      {socialLinks.map((link, index) => (
-        <SocialLink key={index} {...link} />
-      ))}
+export const TeamMember: React.FC<{
+  image: string;
+  name: string;
+  role: string;
+  description: string;
+  socialLinks: {href: string; text: string }[];
+}> = ({ image, name, role, description, socialLinks }) => {
+  return (
+    <div className="text-center p-4">
+      <img src={image} alt={name} className="rounded-full mx-auto mb-4 w-40 h-40 object-cover" />
+      <h3 className="text-xl font-semibold">{name}</h3>
+      <p className="text-gray-500">{role}</p>
+      <p className="mt-2">{description}</p>
+      <div className="mt-4 flex justify-center space-x-4">
+        {socialLinks.map((link, index) => (
+          <SocialLink key={index} {...link} />
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+};

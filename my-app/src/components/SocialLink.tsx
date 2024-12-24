@@ -1,18 +1,20 @@
 import React from "react";
 import { SocialLinkProps } from "../ComponentTypes";
+import { FaLinkedin } from "react-icons/fa";
 
 export const SocialLink: React.FC<SocialLinkProps> = ({
-  icon,
   text,
   href,
   ariaLabel,
 }) => (
   <a
     href={href}
-    className="flex items-center gap-2 text-white hover:text-gray-200 transition-colors"
+    className="flex items-center text-blue-500 hover:text-brandPink transition-colors"
     aria-label={ariaLabel}
+    target="_blank"
+    rel="noopener noreferrer"
   >
-    <img src={icon} alt="" className="w-4 h-4" aria-hidden="true" />
+    <FaLinkedin className="w-5 h-5 text-blue-500 hover:text-pink-500 transition-colors" />
     <span>{text}</span>
   </a>
 );
