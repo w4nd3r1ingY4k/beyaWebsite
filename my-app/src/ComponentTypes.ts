@@ -48,9 +48,13 @@ export interface BlogPostProps {
 }
 
 export interface NavLinkProps {
-  href: string;
   text: string;
   isActive?: boolean;
+}
+
+export interface LogoProps {
+  src: string;
+  alt: string;
 }
 
 export interface FooterProps {

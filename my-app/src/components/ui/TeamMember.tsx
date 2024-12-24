@@ -1,6 +1,6 @@
 import React from "react";
-import { TeamMemberProps } from "../ComponentTypes";
-import { SocialLink } from "./SocialLink";
+import { TeamMemberProps } from "../../ComponentTypes";
+import { SocialLink } from "../SocialLink";
 
 export const TeamMember: React.FC<TeamMemberProps> = ({
   image,

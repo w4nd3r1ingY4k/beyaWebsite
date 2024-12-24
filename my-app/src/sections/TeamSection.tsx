@@ -1,5 +1,5 @@
 import React from "react";
-import { TeamMember } from "../components/TeamMember";
+import { TeamMember } from "../components/ui/TeamMember";
 
 interface TeamProps {
     teamMembers: {

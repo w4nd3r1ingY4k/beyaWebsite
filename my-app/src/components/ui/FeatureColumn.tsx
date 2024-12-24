@@ -1,6 +1,6 @@
 import * as React from "react";
-import { FeatureColumnProps } from "../ComponentTypes";
-import { Feature } from "../ComponentTypes";
+import { FeatureColumnProps } from "../../ComponentTypes";
+import { Feature } from "../../ComponentTypes";
 
 export function FeatureColumn({ position, features }: FeatureColumnProps) {
   const baseColumnClasses = "flex flex-col w-[33%] max-md:ml-0 max-md:w-full";

@@ -1,5 +1,5 @@
 import React from "react";
-import { AppDownloadProps } from "../ComponentTypes";
+import { AppDownloadProps } from "../../ComponentTypes";
 
 export const AppDownload: React.FC<AppDownloadProps> = ({
   googlePlayLink,

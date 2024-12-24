@@ -1,5 +1,5 @@
 import React from "react";
-import { Statistic } from "../components/Statistic";
+import { Statistic } from "../components/ui/Statistic";
 
 interface StatisticsProps {
     statistics: {
