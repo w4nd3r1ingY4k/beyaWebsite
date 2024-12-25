@@ -5,8 +5,12 @@ import { Feature } from "../../ComponentTypes";
 export function FeatureColumn({ position, features }: FeatureColumnProps) {
   const baseColumnClasses = "flex flex-col w-[33%] max-md:ml-0 max-md:w-full";
   const columnClasses =
-    position === "center" ? `${baseColumnClasses} ml-5` : baseColumnClasses;
-
+    position === "center"
+      ? `${baseColumnClasses} ml-5`
+      : position === "left"
+      ? `${baseColumnClasses} mr-auto pr-20`  // Increase right padding for more left shift
+      : `${baseColumnClasses} ml-auto pl-20`; // Increase left padding for more right shift
+  
   const getFeatureContent = (feature: Feature, index: number) => {
     if (feature.centerImage) {
       return (
@@ -18,26 +22,22 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
         />
       );
     }
-
+  
     return (
-      <>
+      <div className="flex flex-col items-center text-center">
         <img
           loading="lazy"
           src={feature.icon}
-          className={`object-contain aspect-square w-[50px] ${
-            position === "left" ? "self-end" : ""
-          } ${index > 0 ? "mt-80 max-md:mt-10" : ""}`}
+          className={`object-contain aspect-square w-[60px] mx-auto ${
+            index > 0 ? "mt-40 max-md:mt-10" : ""
+          }`}
           alt={feature.title}
         />
-        <div
-          className={`mt-6 uppercase ${position === "left" ? "self-end" : ""}`}
-        >
-          {feature.title}
-        </div>
-        <div className="mt-5 text-base leading-6">{feature.description}</div>
-      </>
+        <div className="mt-6 uppercase">{feature.title}</div>
+        <div className="mt-4 text-base leading-6">{feature.description}</div>
+      </div>
     );
-  };
+  };  
 
   const contentClasses = {
     left: "flex flex-col self-stretch my-auto text-2xl font-semibold text-right text-white max-md:mt-10",

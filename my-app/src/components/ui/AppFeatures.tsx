@@ -29,20 +29,8 @@ export function AppFeatures() {
               position="center"
               features={[
                 {
-                  icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/3a515d6c8ea0295c43bb8827b135a57099882250339198b376442d05ede604e9?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
-                  title: "Full free chat",
-                  description:
-                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-                },
-                {
                   centerImage:
                     "assets/landing_page/features_image.png",
-                },
-                {
-                  icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/8ff59764d25393e585f5963af78c8ada23bc5dc8287f4be9a2aa451aa70ef1b5?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
-                  title: "24/7 support by real pepole",
-                  description:
-                    "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
                 },
               ]}
             />

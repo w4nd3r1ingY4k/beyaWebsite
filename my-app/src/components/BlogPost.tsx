@@ -15,7 +15,7 @@ export const BlogPost: React.FC<BlogPostProps> = ({
       <p className="text-neutral-500 mb-4">{description}</p>
       <a
         href={href}
-        className="text-indigo-600 font-semibold uppercase hover:text-indigo-700"
+        className="text-indigo-700 font-semibold uppercase hover:text-indigo-900"
       >
         Read More
       </a>
