@@ -90,7 +90,7 @@ export const teamMembers = [
   {
     image: "assets/headshots/austin_headshot.png",
     name: "Austin Liu",
-    role: "Software Engineer",
+    role: "Founding Software Engineer",
     description: "Sophomore studying CS & Econ",
     socialLinks: [
       {
@@ -103,7 +103,7 @@ export const teamMembers = [
   {
     image: "assets/headshots/jeff_headshot.jpeg",
     name: "Jeffrey Liang",
-    role: "Software Engineer",
+    role: "Founding Software Engineer",
     description: "Sophomore at Brown University",
     socialLinks: [
       {
