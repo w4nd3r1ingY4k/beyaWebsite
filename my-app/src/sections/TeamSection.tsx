@@ -10,7 +10,6 @@ interface TeamProps {
         image: string;
         name: string;
         role: string;
-        description: string;
         socialLinks: {
             href: string;
             text: string;

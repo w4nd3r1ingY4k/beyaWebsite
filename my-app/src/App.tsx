@@ -10,10 +10,10 @@ import { heroData, footerData, teamMembers } from "./ContentData";
 
 
 function App() {
-  
-      return (
+
+  return (
     <div className="min-h-screen bg-gray-50">
-      <NavigationBar/>
+      <NavigationBar />
       <HeroSection {...heroData} />
       {/* <FeaturesSection features={features} />
       <AppFeatures />
@@ -23,7 +23,7 @@ function App() {
       <Footer {...footerData} />
     </div>
   );
-  };
-  
+};
+
 
 export default App;

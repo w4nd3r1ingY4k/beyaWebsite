@@ -62,23 +62,21 @@ export const statistics = [
 
 export const teamMembers = [
   {
-    image: "https://cdn.builder.io/api/v1/image/assets/TEMP/e4be770bdc33b99e35e0b2cb452afc5d5bb14ac389f8db25b4aa16e852014542?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+    image: "assets/headshots/aj_headshot.jpg",
     name: "Akbar Shamji",
     role: "CEO",
-    description: "Sophomore at Brown University",
     socialLinks: [
       {
-        href: "",
+        href: "https://www.linkedin.com/in/robert-james-rodil-03120b290/",
         text: "",
         ariaLabel: "Follow Akbar on Twitter",
       }
     ]
   },
   {
-    image: "https://cdn.builder.io/api/v1/image/assets/TEMP/e4be770bdc33b99e35e0b2cb452afc5d5bb14ac389f8db25b4aa16e852014542?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+    image: "assets/headshots/paul_headshot.jpeg",
     name: "Paul Hudes",
     role: "CFO",
-    description: "Sophomore at Brown University",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/paul-hudes-945273219/",
@@ -91,7 +89,6 @@ export const teamMembers = [
     image: "assets/headshots/austin_headshot.png",
     name: "Austin Liu",
     role: "Founding Software Engineer",
-    description: "Sophomore studying CS & Econ",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/austin-liu-797877262/",
@@ -104,7 +101,6 @@ export const teamMembers = [
     image: "assets/headshots/jeff_headshot.jpeg",
     name: "Jeffrey Liang",
     role: "Founding Software Engineer",
-    description: "Sophomore at Brown University",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",

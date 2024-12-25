@@ -34,7 +34,6 @@ export interface TeamMemberProps {
   image: string;
   name: string;
   role: string;
-  description: string;
   socialLinks: SocialLinkProps[];
 }
 
