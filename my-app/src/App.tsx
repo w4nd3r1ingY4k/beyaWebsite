@@ -4,7 +4,7 @@ import { HeroSection } from "./sections/HeroSection";
 import { StatisticsSection } from "./sections/StatisticsSection";
 import { TeamSection } from "./sections/TeamSection";
 import { BlogSection } from "./sections/BlogSection";
-import { AppFeatures } from "./components/ui/AppFeatures";
+import { AppFeatures } from "./components/ui/AppFeatures/AppFeatures";
 import { NavigationBar } from "./components/navigation/NavigationBar";
 import { heroData, footerData, teamMembers, statistics, features, blogPosts } from "./ContentData";
 

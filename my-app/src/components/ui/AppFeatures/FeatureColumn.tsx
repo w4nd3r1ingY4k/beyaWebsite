@@ -1,15 +1,15 @@
 import * as React from "react";
-import { FeatureColumnProps } from "../../ComponentTypes";
-import { Feature } from "../../ComponentTypes";
-
+import { FeatureColumnProps } from "../../../ComponentTypes";
+import { Feature } from "../../../ComponentTypes";
 export function FeatureColumn({ position, features }: FeatureColumnProps) {
-  const baseColumnClasses = "flex flex-col w-[33%] max-md:ml-0 max-md:w-full";
+  const baseColumnClasses = "flex flex-col w-[33%] max-md:w-full max-md:px-0";  // Ensure full width and reset padding on mobile
+  
   const columnClasses =
     position === "center"
-      ? `${baseColumnClasses} ml-5`
+      ? `${baseColumnClasses} ml-5 max-md:ml-0`  // Centered on mobile
       : position === "left"
-      ? `${baseColumnClasses} mr-auto pr-20`  // Increase right padding for more left shift
-      : `${baseColumnClasses} ml-auto pl-20`; // Increase left padding for more right shift
+      ? `${baseColumnClasses} mr-auto pr-20 max-md:pr-0`  // Remove padding on mobile
+      : `${baseColumnClasses} ml-auto pl-20 max-md:pl-0`; // Remove padding on mobile
   
   const getFeatureContent = (feature: Feature, index: number) => {
     if (feature.centerImage) {
@@ -24,7 +24,7 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
     }
   
     return (
-      <div className="flex flex-col items-center text-center">
+      <div className="flex flex-col items-center text-center w-full">
         <img
           loading="lazy"
           src={feature.icon}
@@ -40,11 +40,11 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
   };  
 
   const contentClasses = {
-    left: "flex flex-col self-stretch my-auto text-2xl font-semibold text-right text-white max-md:mt-10",
+    left: "flex flex-col self-stretch my-auto text-2xl font-semibold text-right text-white max-md:mt-10 max-md:items-center max-md:text-center",
     center:
       "flex flex-col grow items-center text-base font-semibold text-center text-white max-md:mt-10",
     right:
-      "flex flex-col self-stretch my-auto text-2xl font-semibold text-white max-md:mt-10",
+      "flex flex-col self-stretch my-auto text-2xl font-semibold text-white max-md:mt-10 max-md:items-center max-md:text-center",
   };
 
   return (
