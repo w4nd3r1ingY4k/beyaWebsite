@@ -1,12 +1,9 @@
-import * as React from "react";
 import { FeatureColumn } from "./FeatureColumn";
 import { FeatureHeader } from "./FeatureHeader";
-import { BackgroundImage } from "./BackgroundImage";
 
 export function AppFeatures() {
   return (
-    <div className="flex relative flex-col justify-center items-end self-stretch px-20 py-32 mt-36 w-full min-h-[1710px] max-md:px-5 max-md:py-24 max-md:mt-10 max-md:max-w-full">
-      <BackgroundImage />
+  <div className="flex relative flex-col justify-center items-center self-stretch px-20 py-32 w-full min-h-[900px] bg-brandPink max-md:px-5 max-md:py-24 max-md:mt-10 max-md:max-w-full bg-gradient-to-r from-brandPink to-pink-600">
       <div className="flex relative flex-col items-center mb-0 w-full max-w-[1126px] max-md:mb-2.5 max-md:max-w-full">
         <FeatureHeader />
         <div className="self-stretch mt-16 max-md:mt-10 max-md:max-w-full">
@@ -39,7 +36,7 @@ export function AppFeatures() {
                 },
                 {
                   centerImage:
-                    "https://cdn.builder.io/api/v1/image/assets/TEMP/b946c18af8be786bf3c48092629580da6f427e64ab91628edf897dfd4b9c23cc?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+                    "assets/landing_page/features_image.png",
                 },
                 {
                   icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/8ff59764d25393e585f5963af78c8ada23bc5dc8287f4be9a2aa451aa70ef1b5?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",

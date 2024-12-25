@@ -6,7 +6,7 @@ import { TeamSection } from "./sections/TeamSection";
 import { BlogSection } from "./sections/BlogSection";
 import { AppFeatures } from "./components/ui/AppFeatures";
 import { NavigationBar } from "./components/navigation/NavigationBar";
-import { heroData, footerData, teamMembers } from "./ContentData";
+import { heroData, footerData, teamMembers, statistics, features, blogPosts } from "./ContentData";
 
 
 function App() {
@@ -15,10 +15,10 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
       <HeroSection {...heroData} />
-      {/* <FeaturesSection features={features} />
+      <FeaturesSection features={features} />
       <AppFeatures />
       <StatisticsSection statistics={statistics} />
-      <BlogSection blogPosts={blogPosts} />  */}
+      <BlogSection blogPosts={blogPosts} /> 
       <TeamSection teamMembers={teamMembers} />
       <Footer {...footerData} />
     </div>

@@ -10,10 +10,22 @@ export const heroData = {
     appStoreImage:
       "https://cdn.builder.io/api/v1/image/assets/TEMP/55587a083e14666c47a60f1e7df7fab553ef5b29b0ea123c36d46cc8bb821941?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
   },
-  heroImage: "assets/hero_image.png",
+  heroImage: "assets/landing_page/hero_image.png",
 };
 
 export const features = [
+  {
+    icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/cf4a5bb94a24087191853277e7f4cd0828359d4e3ffba5b0e5f37b7fbe837c63?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+    title: "Creative design",
+    description:
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Viverra nunc ante velit vitae.",
+  },
+  {
+    icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/cf4a5bb94a24087191853277e7f4cd0828359d4e3ffba5b0e5f37b7fbe837c63?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+    title: "Creative design",
+    description:
+      "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Viverra nunc ante velit vitae.",
+  },
   {
     icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/cf4a5bb94a24087191853277e7f4cd0828359d4e3ffba5b0e5f37b7fbe837c63?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
     title: "Creative design",
@@ -112,6 +124,20 @@ export const teamMembers = [
 ];
 
 export const blogPosts = [
+  {
+    image: "https://cdn.builder.io/api/v1/image/assets/TEMP/03a0e7fa0bf40ae1aea342c90ebbbe728aefca502143cfafb5adeb0053019a7d?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+    title: "The Snap Pixel: How It Works and How to Install",
+    description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    href: "#",
+    imageAlt: "Snap Pixel blog post"
+  },
+  {
+    image: "https://cdn.builder.io/api/v1/image/assets/TEMP/03a0e7fa0bf40ae1aea342c90ebbbe728aefca502143cfafb5adeb0053019a7d?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+    title: "The Snap Pixel: How It Works and How to Install",
+    description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+    href: "#",
+    imageAlt: "Snap Pixel blog post"
+  },
   {
     image: "https://cdn.builder.io/api/v1/image/assets/TEMP/03a0e7fa0bf40ae1aea342c90ebbbe728aefca502143cfafb5adeb0053019a7d?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
     title: "The Snap Pixel: How It Works and How to Install",
