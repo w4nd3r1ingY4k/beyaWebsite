@@ -35,7 +35,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
           <img
             src={heroImage}
             alt="App preview"
-            className="w-3/4 sm:w-2/3 md:w-1/2 h-auto object-contain rounded-lg"
+            className="w-3/4 sm:w-2/3 md:w-1/2 h-auto max-h-[500px] object-contain rounded-lg"
           />
         </div>
       </div>

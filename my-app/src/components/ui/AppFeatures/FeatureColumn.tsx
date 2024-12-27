@@ -12,6 +12,22 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
       : `${baseColumnClasses} ml-auto pl-20 max-md:pl-0`; // Remove padding on mobile
   
   const getFeatureContent = (feature: Feature, index: number) => {
+    if (Array.isArray(feature.centerImage)) {
+      return (
+        <div className="flex flex-wrap justify-center gap-5 mt-16 w-full">
+          {feature.centerImage.map((image, imgIndex) => (
+            <img
+              key={imgIndex}
+              loading="lazy"
+              src={image}
+              className="object-contain self-stretch w-[45%] aspect-[0.46] rounded-[40px] shadow-[40px_40px_100px_rgba(24,48,63,0.5)] max-md:w-full"
+              alt={`Feature preview ${imgIndex}`}
+            />
+          ))}
+        </div>
+      );
+    }
+    
     if (feature.centerImage) {
       return (
         <img
