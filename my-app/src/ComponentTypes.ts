@@ -9,6 +9,7 @@ export interface AppDownloadProps {
   appStoreLink: string;
   googlePlayImage: string;
   appStoreImage: string;
+  disabled?: boolean;
 }
 
 export interface HeroSectionProps {

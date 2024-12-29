@@ -2,6 +2,8 @@ import React from "react";
 import { HeroSectionProps } from "../ComponentTypes";
 import { AppDownload } from "../components/ui/AppDownload";
 
+const isGreyedOut = true;
+
 export const HeroSection: React.FC<HeroSectionProps> = ({
   title,
   description,
@@ -22,10 +24,16 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {description}
             </p>
             <div className="mb-8">
-              <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-gray-900">
-                Download App Now
+            <h2
+    className={`text-xl sm:text-2xl font-semibold mb-4 ${
+      isGreyedOut ? 'text-gray-400' : 'text-gray-900'
+    }`}
+  >
+                Download App Now(Soon)
               </h2>
-              <AppDownload {...appDownload} />
+              <div className={isGreyedOut ? 'greyed-out' : ''}>
+                <AppDownload {...appDownload} />
+              </div>
             </div>
           </div>
         </div>

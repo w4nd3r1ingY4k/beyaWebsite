@@ -6,8 +6,13 @@ export const AppDownload: React.FC<AppDownloadProps> = ({
   appStoreLink,
   googlePlayImage,
   appStoreImage,
+  disabled = false,
 }) => (
-  <div className="flex gap-4">
+  <div
+    className={`flex gap-4 ${
+      disabled ? 'opacity-50 pointer-events-none cursor-not-allowed' : ''
+    }`}
+  >
     <a
       href={googlePlayLink}
       className="transition-transform hover:scale-105"

@@ -36,3 +36,10 @@
     transform: rotate(360deg);
   }
 }
+
+.greyed-out {
+  color: grey;
+  opacity: 0.5;
+  pointer-events: none; /* Disables clicking */
+  cursor: not-allowed; /* Optional: Changes cursor to indicate it's disabled */
+}
