@@ -61,7 +61,9 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
           style={{ perspective: "1200px" }}  // Increased perspective for better depth
         >
           <div
-            className="cursor-pointer w-full h-auto flex justify-center"
+            className={`w-full h-auto flex justify-center ${
+              hasMultipleImages ? 'cursor-pointer' : 'cursor-default'
+            }`}
             style={{
               transition: "transform 0.6s",
               transformStyle: "preserve-3d",
