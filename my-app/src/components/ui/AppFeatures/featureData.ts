@@ -5,6 +5,10 @@ const icon2 = "https://cdn.builder.io/api/v1/image/assets/TEMP/9799e7e0a958388cd
 const icon3 = "https://cdn.builder.io/api/v1/image/assets/TEMP/e7ef7a3eea63044cc9602cbdeaa294f78423bbfe2a63527dfa30b82893d993bc";
 const icon4 = "https://cdn.builder.io/api/v1/image/assets/TEMP/ec499e41ff62426332adb53d41da9d0b76e1a56ea1039f8342c9b3af5d1b65c2";
 
+/*
+    TODO:
+    Locales, teams and checkout have two mockups. Need to click on the image and flip to the other mockup.
+*/
 export const slides: Slide[] = [
     // Signup Slide
     {

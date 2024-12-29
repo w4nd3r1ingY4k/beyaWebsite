@@ -20,7 +20,7 @@ export const features = [
     icon: "assets/icons/struggle.png",
     title: "Empowering Mobile Vendors",
     description:
-      "Beya is a B2B app designed to streamline operations for small mobile vendors, offering instant payment processing, inventory management, event coordination, and team management features. Our platform has already served 20+ local vendors, facilitating over 900 sales transactions.",
+      "Beya is a B2B app designed to streamline operations for small mobile vendors, offering instant payment processing, inventory management, event coordination, and team management features. Our platform has already served 20+ local vendors, facilitating over 1000 sales transactions.",
   },
   {
     icon: "assets/icons/search-engine.png",
@@ -32,7 +32,7 @@ export const features = [
     icon: "assets/icons/trust.png",
     title: "User-Driven Development:",
     description:
-      "Our beta version, with 12 monthly active users, continuously evolves based on direct customer feedback. We've continuously updated and implemented features from insights gathered at 10+ events, ensuring Beya meets the real needs of mobile vendors and provides an optimized user experience.",
+      "Our beta version, with 20+ monthly active users, continuously evolves based on direct customer feedback. We've continuously updated and implemented features from insights gathered at 10+ events, ensuring Beya meets the real needs of mobile vendors and provides an optimized user experience.",
   },
 ];
 
@@ -58,17 +58,17 @@ export const footerData = {
 
 export const statistics = [
   {
-    icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/14627ade3fa523e041a7311a7aad5b0fe2020d4467c4e2eca593b6fa4485f57d?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
-    value: "900+",
+    icon: "assets/icons/money-icon.jpg",
+    value: "1000+",
     label: "Sales Transactions"
   },
   {
-    icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/0c6ae750a3805e94138b26c0b7baced95c9a6da3fefb4b01a605c768f38c0a47?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
-    value: "12",
+    icon: "assets/icons/users-icon.jpg",
+    value: "20+",
     label: "Average Monthly Users"
   },
   {
-    icon: "https://cdn.builder.io/api/v1/image/assets/TEMP/b435b07f81af71041a60a3a36df60b852f42e0e02633bab6bcdf210282aa1ac8?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
+    icon: "assets/icons/brown-logo.png",
     value: "Every Brown Student",
     label: "5 star rating"
   }
@@ -127,22 +127,22 @@ export const teamMembers = [
 
 export const blogPosts = [
   {
-    image: "https://cdn.builder.io/api/v1/image/assets/TEMP/03a0e7fa0bf40ae1aea342c90ebbbe728aefca502143cfafb5adeb0053019a7d?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
-    title: "The Snap Pixel: How It Works and How to Install",
+    image: "assets/icons/placeholder-img.jpg",
+    title: "Coming Soon...",
     description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
     href: "#",
     imageAlt: "Snap Pixel blog post"
   },
   {
-    image: "https://cdn.builder.io/api/v1/image/assets/TEMP/03a0e7fa0bf40ae1aea342c90ebbbe728aefca502143cfafb5adeb0053019a7d?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
-    title: "The Snap Pixel: How It Works and How to Install",
+    image: "assets/icons/placeholder-img.jpg",
+    title: "Coming Soon...",
     description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
     href: "#",
     imageAlt: "Snap Pixel blog post"
   },
   {
-    image: "https://cdn.builder.io/api/v1/image/assets/TEMP/03a0e7fa0bf40ae1aea342c90ebbbe728aefca502143cfafb5adeb0053019a7d?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
-    title: "The Snap Pixel: How It Works and How to Install",
+    image: "assets/icons/placeholder-img.jpg",
+    title: "Coming Soon...",
     description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
     href: "#",
     imageAlt: "Snap Pixel blog post"

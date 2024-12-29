@@ -9,7 +9,7 @@ export const BlogPost: React.FC<BlogPostProps> = ({
   imageAlt,
 }) => (
   <article className="bg-white rounded-xl shadow-sm overflow-hidden">
-    <img src={image} alt={imageAlt} className="w-full h-48 object-cover" />
+    <img src={image} alt={imageAlt} className="w-full h-48 max-sm:h-22 max-sm:m-5 p-5 object-cover" />
     <div className="p-6">
       <h3 className="text-xl font-semibold text-gray-800 mb-4">{title}</h3>
       <p className="text-neutral-500 mb-4">{description}</p>
