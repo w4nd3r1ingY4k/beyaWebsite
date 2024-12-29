@@ -226,7 +226,8 @@ export function AppFeatures() {
             position: "center",
             features: [
               {
-                centerImage: ["assets/pages/locales.png", "assets/pages/events.png"],
+                // centerImage: ["assets/pages/locales.png", "assets/pages/events.png"],
+                centerImage: "assets/pages/events.png",
               },
             ],
           },
@@ -269,7 +270,8 @@ export function AppFeatures() {
             position: "center",
             features: [
               {
-                centerImage: ["assets/pages/teams.png", "assets/pages/teams2.png"],
+                // centerImage: ["assets/pages/teams.png", "assets/pages/teams2.png"],
+                centerImage: "assets/pages/teams.png",
               },
             ],
           },
@@ -312,7 +314,8 @@ export function AppFeatures() {
             position: "center",
             features: [
               {
-                centerImage: ["assets/pages/checkout.png", "assets/pages/checkout2.png"],
+                // centerImage: ["assets/pages/checkout.png", "assets/pages/checkout2.png"],
+                centerImage: "assets/pages/checkout.png", 
               },
             ],
           },
