@@ -31,6 +31,7 @@ const CustomNextArrow = (props: any) => {
 
 export function AppFeatures() {
     const settings = {
+        dots: true,
         infinite: true,
         speed: 500,
         autoplaySpeed: 3000,
