@@ -24,11 +24,10 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               {description}
             </p>
             <div className="mb-8">
-            <h2
-    className={`text-xl sm:text-2xl font-semibold mb-4 ${
-      isGreyedOut ? 'text-gray-400' : 'text-gray-900'
-    }`}
-  >
+              <h2
+                className={`text-xl sm:text-2xl font-semibold mb-4 ${isGreyedOut ? 'text-gray-400' : 'text-gray-900'
+                  }`}
+              >
                 Download App Now(Soon)
               </h2>
               <div className={isGreyedOut ? 'greyed-out' : ''}>

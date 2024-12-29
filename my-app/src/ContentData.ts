@@ -11,25 +11,25 @@ export const heroData = {
       "https://cdn.builder.io/api/v1/image/assets/TEMP/55587a083e14666c47a60f1e7df7fab553ef5b29b0ea123c36d46cc8bb821941?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
     disabled: true
   },
-  heroImage: "assets/home.png",
+  heroImage: "assets/landing_page/hero_image.png",
 };
 
 // https://cdn.builder.io/api/v1/image/assets/TEMP/cf4a5bb94a24087191853277e7f4cd0828359d4e3ffba5b0e5f37b7fbe837c63?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac
 export const features = [
   {
-    icon: "assets/struggle.png",
+    icon: "assets/icons/struggle.png",
     title: "Empowering Mobile Vendors",
     description:
       "Beya is a B2B app designed to streamline operations for small mobile vendors, offering instant payment processing, inventory management, event coordination, and team management features. Our platform has already served 20+ local vendors, facilitating over 900 sales transactions.",
   },
   {
-    icon: "assets/search-engine.png",
+    icon: "assets/icons/search-engine.png",
     title: "Cutting-Edge Technology:",
     description:
       "Leveraging AWS, Expo, and Firebase, Beya's robust infrastructure supports proximity-based features and minimum-fee transactions. We're currently in the process of obtaining Apple's official Tap-to-Pay Certificate to further enhance our payment capabilities.",
   },
   {
-    icon: "assets/trust.png",
+    icon: "assets/icons/trust.png",
     title: "User-Driven Development:",
     description:
       "Our beta version, with 12 monthly active users, continuously evolves based on direct customer feedback. We've continuously updated and implemented features from insights gathered at 10+ events, ensuring Beya meets the real needs of mobile vendors and provides an optimized user experience.",
@@ -37,7 +37,7 @@ export const features = [
 ];
 
 export const footerData = {
-  logo: "assets/logo.png",
+  logo: "assets/icons/logo.png",
   description: "Still in beta...",
   socialLinks: [
     {

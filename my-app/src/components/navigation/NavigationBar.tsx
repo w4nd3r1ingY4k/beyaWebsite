@@ -7,7 +7,7 @@ export const NavigationBar: React.FC = () => {
                 <div className="absolute left-1/2 transform -translate-x-1/2">
                     <img
                         loading="lazy"
-                        src="/assets/logo.png"
+                        src="/assets/icons/logo.png"
                         alt="Company Logo"
                         className="object-contain aspect-[5.95] w-[167px]"
                     />
