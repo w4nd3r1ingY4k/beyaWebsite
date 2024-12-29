@@ -3,14 +3,14 @@ import { FeatureColumnProps } from "../../../ComponentTypes";
 import { Feature } from "../../../ComponentTypes";
 
 export function FeatureColumn({ position, features }: FeatureColumnProps) {
-  const baseColumnClasses = "flex flex-col h-full w-[33%] max-md:w-full max-md:px-0";  // Stretch columns vertically
+  const baseColumnClasses = "flex flex-col h-full w-full px-0 m-0";  // Stretch columns vertically
   
   const columnClasses =
     position === "center"
       ? `${baseColumnClasses} justify-center items-center max-md:ml-0`
       : position === "left"
-      ? `${baseColumnClasses} justify-start pr-10 max-md:pr-0`  // Reduced padding for less scroll
-      : `${baseColumnClasses} justify-start pl-10 max-md:pl-0`;
+      ? `${baseColumnClasses} justify-start p-0`  // Reduced padding for less scroll
+      : `${baseColumnClasses} justify-start p-0`;
   
   const getFeatureContent = (feature: Feature, index: number) => {
     if (feature.centerImage) {
