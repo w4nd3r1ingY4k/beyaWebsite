@@ -1,5 +1,5 @@
 import React from "react";
-import { FeatureCard } from "../components/ui/AppFeatures/FeatureCard";
+import { FeatureCard } from "../components/ui/FeatureCard";
 
 interface FeaturesProps {
     features: {

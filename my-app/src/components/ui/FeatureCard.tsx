@@ -1,5 +1,5 @@
 import React from "react";
-import { FeatureCardProps } from "../../../ComponentTypes";
+import { FeatureCardProps } from "../../ComponentTypes";
 
 export const FeatureCard: React.FC<FeatureCardProps> = ({
   icon,

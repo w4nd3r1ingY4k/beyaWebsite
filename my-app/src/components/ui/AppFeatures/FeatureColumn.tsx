@@ -1,66 +1,51 @@
 import * as React from "react";
 import { FeatureColumnProps } from "../../../ComponentTypes";
 import { Feature } from "../../../ComponentTypes";
+
 export function FeatureColumn({ position, features }: FeatureColumnProps) {
-  const baseColumnClasses = "flex flex-col w-[33%] max-md:w-full max-md:px-0";  // Ensure full width and reset padding on mobile
+  const baseColumnClasses = "flex flex-col h-full w-[33%] max-md:w-full max-md:px-0";  // Stretch columns vertically
   
   const columnClasses =
     position === "center"
-      ? `${baseColumnClasses} ml-5 max-md:ml-0`  // Centered on mobile
+      ? `${baseColumnClasses} justify-center items-center max-md:ml-0`
       : position === "left"
-      ? `${baseColumnClasses} mr-auto pr-20 max-md:pr-0`  // Remove padding on mobile
-      : `${baseColumnClasses} ml-auto pl-20 max-md:pl-0`; // Remove padding on mobile
+      ? `${baseColumnClasses} justify-start pr-10 max-md:pr-0`  // Reduced padding for less scroll
+      : `${baseColumnClasses} justify-start pl-10 max-md:pl-0`;
   
   const getFeatureContent = (feature: Feature, index: number) => {
-    if (Array.isArray(feature.centerImage)) {
-      return (
-        <div className="flex flex-wrap justify-center gap-5 mt-16 w-full">
-          {feature.centerImage.map((image, imgIndex) => (
-            <img
-              key={imgIndex}
-              loading="lazy"
-              src={image}
-              className="object-contain self-stretch w-[45%] aspect-[0.46] rounded-[40px] shadow-[40px_40px_100px_rgba(24,48,63,0.5)] max-md:w-full"
-              alt={`Feature preview ${imgIndex}`}
-            />
-          ))}
-        </div>
-      );
-    }
-    
     if (feature.centerImage) {
       return (
-        <img
-          loading="lazy"
-          src={feature.centerImage}
-          className="object-contain self-stretch mt-16 w-full aspect-[0.46] rounded-[40px] shadow-[40px_40px_100px_rgba(24,48,63,0.5)] max-md:mt-10"
-          alt="Feature preview"
-        />
+        <div className="flex justify-center items-center w-full h-full">
+          <img
+            loading="lazy"
+            src={feature.centerImage}
+            className="object-contain w-[70%] max-w-[450px] max-h-[700px] rounded-[30px] shadow-lg"
+            alt="Feature preview"
+          />
+        </div>
       );
     }
   
     return (
-      <div className="flex flex-col items-center text-center w-full">
+      <div className="flex flex-col items-center justify-center text-center w-full">
         <img
           loading="lazy"
           src={feature.icon}
-          className={`object-contain aspect-square w-[60px] mx-auto ${
-            index > 0 ? "mt-40 max-md:mt-10" : ""
+          className={`object-contain aspect-square w-[40px] ${
+            index > 0 ? "mt-10" : "mt-5"
           }`}
           alt={feature.title}
         />
-        <div className="mt-6 uppercase">{feature.title}</div>
-        <div className="mt-4 text-base leading-6">{feature.description}</div>
+        <div className="mt-4 uppercase text-sm font-medium">{feature.title}</div>
+        <div className="mt-3 mb-5 text-sm leading-5 max-w-[300px]">{feature.description}</div>
       </div>
     );
   };  
 
   const contentClasses = {
-    left: "flex flex-col self-stretch my-auto text-2xl font-semibold text-right text-white max-md:mt-10 max-md:items-center max-md:text-center",
-    center:
-      "flex flex-col grow items-center text-base font-semibold text-center text-white max-md:mt-10",
-    right:
-      "flex flex-col self-stretch my-auto text-2xl font-semibold text-white max-md:mt-10 max-md:items-center max-md:text-center",
+    left: "flex flex-col justify-start items-end text-white h-full",
+    center: "flex flex-col justify-center items-center text-white h-full",
+    right: "flex flex-col justify-start items-start text-white h-full",
   };
 
   return (
