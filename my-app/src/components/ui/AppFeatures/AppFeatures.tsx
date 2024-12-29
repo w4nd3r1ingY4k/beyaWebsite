@@ -42,14 +42,14 @@ export function AppFeatures() {
     };
 
     return (
-        <div className="flex flex-col justify-center items-center w-full h-screen bg-gradient-to-r from-brandPink to-pink-600">
-            <div className="w-full max-w-[1200px] text-center h-full flex flex-col justify-between overflow-hidden">
+        <div className="flex flex-col justify-center items-center w-full h-screen bg-gradient-to-r from-brandPink to-pink-600 max-md:min-h-[900px] max-md:overflow-y-auto">
+            <div className="w-full max-w-[1200px] text-center h-full flex flex-col justify-between overflow-hidden max-md:py-10">
                 <FeatureHeader />
-                <div className="flex-1 mt-5 w-full h-full max-md:mt-10 overflow-hidden">
+                <div className="flex-1 mt-5 w-full h-full max-md:h-auto max-md:overflow-y-auto">
                     <Slider {...settings}>
                         {slides.map((slide, index) => (
                             <div key={index} className="mt-5 h-full flex items-center justify-center">
-                                <div className="flex items-center  max-md:flex-col">
+                                <div className="flex items-center gap-5 max-md:flex-col max-md:gap-8">
                                     {slide.columns.map((column, colIndex) => (
                                         <FeatureColumn
                                             key={colIndex}
