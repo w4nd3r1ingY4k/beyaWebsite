@@ -4,7 +4,7 @@ export interface Feature {
     icon?: string;
     title?: string;
     description?: string;
-    centerImage?: string;
+    centerImage?: string[];
 }
 
 export interface Column {

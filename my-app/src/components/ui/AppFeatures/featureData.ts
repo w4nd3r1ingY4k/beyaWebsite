@@ -32,7 +32,7 @@ export const slides: Slide[] = [
                 position: "center",
                 features: [
                     {
-                        centerImage: "assets/pages/signup.png",
+                        centerImage: ["assets/pages/signup.png"],
                     },
                 ],
             },
@@ -76,7 +76,7 @@ export const slides: Slide[] = [
                 position: "center",
                 features: [
                     {
-                        centerImage: "assets/pages/profile.png",
+                        centerImage: ["assets/pages/profile.png"],
                     },
                 ],
             },
@@ -119,7 +119,7 @@ export const slides: Slide[] = [
                 position: "center",
                 features: [
                     {
-                        centerImage: "assets/pages/features_image.png",
+                        centerImage: ["assets/pages/features_image.png"],
                     },
                 ],
             },
@@ -162,7 +162,7 @@ export const slides: Slide[] = [
                 position: "center",
                 features: [
                     {
-                        centerImage: "assets/pages/orders.png",
+                        centerImage: ["assets/pages/orders.png"],
                     },
                 ],
             },
@@ -205,8 +205,8 @@ export const slides: Slide[] = [
                 position: "center",
                 features: [
                     {
-                        // centerImage: ["assets/pages/locales.png", "assets/pages/events.png"],
-                        centerImage: "assets/pages/events.png",
+                        centerImage: ["assets/pages/locales.png", "assets/pages/events.png"],
+                        // centerImage: "assets/pages/events.png",
                     },
                 ],
             },
@@ -249,8 +249,7 @@ export const slides: Slide[] = [
                 position: "center",
                 features: [
                     {
-                        // centerImage: ["assets/pages/teams.png", "assets/pages/teams2.png"],
-                        centerImage: "assets/pages/teams.png",
+                        centerImage: ["assets/pages/teams.png", "assets/pages/teams2.png"],
                     },
                 ],
             },
@@ -293,8 +292,7 @@ export const slides: Slide[] = [
                 position: "center",
                 features: [
                     {
-                        // centerImage: ["assets/pages/checkout.png", "assets/pages/checkout2.png"],
-                        centerImage: "assets/pages/checkout.png",
+                        centerImage: ["assets/pages/checkout.png", "assets/pages/checkout2.png"],
                     },
                 ],
             },
