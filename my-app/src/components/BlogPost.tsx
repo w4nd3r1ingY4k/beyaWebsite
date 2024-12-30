@@ -14,7 +14,7 @@ export const BlogPost: React.FC<BlogPostProps> = ({
       <h3 className="text-xl font-semibold text-gray-800 mb-4">{title}</h3>
       <p className="text-neutral-500 mb-4">{description}</p>
       <a
-        href={href}
+        href={"https://medium.com/@jeffreyliang1234/dummy-post-ec825767be16"}
         className="text-indigo-700 font-semibold uppercase hover:text-indigo-900"
       >
         Read More
