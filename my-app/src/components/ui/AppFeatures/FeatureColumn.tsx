@@ -2,7 +2,7 @@ import * as React from "react";
 import { FeatureColumnProps, Feature } from "../../../ComponentTypes";
 
 export function FeatureColumn({ position, features }: FeatureColumnProps) {
-  const baseColumnClasses = "flex flex-col h-full w-full px-0 m-0";
+  const baseColumnClasses = "flex flex-col h-full w-full px-0 m-0 pb-10 overflow-y-auto";
 
   const columnClasses =
     position === "center"
@@ -57,7 +57,7 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
     if (feature.centerImage) {
       return (
         <div
-          className="relative w-full h-full flex justify-center items-center"
+          className="relative w-full min-h-full flex justify-center items-center"
           style={{ perspective: "1200px" }}  // Increased perspective for better depth
         >
           <div
@@ -109,9 +109,9 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
   };
 
   const contentClasses = {
-    left: "flex flex-col justify-start items-end text-white h-full",
-    center: "flex flex-col justify-center items-center text-white h-full",
-    right: "flex flex-col justify-start items-start text-white h-full",
+    left: "flex flex-col justify-start items-end text-white min-h-full",
+    center: "flex flex-col justify-center items-center text-white min-h-full",
+    right: "flex flex-col justify-start items-start text-white min-h-full",
   };
 
   return (

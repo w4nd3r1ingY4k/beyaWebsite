@@ -1,6 +1,8 @@
 import React from "react";
 import { BlogPostProps } from "../ComponentTypes";
 
+
+
 export const BlogPost: React.FC<BlogPostProps> = ({
   image,
   title,
@@ -15,6 +17,8 @@ export const BlogPost: React.FC<BlogPostProps> = ({
       <p className="text-neutral-500 mb-4">{description}</p>
       <a
         href={href}
+        target="_blank"
+        rel="noopener noreferrer"
         className="text-indigo-700 font-semibold uppercase hover:text-indigo-900"
       >
         Read More

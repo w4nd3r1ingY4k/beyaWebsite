@@ -11,6 +11,7 @@ interface BlogProps {
     }[];
 }
 
+
 export const BlogSection: React.FC<BlogProps> = ({ blogPosts }) => {
     return (
         <section className="py-20 bg-indigo-700">
