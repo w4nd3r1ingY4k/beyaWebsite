@@ -127,24 +127,24 @@ export const teamMembers = [
 
 export const blogPosts = [
   {
-    image: "assets/icons/placeholder-img.jpg",
-    title: "Coming Soon...",
-    description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-    href: "#",
+    image: "assets/events/Steps.png",
+    title: "Next Steps Forward.",
+    description: "See insights into how we are approaching Beya's full release timeline and upcoming events in planning.",
+    href: "https://medium.com/@jeffreyliang1234/dummy-post-3-1ba4c20e3e4a",
     imageAlt: "Snap Pixel blog post"
   },
   {
-    image: "assets/icons/placeholder-img.jpg",
-    title: "Coming Soon...",
-    description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-    href: "#",
+    image: "assets/events/IMG_7186.png",
+    title: "Previous Events!",
+    description: "Hear about major events Beya has held with mobile vendors and student businesses in the Providence area.",
+    href: "https://medium.com/@jeffreyliang1234/dummy-post-2-e466c5cac8f0",
     imageAlt: "Snap Pixel blog post"
   },
   {
-    image: "assets/icons/placeholder-img.jpg",
-    title: "Coming Soon...",
-    description: "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
-    href: "#",
+    image: "assets/events/IMG_7188.png",
+    title: "Why Beya?",
+    description: "From a core team of 4 Brown Sophomore Students, learn about the motivation behind creating Beya.",
+    href: "https://medium.com/@jeffreyliang1234/dummy-post-ec825767be16",
     imageAlt: "Snap Pixel blog post"
   }
 ];
