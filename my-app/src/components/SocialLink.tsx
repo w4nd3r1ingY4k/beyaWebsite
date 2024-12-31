@@ -14,7 +14,9 @@ export const SocialLink: React.FC<SocialLinkProps> = ({
     target="_blank"
     rel="noopener noreferrer"
   >
-    <FaLinkedin className="w-5 h-5 text-blue-500 hover:text-pink-500 transition-colors" />
+    {href &&
+        <FaLinkedin className="w-5 h-5 text-blue-500 hover:text-pink-500 transition-colors" />
+    }
     <span>{text}</span>
   </a>
 );

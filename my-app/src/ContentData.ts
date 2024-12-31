@@ -81,7 +81,7 @@ export const teamMembers = [
     role: "CEO",
     socialLinks: [
       {
-        href: "https://www.linkedin.com/in/robert-james-rodil-03120b290/",
+        href: "",
         text: "",
         ariaLabel: "Follow Akbar on Twitter",
       }
@@ -114,7 +114,7 @@ export const teamMembers = [
   {
     image: "assets/headshots/jeff_headshot.jpeg",
     name: "Jeffrey Liang",
-    role: "Lead Technical Developer",
+    role: "Founding Software Engineer",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",
