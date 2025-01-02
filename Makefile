@@ -1,6 +1,9 @@
-.PHONY: build deploy
+.PHONY: build deploy clean
 
-build:
+clean:
+	@cd my-app && rm -rf build
+
+build: clean
 	@cd my-app && npm run build
 
 deploy: build
