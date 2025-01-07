@@ -64,7 +64,7 @@ export const statistics = [
   },
   {
     icon: "assets/icons/users-icon.jpg",
-    value: "20+",
+    value: "10+",
     label: "Average Monthly Users"
   },
   {
