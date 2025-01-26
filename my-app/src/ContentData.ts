@@ -58,19 +58,19 @@ export const footerData = {
 
 export const statistics = [
   {
-    icon: "assets/icons/money-icon.jpg",
+    icon: "assets/icons/sales.png",
     value: "1000+",
     label: "Sales Transactions"
+  },
+  {
+    icon: "assets/icons/money-icon.jpg",
+    value: "$4000+",
+    label: "Product Revenue"
   },
   {
     icon: "assets/icons/users-icon.jpg",
     value: "10+",
     label: "Average Monthly Users"
-  },
-  {
-    icon: "assets/icons/brown-logo.png",
-    value: "Every Brown Student",
-    label: "5 star rating"
   }
 ];
 

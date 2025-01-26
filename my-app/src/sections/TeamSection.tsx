@@ -19,12 +19,12 @@ interface TeamProps {
 
 export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
     const settings = {
-        dots: true,
+        dots: false,
         infinite: true,
         speed: 500,
         slidesToShow: 3,  // Number of team members visible at once
-        slidesToScroll: 1,
-        autoplay: true,
+        slidesToScroll: 0,
+        autoplay: false,
         autoplaySpeed: 3000,
         responsive: [
             {
