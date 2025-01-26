@@ -88,18 +88,6 @@ export const teamMembers = [
     ]
   },
   {
-    image: "assets/headshots/paul_headshot.jpeg",
-    name: "Paul Hudes",
-    role: "CFO",
-    socialLinks: [
-      {
-        href: "https://www.linkedin.com/in/paul-hudes-945273219/",
-        text: "",
-        ariaLabel: "Follow Carla on Twitter"
-      }
-    ]
-  },
-  {
     image: "assets/headshots/austin_headshot.png",
     name: "Austin Liu",
     role: "Founding Software Engineer",
