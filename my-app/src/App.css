@@ -1,12 +1,11 @@
 
-/* App.css */
 .App {
   display: flex;
   flex-direction: column;
   justify-content: center; /* Centers content vertically */
   align-items: center;     /* Centers content horizontally */
   height: 100vh;           /* Full viewport height */
-  width: 100%;
+  width: 100vh;
   background-color: #222;
   color: #ffffff;
 }
