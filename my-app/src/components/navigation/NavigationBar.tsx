@@ -28,15 +28,24 @@ export const NavigationBar: React.FC = () => {
 
     const handleClick = (sectionId: string) => {
         setActive(sectionId);
+
         const section = document.getElementById(sectionId);
         if (section) {
-            section.scrollIntoView({ behavior: "smooth", block: "center" });
+            const isMobile = window.innerWidth < 768; // Check for mobile devices
+            const yOffset = isMobile ? -100 : 0; // Adjust this value based on your fixed navbar height
+            const yPosition = section.getBoundingClientRect().top + window.scrollY + yOffset;
+
+            window.scrollTo({
+                top: yPosition,
+                behavior: "smooth",
+            });
         }
-        setIsMobileMenuOpen(false); // Close mobile menu after clicking a link
+
+        setIsMobileMenuOpen(false); // Close the mobile menu after clicking a link
     };
 
     return (
-        <nav className="sticky top-0 z-50 bg-white shadow-md">
+        <nav className="fixed top-0 left-0 right-0 z-50 bg-white shadow-md">
             <div className="relative flex items-center justify-between py-8 px-8 w-full max-w-screen-xl mx-auto">
                 {/* Left Navigation Links */}
                 <div className="hidden md:flex space-x-6">
@@ -123,46 +132,46 @@ export const NavigationBar: React.FC = () => {
 
             {/* Mobile Menu */}
             {isMobileMenuOpen && (
-                <div className="md:hidden bg-white shadow-lg">
-                    <div className="flex flex-col space-y-4 p-4">
+                <div className="md:hidden bg-white shadow-lg border-t border-gray-200">
+                    <div className="flex flex-col">
                         <button
                             onClick={() => handleClick("mission")}
-                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            className={`text-sm py-3 px-6 transition-colors duration-200 hover:bg-gray-50 hover:text-purple-500 border-b border-gray-200`}
                             aria-label="Mission Section"
                         >
                             Our Mission
                         </button>
                         <button
                             onClick={() => handleClick("what-we-do")}
-                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            className={`text-sm py-3 px-6 transition-colors duration-200 hover:bg-gray-50 hover:text-purple-500 border-b border-gray-200`}
                             aria-label="What We Do Section"
                         >
                             What We Do
                         </button>
                         <button
                             onClick={() => handleClick("features")}
-                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            className={`text-sm py-3 px-6 transition-colors duration-200 hover:bg-gray-50 hover:text-purple-500 border-b border-gray-200`}
                             aria-label="Features Section"
                         >
                             Features
                         </button>
                         <button
                             onClick={() => handleClick("impact")}
-                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            className={`text-sm py-3 px-6 transition-colors duration-200 hover:bg-gray-50 hover:text-purple-500 border-b border-gray-200`}
                             aria-label="Impact Section"
                         >
                             Impact
                         </button>
                         <button
                             onClick={() => handleClick("blog")}
-                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            className={`text-sm py-3 px-6 transition-colors duration-200 hover:bg-gray-50 hover:text-purple-500 border-b border-gray-200`}
                             aria-label="Blog Section"
                         >
                             Blog
                         </button>
                         <button
                             onClick={() => handleClick("our-team")}
-                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            className={`text-sm py-3 px-6 transition-colors duration-200 hover:bg-gray-50 hover:text-purple-500`}
                             aria-label="Our Team Section"
                         >
                             Our Team

@@ -1,9 +1,4 @@
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow: auto;
-  width: 100%;
-}
+
 /* App.css */
 .App {
   display: flex;
