@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 
 export const NavigationBar: React.FC = () => {
     const [active, setActive] = useState<string>("");
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
     // Set active state based on the current section when the page is scrolled
     useEffect(() => {
@@ -31,13 +32,14 @@ export const NavigationBar: React.FC = () => {
         if (section) {
             section.scrollIntoView({ behavior: "smooth", block: "center" });
         }
+        setIsMobileMenuOpen(false); // Close mobile menu after clicking a link
     };
 
     return (
         <nav className="sticky top-0 z-50 bg-white shadow-md">
             <div className="relative flex items-center justify-between py-8 px-8 w-full max-w-screen-xl mx-auto">
                 {/* Left Navigation Links */}
-                <div className="flex space-x-6">
+                <div className="hidden md:flex space-x-6">
                     <button
                         onClick={() => handleClick("mission")}
                         className={`text-sm transition-colors duration-200 hover:text-purple-500`}
@@ -67,12 +69,12 @@ export const NavigationBar: React.FC = () => {
                         loading="lazy"
                         src="/assets/icons/logo.png"
                         alt="Company Logo"
-                        className="object-contain w-15 md:w-10 lg:w-20"
+                        className="object-contain w-10 md:w-10 lg:w-20"
                     />
                 </div>
 
                 {/* Right Navigation Links */}
-                <div className="flex space-x-6">
+                <div className="hidden md:flex space-x-6">
                     <button
                         onClick={() => handleClick("impact")}
                         className={`text-sm transition-colors duration-200 hover:text-purple-500`}
@@ -95,7 +97,79 @@ export const NavigationBar: React.FC = () => {
                         Our Team
                     </button>
                 </div>
+
+                {/* Mobile Menu Toggle Button */}
+                <button
+                    className="md:hidden p-2 focus:outline-none"
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    aria-label="Toggle Mobile Menu"
+                >
+                    <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                    >
+                        <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 6h16M4 12h16m-7 6h7"
+                        />
+                    </svg>
+                </button>
             </div>
+
+            {/* Mobile Menu */}
+            {isMobileMenuOpen && (
+                <div className="md:hidden bg-white shadow-lg">
+                    <div className="flex flex-col space-y-4 p-4">
+                        <button
+                            onClick={() => handleClick("mission")}
+                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            aria-label="Mission Section"
+                        >
+                            Our Mission
+                        </button>
+                        <button
+                            onClick={() => handleClick("what-we-do")}
+                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            aria-label="What We Do Section"
+                        >
+                            What We Do
+                        </button>
+                        <button
+                            onClick={() => handleClick("features")}
+                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            aria-label="Features Section"
+                        >
+                            Features
+                        </button>
+                        <button
+                            onClick={() => handleClick("impact")}
+                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            aria-label="Impact Section"
+                        >
+                            Impact
+                        </button>
+                        <button
+                            onClick={() => handleClick("blog")}
+                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            aria-label="Blog Section"
+                        >
+                            Blog
+                        </button>
+                        <button
+                            onClick={() => handleClick("our-team")}
+                            className={`text-sm transition-colors duration-200 hover:text-purple-500`}
+                            aria-label="Our Team Section"
+                        >
+                            Our Team
+                        </button>
+                    </div>
+                </div>
+            )}
         </nav>
     );
 };
