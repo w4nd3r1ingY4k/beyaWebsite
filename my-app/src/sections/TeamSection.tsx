@@ -31,12 +31,14 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
                 breakpoint: 1024,
                 settings: {
                     slidesToShow: 2,
+                    autoplay: true,
                 },
             },
             {
                 breakpoint: 640,
                 settings: {
                     slidesToShow: 1,
+                    autoplay: true,
                 },
             },
         ],
