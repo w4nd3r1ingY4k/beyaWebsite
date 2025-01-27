@@ -1,0 +1,43 @@
+/* SolariDisplay.css */
+
+.solari-display {
+    display: flex;
+    flex-direction: column;      
+    justify-content: center;     
+    align-items: center;         
+    gap: 10px;                   
+    padding: 20px;              
+    margin: 0 auto;              
+    
+    /* Fixed Height Settings */
+    height: 700px;              
+    
+    /* Optional Enhancements */
+    background-color: #ffffff;      
+    border: 2px solid #fff;    
+    border-radius: 10px;     
+  }
+  
+  /* Each word container */
+  .solari-word {
+    display: flex;
+    justify-content: center;   
+    align-items: center;       
+    gap: 0px;                  
+    flex-wrap: nowrap;         
+    
+    height: 50px;               
+  }
+  
+  /* Responsive Adjustments */
+  @media (max-width: 600px) {
+    .solari-display {
+      height: 250px;            
+      padding: 10px;           
+    }
+  
+    .solari-word {
+      gap: 3px;                   
+      height: 40px;              
+    }
+  }
