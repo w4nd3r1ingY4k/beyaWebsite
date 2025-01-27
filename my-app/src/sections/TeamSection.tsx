@@ -23,7 +23,7 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
         infinite: true,
         speed: 500,
         slidesToShow: 3,  // Number of team members visible at once
-        slidesToScroll: 0,
+        slidesToScroll: 1,
         autoplay: false,
         autoplaySpeed: 3000,
         responsive: [
@@ -43,7 +43,7 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
     };
 
     return (
-        <section className="py-20">
+        <section className="py-20" id="our-team">
             <div className="container mx-auto px-4">
                 <h2 className="text-3xl font-bold text-center mb-12">Our Team</h2>
                 <Slider {...settings}>

@@ -1,7 +1,7 @@
 // SolariDisplay.tsx
 import React, { useEffect, useState } from "react";
 import SplitFlap from "../components/SplitFlap";
-import "../SolariDisplay.css"; 
+import "./SolariDisplay.css"; 
 
 type SolariDisplayProps = {
   phrases: string[]; // Array of phrases

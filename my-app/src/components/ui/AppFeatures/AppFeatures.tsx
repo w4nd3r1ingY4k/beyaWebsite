@@ -43,7 +43,7 @@ export function AppFeatures() {
     };
 
     return (
-        <div className="flex flex-col justify-center items-center w-full min-h-screen bg-gradient-to-r from-brandPink to-pink-600 max-md:min-h-[900px] max-md:overflow-y-auto">
+        <div className="flex flex-col justify-center items-center w-full min-h-screen bg-gradient-to-r from-brandPink to-pink-600 max-md:min-h-[900px] max-md:overflow-y-auto" id="features">
             <div className="w-full max-w-[1200px] text-center min-h-full flex flex-col justify-between overflow-hidden max-md:py-10">
                 <FeatureHeader />
                 <div className="flex-1 mt-5 w-full min-h-[600px] max-md:h-auto max-md:overflow-y-auto">

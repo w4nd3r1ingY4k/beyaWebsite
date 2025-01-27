@@ -1,6 +1,6 @@
 // SplitFlap.tsx
 import React, { useEffect, useState } from "react";
-import "../SplitFlap.css";
+import "./SplitFlap.css";
 
 type SplitFlapProps = {
   targetChar: string;
