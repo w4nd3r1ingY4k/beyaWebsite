@@ -78,7 +78,9 @@ export const teamMembers = [
   {
     image: "assets/headshots/aj_headshot.jpg",
     name: "Akbar Shamji",
-    role: "CEO",
+    school: "Brown University",
+    major: "Computer Engineering",
+    role: "Founder and CEO",
     socialLinks: [
       {
         href: "",
@@ -90,24 +92,28 @@ export const teamMembers = [
   {
     image: "assets/headshots/austin_headshot.png",
     name: "Austin Liu",
+    school: "Brown University",
+    major: "Computer Science and Economics + Applied Math",
     role: "Founding Software Engineer",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/austin-liu-797877262/",
         text: "",
-        ariaLabel: "Follow Carla on Twitter"
+        ariaLabel: "Follow Austin on Twitter"
       }
     ]
   },
   {
     image: "assets/headshots/jeff_headshot.jpeg",
     name: "Jeffrey Liang",
+    school: "Brown University",
+    major: "Computer Science and Economics",
     role: "Founding Software Engineer",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",
         text: "",
-        ariaLabel: "Follow Carla on Twitter"
+        ariaLabel: "Follow Jeff on Twitter"
       }
     ]
   }

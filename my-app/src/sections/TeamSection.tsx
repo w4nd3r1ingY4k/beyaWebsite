@@ -9,6 +9,8 @@ interface TeamProps {
     teamMembers: {
         image: string;
         name: string;
+        school: string;
+        major: string;
         role: string;
         socialLinks: {
             href: string;

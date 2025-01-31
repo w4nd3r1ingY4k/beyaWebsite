@@ -23,7 +23,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             <p className="text-base sm:text-sm lg:text-xl mb-8 text-gray-700">
               {description}
             </p>
-            <div className="mb-8">
+<p> <b><a href="https://www.figma.com/proto/qO9vcMMjS1UxcYTYAbOEIQ/UI?page-id=578%3A195&node-id=578-398&viewport=838%2C453%2C0.14&t=rt5qp9FqxhzAbZPG-1&scaling=scale-down&content-scaling=fixed&starting-point-node-id=578%3A398" target="_blank">Click here for a wireframe demo!</a></b> </p>            <div className="mb-8">
               <h2
                 className={`text-xl sm:text-2xl font-semibold mb-4 ${isGreyedOut ? 'text-gray-400' : 'text-gray-900'
                   }`}
