@@ -108,7 +108,7 @@ export const teamMembers = [
     name: "Jeffrey Liang",
     school: "Brown University",
     major: "Computer Science and Economics",
-    role: "Founding Software Engineer",
+    role: "Technical Development Lead",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",
