@@ -132,7 +132,7 @@ export const NavigationBar: React.FC = () => {
 
             {/* Mobile Menu */}
             {isMobileMenuOpen && (
-                <div className="md:hidden bg-white shadow-lg border-t border-gray-200">
+                <div className="md:hidden bg-white shadow-lg border-t border-gray-200 ">
                     <div className="flex flex-col">
                         <button
                             onClick={() => handleClick("mission")}
