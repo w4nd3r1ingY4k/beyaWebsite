@@ -25,33 +25,23 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
         infinite: true,
         speed: 500,
         slidesToShow: 3,  // Number of team members visible at once
-        slidesToScroll: 0,
-        autoplay: false,
-        autoplaySpeed: 3000,
-        swipe: false, // Disable swiping
-        touchMove: false, // Disable touch movement
-        draggable: false, // Disable dragging
+        slidesToScroll: 1,
+        autoplay: true,
+        autoplaySpeed: 2000,
+        swipe: true, 
+        touchMove: true,
+        draggable: true,
         responsive: [
             {
                 breakpoint: 1024,
                 settings: {
                     slidesToShow: 2,
-                    slidesToScroll: 1,
-                    autoplay: true,
-                    swipe: true, 
-                    touchMove: true,
-                    draggable: true,
                 },
             },
             {
                 breakpoint: 640,
                 settings: {
                     slidesToShow: 1,
-                    slidesToScroll: 1,
-                    autoplay: true,
-                    swipe: true,
-                    touchMove: true,
-                    draggable: true,
                 },
             },
         ],

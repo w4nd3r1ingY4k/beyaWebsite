@@ -93,13 +93,13 @@ export const teamMembers = [
     image: "assets/headshots/austin_headshot.png",
     name: "Austin Liu",
     school: "Brown University",
-    major: "Computer Science and Economics + Applied Math",
+    major: "Applied Math and Computer Science + Economics",
     role: "Founding Software Engineer",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/austin-liu-797877262/",
         text: "",
-        ariaLabel: "Follow Austin on Twitter"
+        ariaLabel: "Follow Austin on LinkedIn"
       }
     ]
   },
@@ -113,7 +113,21 @@ export const teamMembers = [
       {
         href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",
         text: "",
-        ariaLabel: "Follow Jeff on Twitter"
+        ariaLabel: "Follow Jeff on LinkedIn"
+      }
+    ]
+  },
+  {
+    image: "assets/headshots/johnson_headshot.png",
+    name: "Johnson Shou",
+    school: "Brown University",
+    major: "Computer Science and Music",
+    role: "Web Developer",
+    socialLinks: [
+      {
+        href: "https://www.linkedin.com/in/johnsonshou/",
+        text: "",
+        ariaLabel: "Follow Johnson on LinkedIn"
       }
     ]
   }
