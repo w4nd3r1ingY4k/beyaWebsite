@@ -128,11 +128,9 @@ export const NavigationBar: React.FC = () => {
                         />
                     </svg>
                 </button>
-            </div>
 
-            {/* Mobile Menu */}
-            {isMobileMenuOpen && (
-                <div className="md:hidden bg-white shadow-lg border-t border-gray-200 ">
+                {/* Mobile Menu */}
+                <div className={`md:hidden bg-white shadow-lg border-t border-gray-200 fixed top-[6rem] left-0 w-full transform transition-transform duration-300 ${isMobileMenuOpen ? "translate-y-0 opacity-100" : "translate-y-[-100vh] opacity-0"}`}>
                     <div className="flex flex-col">
                         <button
                             onClick={() => handleClick("mission")}
@@ -178,7 +176,9 @@ export const NavigationBar: React.FC = () => {
                         </button>
                     </div>
                 </div>
-            )}
+            </div>
+
+        
         </nav>
     );
 };
