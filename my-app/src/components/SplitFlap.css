@@ -9,7 +9,7 @@
   .split-flap .split-flap-char {
     background: rgb(255, 255, 255);
     color: white; /* Default color when settled */
-    font-family: 'SF Pro', sans-serif; /* Apply SF Pro */
+    font-family: 'Futura', sans-serif; /* Apply SF Pro */
     font-weight: 400; /* Regular weight */
     text-align: center;
     font-size: 1.5rem;
