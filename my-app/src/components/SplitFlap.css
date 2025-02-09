@@ -7,17 +7,17 @@
   }
   
   .split-flap .split-flap-char {
-    background: rgb(255, 255, 255);
-    color: white; /* Default color when settled */
+    /* background: bg-gradient-to-br from-indigo-700 via-indigo to-gray-900; */
+    color: rgb(255, 255, 255); /* Default color when settled */
     font-family: 'Futura', sans-serif; /* Apply SF Pro */
     font-weight: 400; /* Regular weight */
+    text-transform: uppercase; /* Uppercase letters */
     text-align: center;
     font-size: 1.5rem;
     width: 40px; /* Fixed width */
     height: 50px; /* Fixed height */
     line-height: 50px; /* Center text vertically */
     overflow: hidden;
-    border: 1px solid #ffffff;
     border-radius: 4px; /* Optional: Slight rounding */
     transition: color 0.3s ease-in-out, transform 0.3s ease-in-out; /* Smooth transitions */
     box-sizing: border-box; /* Include border and padding within width and height */
@@ -32,7 +32,7 @@
   
   /* Color when settled */
   .split-flap .split-flap-char.settled {
-    color: #333; /* Revert to white */
+    color: #ffffff; /* Revert to white */
     transform: scale(1); /* Revert to original size */
   }
   
