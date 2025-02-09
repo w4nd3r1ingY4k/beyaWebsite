@@ -10,7 +10,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   appDownload,
   heroImage,
 }) => (
-  <section className="relative bg-gradient-to-r from-brandPink to-pink-600 py-40" id="mission">
+  <section className="relative bg-gradient-to-b from-pink-500 to-brandPink py-40" id="mission">
     <div className="container mx-auto px-4">
       <div className="flex flex-col-reverse lg:flex-row items-center justify-between">
 
