@@ -7,7 +7,7 @@ import { BlogSection } from "./sections/BlogSection";
 import { AppFeatures } from "./components/ui/AppFeatures/AppFeatures";
 import { NavigationBar } from "./components/navigation/NavigationBar";
 import SolariDisplay from "./sections/SolariDisplay";
-import ScrollDown from "./sections/ScrollDown";
+import ScrollDown from "./components/ScrollDown";
 import { heroData, footerData, teamMembers, statistics, features, blogPosts } from "./ContentData";
 
 const phrases = [

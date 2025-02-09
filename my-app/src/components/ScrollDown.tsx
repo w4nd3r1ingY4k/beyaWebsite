@@ -33,27 +33,10 @@
                 });
             }
         }
-        // return (
-        //     <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center">
-        //         <motion.div 
-        //         initial={{ opacity: 1, y: -10 }} 
-        //         animate={{ opacity: isVisible ? 1: 0, y: 10 }} 
-        //         transition={{ repeat: Infinity, repeatType: "reverse", duration: 1.5 }} 
-        //         className="absolute bottom-10 flex flex-col items-center"
-        //         onClick={() => handleClick("mission")}> 
-
-        //             <ArrowDownCircle size={40} className="text-white hover:text-white transition" />
-        //             <span className="text-sm mt-2 text-white uppercase tracking-wider">
-        //                 Scroll Down
-        //             </span>
-        //         </motion.div>
-        //     </div>
-
-        // )
         
         return (
             <motion.div
-                className="absolute bottom-10 left-1/2 transform -translate-x-1/2 flex flex-col items-center justify-center"
+                className="absolute bottom-10 left-1/2 transform -translate-x-1/2 flex flex-col items-center cursor-pointer justify-center"
                 initial={{ opacity: 1 }}
                 animate={{ opacity: isVisible ? 1 : 0 }}
                 transition={{ opacity: { duration: 0.5 } }} // Smooth fade
