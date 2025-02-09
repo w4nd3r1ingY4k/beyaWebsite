@@ -1,7 +1,7 @@
 export const heroData = {
-  title: "A Great App Makes Your Life Better",
+  title: "Business, Simplified",
   description:
-    "Supporting small businesses with inventory management, event and locales proximity-based features, minimum-fee transactions, analytics, and more to come",
+    "Beya equips small businesses with tools, services, and automation, so they can focus on creation.",
   appDownload: {
     googlePlayLink: "https://play.google.com",
     appStoreLink: "https://apps.apple.com",
