@@ -7,6 +7,7 @@ import { BlogSection } from "./sections/BlogSection";
 import { AppFeatures } from "./components/ui/AppFeatures/AppFeatures";
 import { NavigationBar } from "./components/navigation/NavigationBar";
 import SolariDisplay from "./sections/SolariDisplay";
+import ScrollDown from "./components/ScrollDown";
 import { heroData, footerData, teamMembers, statistics, features, blogPosts } from "./ContentData";
 
 const phrases = [
@@ -23,6 +24,7 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       <NavigationBar />
       <SolariDisplay phrases={phrases} speed={100} phraseDelay={4000} />
+      <ScrollDown />
       <HeroSection {...heroData} />
       <FeaturesSection features={features} />
       <AppFeatures />

@@ -10,7 +10,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
   appDownload,
   heroImage,
 }) => (
-  <section className="relative bg-gradient-to-r from-brandPink to-pink-600 py-40" id="mission">
+  <section className="relative bg-gradient-to-b from-pink-500 to-brandPink py-40" id="mission">
     <div className="container mx-auto px-4">
       <div className="flex flex-col-reverse lg:flex-row items-center justify-between">
 
@@ -23,12 +23,35 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
             <p className="text-base sm:text-sm lg:text-xl mb-8 text-gray-700">
               {description}
             </p>
-<p> <b><a href="https://www.figma.com/proto/qO9vcMMjS1UxcYTYAbOEIQ/UI?page-id=578%3A195&node-id=578-398&viewport=838%2C453%2C0.14&t=rt5qp9FqxhzAbZPG-1&scaling=scale-down&content-scaling=fixed&starting-point-node-id=578%3A398" target="_blank">Click here for a wireframe demo!</a></b> </p>            <div className="mb-8">
+            <p className="text-lg sm:text-base lg:text-xl mb-4 text-gray-700">
+              <b>
+                <a
+                  href="https://www.figma.com/proto/qO9vcMMjS1UxcYTYAbOEIQ/UI?page-id=578%3A195&node-id=578-398&viewport=838%2C453%2C0.14&t=rt5qp9FqxhzAbZPG-1&scaling=scale-down&content-scaling=fixed&starting-point-node-id=578%3A398"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 hover:underline"
+                >
+                  Wireframe Demo
+                </a>
+              </b>
+              &nbsp; | &nbsp;
+              <b>
+                <a
+                  href="https://calendly.com/akbar-usebeya"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo-600 hover:underline"
+                >
+                  Book a Call
+                </a>
+              </b>
+            </p>
+            <div className="mb-8">
               <h2
                 className={`text-xl sm:text-2xl font-semibold mb-4 ${isGreyedOut ? 'text-gray-400' : 'text-gray-900'
                   }`}
               >
-                Download App Now(Soon)
+                Download App (Soon)
               </h2>
               <div className={isGreyedOut ? 'greyed-out' : ''}>
                 <AppDownload {...appDownload} />
