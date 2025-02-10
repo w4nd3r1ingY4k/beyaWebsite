@@ -3,7 +3,7 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        brandPink: '#F92AA3',
+        brandPink: '#DF1780',
       },
     },
   },
