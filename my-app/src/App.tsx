@@ -11,11 +11,11 @@ import ScrollDown from "./components/ScrollDown";
 import { heroData, footerData, teamMembers, statistics, features, blogPosts } from "./ContentData";
 
 const phrases = [
-  "Powering You",
-  "Community Centric Commerce",
-  "Powering Localized Scale",
-  "Pioneering Big Small Business",
-  "Empowering Small Business Owners",
+  "Empowering You",
+  "Community-Driven Commerce",
+  "Scaling Local, Growing Global",
+  "Revolutionizing Small Business Growth",
+  "Fueling Small Business Success",
 ];
 
 function App() {
