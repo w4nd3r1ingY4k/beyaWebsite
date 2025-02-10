@@ -12,9 +12,9 @@ import { heroData, footerData, teamMembers, statistics, features, blogPosts } fr
 
 const phrases = [
   "Empowering You",
-  "Community-Driven Commerce",
-  "Scaling Local, Growing Global",
-  "Revolutionizing Small Business Growth",
+  "Community Centric Commerce",
+  "Scaling Local Growing Global",
+  "Pioneering Big Small Business",
   "Fueling Small Business Success",
 ];
 
