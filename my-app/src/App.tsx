@@ -11,7 +11,7 @@ import ScrollDown from "./components/ScrollDown";
 import { heroData, footerData, teamMembers, statistics, features, blogPosts } from "./ContentData";
 
 const phrases = [
-  "Empowering You",
+  "Powering You",
   "Community Centric Commerce",
   "Scaling Local Growing Global",
   "Pioneering Big Small Business",
