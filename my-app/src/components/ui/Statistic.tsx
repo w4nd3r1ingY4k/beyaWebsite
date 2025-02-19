@@ -1,9 +1,10 @@
 import React from "react";
 import { StatisticProps } from "../../ComponentTypes";
+import ImageWithLoading from "../ImageLoading";
 
 export const Statistic: React.FC<StatisticProps> = ({ icon, value, label }) => (
   <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-    <img
+    <ImageWithLoading
       src={icon}
       alt=""
       className="w-32 h-32 mx-auto object-contain"

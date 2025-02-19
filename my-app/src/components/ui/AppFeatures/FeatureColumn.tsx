@@ -1,5 +1,6 @@
 import * as React from "react";
 import { FeatureColumnProps, Feature } from "../../../ComponentTypes";
+import ImageWithLoading from "../../ImageLoading";
 
 export function FeatureColumn({ position, features }: FeatureColumnProps) {
   const baseColumnClasses = "flex flex-col h-full w-full px-0 m-0 pb-10 overflow-y-auto";
@@ -72,8 +73,7 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
             }}
             onClick={() => hasMultipleImages && handleImageClick(index)}
           >
-            <img
-              loading="lazy"
+            <ImageWithLoading
               src={feature.centerImage[imageIndexList[index]]}
               className="object-contain w-[70%] max-w-[450px] max-h-[700px] rounded-[30px] shadow-lg"
               alt="Feature preview"
@@ -92,8 +92,7 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
 
     return (
       <div className="flex flex-col items-center justify-center text-center w-full">
-        <img
-          loading="lazy"
+        <ImageWithLoading
           src={feature.icon}
           className={`object-contain aspect-square w-[40px] ${
             index > 0 ? "mt-10" : "mt-5"

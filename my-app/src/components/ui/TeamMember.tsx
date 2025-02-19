@@ -1,5 +1,6 @@
 import React from "react";
 import { SocialLink } from "../SocialLink";
+import ImageWithLoading from "../ImageLoading";
 
 export const TeamMember: React.FC<{
   image: string;
@@ -11,7 +12,7 @@ export const TeamMember: React.FC<{
 }> = ({ image, name,school, major, role, socialLinks }) => {
   return (
     <div className="text-center p-4">
-      <img src={image} alt={name} className="rounded-full mx-auto mb-4 w-40 h-40 object-cover" />
+      <ImageWithLoading src={image} alt={name} className="rounded-full mx-auto mb-4 w-40 h-40 object-cover" />
       <h3 className="text-xl font-semibold">{name}</h3>
       <p className="text-sm text-gray-500">{school}</p>
       <p className="text-sm text-gray-500">{major}</p>

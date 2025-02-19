@@ -2,6 +2,7 @@ import React from "react";
 import { FooterProps } from "../ComponentTypes";
 import { NewsletterForm } from "./NewsletterForm";
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn, FaEnvelope } from "react-icons/fa";
+import ImageWithLoading from "./ImageLoading";
 
 export const Footer: React.FC<FooterProps> = ({
   logo,
@@ -15,7 +16,7 @@ export const Footer: React.FC<FooterProps> = ({
     <div className="container mx-auto px-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
         <div>
-          <img src={logo} alt="Company logo" className="h-8 mb-6" />
+          <ImageWithLoading src={logo} alt="Company logo" className="h-8 mb-6" />
           <p className="text-gray-400 mb-6">{description}</p>
 
           {/* Email Link */}

@@ -1,5 +1,6 @@
 import React from "react";
 import { AppDownloadProps } from "../../ComponentTypes";
+import ImageWithLoading from "../ImageLoading";
 
 export const AppDownload: React.FC<AppDownloadProps> = ({
   googlePlayLink,
@@ -18,7 +19,7 @@ export const AppDownload: React.FC<AppDownloadProps> = ({
       className="transition-transform hover:scale-105 flex items-center"
       aria-label="Download on Google Play"
     >
-      <img
+      <ImageWithLoading
         src={googlePlayImage}
         alt="Get it on Google Play"
         className="h-12 w-auto object-contain"
@@ -29,7 +30,7 @@ export const AppDownload: React.FC<AppDownloadProps> = ({
       className="transition-transform hover:scale-105 flex items-center"
       aria-label="Download on App Store"
     >
-      <img
+      <ImageWithLoading
         src={appStoreImage}
         alt="Download on the App Store"
         className="h-12 w-auto object-contain mb-[0.25em]"
