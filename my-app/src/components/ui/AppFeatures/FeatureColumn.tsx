@@ -75,7 +75,7 @@ export function FeatureColumn({ position, features }: FeatureColumnProps) {
             <img
               loading="lazy"
               src={feature.centerImage[imageIndexList[index]]}
-              className="object-contain w-[70%] max-w-[450px] max-h-[700px] rounded-[30px] shadow-lg"
+              className="object-contain w-[70%] max-w-[450px] max-h-[700px] rounded-[30px]"
               alt="Feature preview"
             />
           </div>
