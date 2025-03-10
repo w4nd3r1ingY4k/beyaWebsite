@@ -37,7 +37,7 @@ export const features = [
 ];
 
 export const footerData = {
-  logo: "assets/icons/logo.png",
+  logo: "assets/icons/logo-1.png",
   description: "Still in beta...",
   socialLinks: [
     {
