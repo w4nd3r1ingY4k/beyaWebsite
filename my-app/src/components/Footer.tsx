@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { FooterProps } from "../ComponentTypes";
 import { NewsletterForm } from "./NewsletterForm";
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn, FaEnvelope } from "react-icons/fa";
@@ -11,7 +12,7 @@ export const Footer: React.FC<FooterProps> = ({
   newsletterDescription,
   copyrightText,
 }) => (
-  <footer className="bg-gray-900 text-white pt-20 pb-6">
+  <footer className="bg-[#DF1780] text-white pt-20 pb-6">
     <div className="container mx-auto px-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-12 mb-12">
         <div>
@@ -82,6 +83,14 @@ export const Footer: React.FC<FooterProps> = ({
           <NewsletterForm />
         </div>
       </div>
+      <div className="mt-4">
+            <Link
+              to="/privacy"
+              className="text-sm underline hover:text-white transition-colors duration-200"
+            >
+              Privacy Policy
+            </Link>
+          </div>
 
       <div className="border-t border-gray-700 pt-6 text-center text-gray-400">
         {copyrightText}

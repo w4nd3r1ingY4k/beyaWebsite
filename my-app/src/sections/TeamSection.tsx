@@ -22,8 +22,8 @@ interface TeamProps {
 export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
     const settings = {
         dots: false,
-        infinite: true,
-        speed: 500,
+        infinite: false,
+        speed: 0,
         slidesToShow: 3,  // Number of team members visible at once
         slidesToScroll: 1,
         autoplay: true,
@@ -48,9 +48,9 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
     };
 
     return (
-        <section className="py-20" id="our-team">
-            <div className="container mx-auto px-10">
-                <h2 className="text-3xl font-bold text-center mb-12">Our Team</h2>
+<section className="py-20 bg-[#FCFCFC]" id="our-team">            
+    <div className="container mx-auto px-10">
+                <h2 className="text-3xl font-bold text-center mb-12 text-[#3A3A3A]">Our Team</h2>
                 <Slider {...settings}>
                     {teamMembers.map((member, index) => (
                         <div key={index}>

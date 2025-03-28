@@ -80,7 +80,7 @@ export const teamMembers = [
     name: "Akbar Shamji",
     school: "Brown University",
     major: "Computer Engineering",
-    role: "Founder and CEO",
+    role: "Founder, CEO, CTO",
     socialLinks: [
       {
         href: "",
@@ -103,34 +103,34 @@ export const teamMembers = [
       }
     ]
   },
-  {
-    image: "assets/headshots/jeff_headshot.jpeg",
-    name: "Jeffrey Liang",
-    school: "Brown University",
-    major: "Computer Science and Economics",
-    role: "Technical Development Lead",
-    socialLinks: [
-      {
-        href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",
-        text: "",
-        ariaLabel: "Follow Jeff on LinkedIn"
-      }
-    ]
-  },
-  {
-    image: "assets/headshots/johnson_headshot.png",
-    name: "Johnson Shou",
-    school: "Brown University",
-    major: "Computer Science and Music",
-    role: "Web Developer",
-    socialLinks: [
-      {
-        href: "https://www.linkedin.com/in/johnsonshou/",
-        text: "",
-        ariaLabel: "Follow Johnson on LinkedIn"
-      }
-    ]
-  }
+  // {
+  //   image: "assets/headshots/jeff_headshot.jpeg",
+  //   name: "Jeffrey Liang",
+  //   school: "Brown University",
+  //   major: "Computer Science and Economics",
+  //   role: "Technical Development Lead",
+  //   socialLinks: [
+  //     {
+  //       href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",
+  //       text: "",
+  //       ariaLabel: "Follow Jeff on LinkedIn"
+  //     }
+  //   ]
+  // },
+  // {
+  //   image: "assets/headshots/johnson_headshot.png",
+  //   name: "Johnson Shou",
+  //   school: "Brown University",
+  //   major: "Computer Science and Music",
+  //   role: "Web Developer",
+  //   socialLinks: [
+  //     {
+  //       href: "https://www.linkedin.com/in/johnsonshou/",
+  //       text: "",
+  //       ariaLabel: "Follow Johnson on LinkedIn"
+  //     }
+  //   ]
+  // }
 ];
 
 export const blogPosts = [

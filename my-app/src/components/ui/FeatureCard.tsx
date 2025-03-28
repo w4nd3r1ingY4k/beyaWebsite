@@ -6,7 +6,7 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
   title,
   description,
 }) => (
-  <div className="bg-white rounded-xl shadow-sm p-8 transition-transform hover:scale-105">
+  <div className="bg-[#FCFCFC] rounded-xl shadow-md p-8 transition-transform hover:scale-105">
     <img src={icon} alt="" className="w-12 h-12 mb-6" aria-hidden="true" />
     <h3 className="text-xl font-semibold text-gray-800 uppercase mb-4">
       {title}
