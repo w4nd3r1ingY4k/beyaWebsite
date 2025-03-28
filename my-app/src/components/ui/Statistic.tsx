@@ -2,7 +2,7 @@ import React from "react";
 import { StatisticProps } from "../../ComponentTypes";
 
 export const Statistic: React.FC<StatisticProps> = ({ icon, value, label }) => (
-  <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+  <div className="bg-[#FCFCFC] rounded-xl shadow-md p-8 text-center">
     <img
       src={icon}
       alt=""
