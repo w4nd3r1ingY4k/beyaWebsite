@@ -1,6 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+
 
 @import url('https://fonts.googleapis.com/css2?family=Dosis:wght@200..800&family=Jost:ital,wght@0,100..900;1,100..900&family=Outfit:wght@100..900&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
 
@@ -10,6 +8,5 @@ body {
     padding: 0;
     overflow: auto;
     width: 100%;
-    font-family: 'Outfit', sans-serif;
-    font-weight: 200;
+    font-family: 'Jost', sans-serif;  font-weight: 200;
 }

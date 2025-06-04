@@ -24,7 +24,7 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
         dots: false,
         infinite: false,
         speed: 0,
-        slidesToShow: 3,  // Number of team members visible at once
+        slidesToShow: 3,
         slidesToScroll: 1,
         autoplay: true,
         autoplaySpeed: 2000,
@@ -48,9 +48,33 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
     };
 
     return (
-<section className="py-20 bg-[#FCFCFC]" id="our-team">            
-    <div className="container mx-auto px-10">
-                <h2 className="text-3xl font-bold text-center mb-12 text-[#3A3A3A]">Our Team</h2>
+        <section
+            id="our-team"
+            style={{
+                paddingTop: 80,
+                paddingBottom: 80,
+                background: "#FCFCFC",
+            }}
+        >
+            <div
+                style={{
+                    maxWidth: 1200,
+                    margin: "0 auto",
+                    paddingLeft: 40,
+                    paddingRight: 40,
+                }}
+            >
+                <h2
+                    style={{
+                        fontSize: 32,
+                        fontWeight: "bold",
+                        textAlign: "center",
+                        marginBottom: 48,
+                        color: "#3A3A3A",
+                    }}
+                >
+                    Our Team
+                </h2>
                 <Slider {...settings}>
                     {teamMembers.map((member, index) => (
                         <div key={index}>

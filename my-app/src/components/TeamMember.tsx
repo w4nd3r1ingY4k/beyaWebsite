@@ -7,17 +7,47 @@ export const TeamMember: React.FC<{
   school: string;
   major: string;
   role: string;
-  socialLinks: {href: string; text: string }[];
-}> = ({ image, name,school, major, role, socialLinks }) => {
+  socialLinks: { href: string; text: string }[];
+}> = ({ image, name, school, major, role, socialLinks }) => {
   return (
-    <div className="text-center p-4">
-      <img src={image} alt={name} className="rounded-full mx-auto mb-4 w-40 h-40 object-cover" />
-      <h3 className="text-xl font-semibold text-[#3A3A3A]">{name}</h3>
-      <p className="text-sm text-gray-500">{school}</p>
-      <p className="text-sm text-gray-500">{major}</p>
-
-      <p className="font-semibold text-[#3A3A3A]">{role}</p>
-      <div className="mt-2 flex justify-center space-x-4">
+    <div
+      style={{
+        textAlign: "center",
+        padding: "1rem",
+      }}
+    >
+      <img
+        src={image}
+        alt={name}
+        style={{
+          borderRadius: "50%",
+          display: "block",
+          margin: "0 auto 1rem auto",
+          width: "10rem",
+          height: "10rem",
+          objectFit: "cover",
+        }}
+      />
+      <h3
+        style={{
+          fontSize: "1.25rem",
+          fontWeight: 600,
+          color: "#3A3A3A",
+        }}
+      >
+        {name}
+      </h3>
+      <p style={{ fontSize: "0.875rem", color: "#6B7280" }}>{school}</p>
+      <p style={{ fontSize: "0.875rem", color: "#6B7280" }}>{major}</p>
+      <p style={{ fontWeight: 600, color: "#3A3A3A" }}>{role}</p>
+      <div
+        style={{
+          marginTop: "0.5rem",
+          display: "flex",
+          justifyContent: "center",
+          gap: "1rem",
+        }}
+      >
         {socialLinks.map((link, index) => (
           <SocialLink key={index} {...link} />
         ))}

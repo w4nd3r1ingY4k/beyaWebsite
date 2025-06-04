@@ -6,11 +6,36 @@ export const FeatureCard: React.FC<FeatureCardProps> = ({
   title,
   description,
 }) => (
-  <div className="bg-[#FCFCFC] rounded-xl shadow-md p-8 transition-transform hover:scale-105">
-    <img src={icon} alt="" className="w-12 h-12 mb-6" aria-hidden="true" />
-    <h3 className="text-xl font-semibold text-gray-800 uppercase mb-4">
+  <div
+    style={{
+      background: "#FCFCFC",
+      borderRadius: "0.75rem",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+      padding: "2rem",
+      transition: "transform 0.2s",
+      willChange: "transform",
+      cursor: "pointer",
+    }}
+    onMouseEnter={e => (e.currentTarget.style.transform = "scale(1.05)")}
+    onMouseLeave={e => (e.currentTarget.style.transform = "scale(1)")}
+  >
+    <img
+      src={icon}
+      alt=""
+      style={{ width: "3rem", height: "3rem", marginBottom: "1.5rem" }}
+      aria-hidden="true"
+    />
+    <h3
+      style={{
+        fontSize: "1.25rem",
+        fontWeight: 600,
+        color: "#1F2937",
+        textTransform: "uppercase",
+        marginBottom: "1rem",
+      }}
+    >
       {title}
     </h3>
-    <p className="text-neutral-500 leading-relaxed">{description}</p>
+    <p style={{ color: "#6B7280", lineHeight: 1.6 }}>{description}</p>
   </div>
 );

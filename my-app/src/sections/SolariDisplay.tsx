@@ -2,12 +2,27 @@
 import React, { useEffect, useState } from "react";
 import SplitFlap from "../components/SplitFlap";
 
-import "./SolariDisplay.css"; 
-
 type SolariDisplayProps = {
-  phrases: string[]; // Array of phrases
-  speed?: number;    // Speed of random character changes in milliseconds
-  phraseDelay?: number; // Delay between phrases in milliseconds
+  phrases: string[];
+  speed?: number;
+  phraseDelay?: number;
+};
+
+const containerStyle: React.CSSProperties = {
+  position: "relative",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  height: "100vh",
+  background: "linear-gradient(to bottom, #ea580c, #ec4899)",
+  color: "white",
+  overflow: "hidden",
+};
+
+const solariWordStyle: React.CSSProperties = {
+  display: "flex",
+  margin: "8px 0",
 };
 
 const SolariDisplay: React.FC<SolariDisplayProps> = ({
@@ -40,11 +55,11 @@ const SolariDisplay: React.FC<SolariDisplayProps> = ({
   }, [currentPhraseIndex, phrases]);
 
   return (
-    <div className="relative flex flex-col items-center justify-center h-screen bg-gradient-to-b from-orange-600 to-pink-500 text-white overflow-hidden">
+    <div style={containerStyle}>
       {currentPhrase.split(" ").map((word, index) => (
-        <div key={index} className="solari-word">
+        <div key={index} style={solariWordStyle}>
           {word.split("").map((char, idx) => (
-            <SplitFlap targetChar={char} speed={speed} />
+            <SplitFlap key={idx} targetChar={char} speed={speed} />
           ))}
         </div>
       ))}
