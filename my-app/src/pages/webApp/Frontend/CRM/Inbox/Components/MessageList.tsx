@@ -15,7 +15,7 @@ const API_BASE = 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod'
 type Channel = 'whatsapp' | 'email'
 
 interface Props {
-  selectedId: string
+  selectedId: string | null
   onSelect: (id: string) => void
 }
 
@@ -49,6 +49,8 @@ const MessageList: React.FC<Props> = ({ selectedId, onSelect }) => {
   const [error, setError] = useState<string | null>(null) // Error state for API calls
   const [flows, setFlows] = useState<any[]>([]) // All flows fetched from the API
   const [viewFilter, setViewFilter] = useState<ViewFilter>("owned");
+  const [activeMessageId, setActiveMessageId] = useState<string | null>(null)
+
   const [emailEditorState, setEmailEditorState] = useState<EditorState>(
     () => EditorState.createEmpty()
   )
@@ -198,6 +200,16 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
   const ownedFlowIds = useMemo(() => {
     return new Set(myFlows.map(f => f.flowId));
   }, [myFlows]);
+
+  useEffect(() => {
+    if (chatMessages.length > 0) {
+      const lastMsg = chatMessages[chatMessages.length - 1]
+      // If `lastMsg.id` could be undefined, this forces it into `string | null`
+      setActiveMessageId(lastMsg.id!)
+    } else {
+      setActiveMessageId(null)
+    }
+  }, [chatMessages])
   // Effect to fetch flows and threads on component mount or user change
   useEffect(() => {
     if (!user) return
@@ -594,11 +606,11 @@ async function sendEmailMessage(
 
   // Handles sending a reply to the customer
   const handleReplySend = async () => {
-    const channel = getChannel(selectedId);
+    const channel = getChannel(selectedId!!);
     try {
       if (channel === 'whatsapp') {
         if (!replyText.trim()) return;
-        await sendWhatsAppMessage(selectedId, replyText);
+        await sendWhatsAppMessage(selectedId!!, replyText);
       } else {
         // For email, pull HTML from Draft.js
         const contentState = emailEditorState.getCurrentContent();
@@ -611,7 +623,7 @@ async function sendEmailMessage(
 const originalMessageId = incoming?.originalMessageId;
   
         await sendEmailMessage(
-          decodeURIComponent(selectedId),
+          decodeURIComponent(selectedId!!),
           replySubject,
           plainText,
           htmlBody,
@@ -673,7 +685,7 @@ setTeamChatInput("");
 
   // ─────────── Render Method ───────────
   return (
-    <div style={{ height: '100%', backgroundColor: '#FFFBFA', width: '100%' }}>
+    <div style={{ height: '100%', backgroundColor: '#FFFBFA', width: '100%', fontFamily: 'Arial, sans-serif' }}>
       {/* ─── Top header: Status & Action Controls ─── */}
       <div
         style={{
@@ -684,6 +696,7 @@ setTeamChatInput("");
           backgroundColor: '#FFFBFA',
           marginTop: 20,
           marginBottom: -20,
+
         }}
       >
         {/* Status filter buttons */}
@@ -694,7 +707,7 @@ setTeamChatInput("");
             gap: '12px',
             alignItems: 'center',
             marginTop: 10,
-            marginLeft: 100,
+            marginLeft: 75,
           }}
         >
           <button
@@ -1256,74 +1269,96 @@ setTeamChatInput("");
             ) : chatMessages.length === 0 ? (
               <p style={{ textAlign: 'center', color: '#888' }}>No messages in this conversation yet.</p>
             ) : (
-              chatMessages.map(chat => (
-                <div
-                  key={`${chat.id}-${chat.timestamp}`}
-                  style={{
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
-                    width: '90%',
-                    margin: '0 auto 16px auto',
-                    padding: 12,
-                    borderRadius: 5,
-                    background: '#FFFBFA',
-                    overflowWrap: 'break-word', // Ensures long text wraps within the container
-                  }}
-                >
-                  <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
-                    <strong>{chat.senderName}</strong> ·{' '}
-                    {new Date(chat.timestamp).toLocaleString()}
-                  </p>
-                  {chat.subject && (
-                    <p style={{ fontStyle: 'italic', margin: '4px 0', fontSize: '0.95em' }}>
-                      {chat.subject}
+              chatMessages.map(chat => {
+                const isActive = chat.id === activeMessageId
+    
+                return (
+                  <div
+                    key={`${chat.id}-${chat.timestamp}`}
+                    onClick={() => {
+                      // Clicking on any message makes it “active” (expanded)
+                      setActiveMessageId(chat.id ?? null)
+                    }}
+                    style={{
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+                      width: '100%',
+                      margin: '0 auto 16px auto',
+                      padding: 12,
+                      borderRadius: 5,
+                      background: '#FFFBFA',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+    
+                      // If not active, limit its height so it looks “collapsed”
+                      maxHeight: isActive ? 'none' : '60px',
+                      transition: 'max-height 0.2s ease-out',
+                    }}
+                  >
+                    <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
+                      <strong>{chat.senderName}</strong> ·{' '}
+                      {new Date(chat.timestamp).toLocaleString()}
                     </p>
-                  )}
-                  <p style={{ margin: '8px 0 0', whiteSpace: 'pre-wrap' }}>
-                    {linkifyWithImages(chat.body)}
-                  </p>
-                </div>
-              ))
+                    {chat.subject && (
+                      <p style={{ fontStyle: 'italic', margin: '4px 0', fontSize: '0.95em' }}>
+                        {chat.subject}
+                      </p>
+                    )}
+                    <p
+                      style={{
+                        margin: '8px 0 0',
+                        whiteSpace: 'pre-wrap',
+                        // If the box is collapsed, hide overflow text
+                        overflow: isActive ? 'visible' : 'hidden',
+                      }}
+                    >
+                      {linkifyWithImages(chat.body)}
+                    </p>
+                    {selectedId && (
+              
+              <div style={{ textAlign: 'left', marginTop: 20 }}>
+              <button
+                onClick={() => {
+                const email = prompt('Enter email to add:')
+                if (email) addParticipant(selectedId, email)
+                }}
+                style={{
+                background: '#DE1785',
+                color: '#fff',
+                padding: '7px 18px',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: '1.1em',
+                cursor: 'pointer',
+                boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                marginRight: 20
+                }}
+              >
+                Share
+              </button>
+              <button
+                onClick={() => setIsReplying(!isReplying)}
+                style={{
+                background: '#DE1785',
+                color: '#fff',
+                padding: '7px 18px',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: '1.1em',
+                cursor: 'pointer',
+                boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+                }}
+              >
+                Reply to Customer
+              </button>
+              </div>
+          )}
+                  </div>
+                )
+              })
             )}
 
             {/* Reply Button */}
-            {selectedId && (
-              
-                <div style={{ textAlign: 'center', marginTop: 20 }}>
-                <button
-                  onClick={() => {
-                  const email = prompt('Enter email to add:')
-                  if (email) addParticipant(selectedId, email)
-                  }}
-                  style={{
-                  background: '#DE1785',
-                  color: '#fff',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: 6,
-                  fontSize: '1.1em',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                  }}
-                >
-                  Share
-                </button>
-                <button
-                  onClick={() => setIsReplying(!isReplying)}
-                  style={{
-                  background: '#DE1785',
-                  color: '#fff',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: 6,
-                  fontSize: '1.1em',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                  }}
-                >
-                  Reply to Customer
-                </button>
-                </div>
-            )}
+            
             {isComposing && (
   <div
     style={{
@@ -1522,7 +1557,7 @@ setTeamChatInput("");
   
   <div
     style={{
-      height: 300,
+      height: 200,
             overflowY: 'auto',
       marginBottom: 28,
       padding: '8px',
@@ -1590,6 +1625,7 @@ setTeamChatInput("");
         borderRadius: 18,
         border: '1px solid #ccc',
         boxSizing: 'border-box',
+        fontFamily: 'Arial, sans-serif',
       }}
     />
     <button
@@ -1628,7 +1664,7 @@ setTeamChatInput("");
           {/* Reply overlay */}
           {isReplying && (
   <div>
-          {getChannel(selectedId) === 'email' && (
+          {getChannel(selectedId!!) === 'email' && (
         <>
           <input
             type="text"
@@ -1653,7 +1689,7 @@ setTeamChatInput("");
         </>
       )}
 
-    {getChannel(selectedId) === 'whatsapp' && (
+    {getChannel(selectedId!!) === 'whatsapp' && (
       <textarea
       value={replyText}
       onChange={e => setReplyText(e.target.value)}

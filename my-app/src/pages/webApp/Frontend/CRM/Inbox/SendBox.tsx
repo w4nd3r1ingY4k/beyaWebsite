@@ -341,21 +341,6 @@ import React, {
               blockRenderMap={blockRenderMap}
             />
           </div>
-  
-          <button
-            onClick={handleSend}
-            style={{
-              marginTop: 12,
-              background: '#DE1785',
-              color: '#fff',
-              padding: '8px 16px',
-              border: 'none',
-              borderRadius: 4,
-              cursor: 'pointer',
-            }}
-          >
-            Send Email
-          </button>
         </div>
       )
     }
