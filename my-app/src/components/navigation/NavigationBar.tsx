@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Link } from "react-router-dom";
 
 export const NavigationBar: React.FC = () => {
     const [active, setActive] = useState<string>("");
@@ -51,6 +52,7 @@ export const NavigationBar: React.FC = () => {
         if (location.pathname === "/") {
             scrollToSection(sectionId);
         } else {
+            
             navigate("/", { state: { scrollTo: sectionId } });
         }
     };
@@ -90,6 +92,12 @@ export const NavigationBar: React.FC = () => {
                     <button onClick={() => handleClick("our-team")} className="text-sm hover:text-purple-500">
                         Our Team
                     </button>
+                    <Link
+                        to="/login"
+                        className="text-sm px-5 py-2 rounded bg-[#DE1785] text-white font-semibold hover:bg-[#b0136a] transition-colors duration-200 shadow"
+                    >
+                        Log In
+                    </Link>
                 </div>
 
                 <button

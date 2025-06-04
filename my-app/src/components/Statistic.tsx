@@ -1,5 +1,5 @@
 import React from "react";
-import { StatisticProps } from "../../ComponentTypes";
+import { StatisticProps } from "../ComponentTypes";
 
 export const Statistic: React.FC<StatisticProps> = ({ icon, value, label }) => (
   <div className="bg-[#FCFCFC] rounded-xl shadow-md p-8 text-center">

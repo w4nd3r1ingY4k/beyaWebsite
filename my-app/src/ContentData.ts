@@ -52,7 +52,7 @@ export const footerData = {
   ],
   newsletterTitle: "Newsletter",
   newsletterDescription: "Subscribe to our newsletter for updates",
-  copyrightText: "Copyright 2025. All Rights Reserved.",
+  copyrightText: "Copyright 2024. All Rights Reserved.",
 };
 
 
