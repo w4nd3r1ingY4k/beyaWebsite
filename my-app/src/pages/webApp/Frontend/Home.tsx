@@ -10,6 +10,8 @@ import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.sv
 import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from './Assets/Icons/CommerceIcon.svg';
 import InboxHome from './CRM/Inbox/Home';
+import ContactsCRM from './CRM/Contacts/Home';
+import CalendarPage from './CRM/Schedule/ScheduleHome';
 import AIChatCircle from './ai';
 import { useAuth } from '../../AuthContext';
 import HomeDashboard from './Home/home';
@@ -68,14 +70,9 @@ const navigate = useNavigate();
         case 'inbox':
           return <InboxHome />;
         case 'contacts':
-          return (
-            <div style={{ marginTop: 0 }}>
-              <h2>CRM – Contacts</h2>
-              <div>
-                Welcome, {user!.email} • <button onClick={logout}>Sign out</button>
-              </div>
-            </div>
-          );
+          return <ContactsCRM />;
+        case 'schedule':
+          return <CalendarPage />;
         default:
           return (
             <div style={{ marginTop: 40 }}>
