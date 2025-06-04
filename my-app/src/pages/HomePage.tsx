@@ -6,7 +6,6 @@ import { HeroSection } from "../sections/HeroSection";
 import { StatisticsSection } from "../sections/StatisticsSection";
 import { TeamSection } from "../sections/TeamSection";
 import { BlogSection } from "../sections/BlogSection";
-import { AppFeatures } from "../components/ui/AppFeatures/AppFeatures";
 import { NavigationBar } from "../components/navigation/NavigationBar";
 import SolariDisplay from "../sections/SolariDisplay";
 import ScrollDown from "../components/ScrollDown";
@@ -45,13 +44,12 @@ const HomePage = () => {
   }, [location.state]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-red-500">
       <NavigationBar />
       <SolariDisplay phrases={phrases} speed={100} phraseDelay={4000} />
       <ScrollDown />
       <HeroSection {...heroData} />
       <FeaturesSection features={features} />
-      <AppFeatures />
       <StatisticsSection statistics={statistics} />
       <BlogSection blogPosts={blogPosts} />
       <TeamSection teamMembers={teamMembers} />

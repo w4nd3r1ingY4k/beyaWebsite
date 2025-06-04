@@ -1,26 +1,24 @@
 {
   "compilerOptions": {
-    "target": "es5",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
-    "allowJs": true,
-    "skipLibCheck": true,
+    "target": "esnext", // Modern target
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler", // Or "node" if "bundler" causes issues with your setup
+    "jsx": "react-jsx",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "module": "esnext",
-    "moduleResolution": "node",
+    "skipLibCheck": false, // Important: keep this false to see if types install
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "jsx": "react-jsx"
+    "noEmit": true, // Assuming this is a frontend project handled by a bundler
+    "allowJs": true,
+    "forceConsistentCasingInFileNames": true // Good practice
+    // Remove typeRoots and types for now, unless you are ABSOLUTELY sure you need them
+    // and know what they do.
+    // "typeRoots": ["./node_modules/@types", "./src/types"], // Example default + custom
+    // "types": [] // If empty, includes all @types visible
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"], // Ensure this points to your source code
+  "exclude": ["node_modules"] // Standard
 }
