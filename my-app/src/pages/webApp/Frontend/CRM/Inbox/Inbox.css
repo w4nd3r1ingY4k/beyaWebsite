@@ -65,16 +65,16 @@ body, html {
 
 .message-preview {
   display: flex;
-  padding: 12px;
+  padding: 20px;
   margin-bottom: 12px;
   background-color: #FFFBFA;
-  border: 1px solid #D9D9D9;
   border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s;
 }
 
 .message-preview.active {
+  border: 1px solid;
   background: #FFF4FA;
   border-color: #DE1785;
 }
