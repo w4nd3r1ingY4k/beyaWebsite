@@ -39,22 +39,11 @@ export const features = [
 export const footerData = {
   logo: "assets/icons/logo-1.png",
   description: "Still in beta...",
-  socialLinks: [
-    {
-      text: "akbar@usebeya.com",
-      href: "mailto:akbar@usebeya.com",
-      ariaLabel: "Email us",
-    },
-  ],
-  quickLinks: [
-    { href: "#", text: "Home", isActive: true },
-    { href: "#about", text: "About" },
-  ],
+  emailLink: "hello.usebeya@gmail.com",
   newsletterTitle: "Newsletter",
   newsletterDescription: "Subscribe to our newsletter for updates",
-  copyrightText: "Copyright 2024. All Rights Reserved.",
+  copyrightText: `Copyright ${new Date().getFullYear()}. All Rights Reserved.`,
 };
-
 
 export const statistics = [
   {
@@ -102,35 +91,7 @@ export const teamMembers = [
         ariaLabel: "Follow Austin on LinkedIn"
       }
     ]
-  },
-  // {
-  //   image: "assets/headshots/jeff_headshot.jpeg",
-  //   name: "Jeffrey Liang",
-  //   school: "Brown University",
-  //   major: "Computer Science and Economics",
-  //   role: "Technical Development Lead",
-  //   socialLinks: [
-  //     {
-  //       href: "https://www.linkedin.com/in/jeffrey-liang-a04760291/",
-  //       text: "",
-  //       ariaLabel: "Follow Jeff on LinkedIn"
-  //     }
-  //   ]
-  // },
-  // {
-  //   image: "assets/headshots/johnson_headshot.png",
-  //   name: "Johnson Shou",
-  //   school: "Brown University",
-  //   major: "Computer Science and Music",
-  //   role: "Web Developer",
-  //   socialLinks: [
-  //     {
-  //       href: "https://www.linkedin.com/in/johnsonshou/",
-  //       text: "",
-  //       ariaLabel: "Follow Johnson on LinkedIn"
-  //     }
-  //   ]
-  // }
+  }
 ];
 
 export const blogPosts = [

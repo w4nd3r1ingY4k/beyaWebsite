@@ -1,0 +1,130 @@
+/* footer.css */
+
+/* Footer wrapper */
+.footer {
+    background: #DF1780;
+    color: white;
+    padding-top: 80px;
+    padding-bottom: 24px;
+}
+
+/* Centered container */
+.footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 16px;
+    padding-right: 16px;
+    box-sizing: border-box;
+}
+
+/* Grid: single column by default */
+.footer-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 48px;
+    margin-bottom: 48px;
+    box-sizing: border-box;
+}
+
+/* On md+ screens, switch to three columns */
+@media (min-width: 768px) {
+    .footer-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* Logo image */
+.footer-logo {
+    height: 32px;
+    margin-bottom: 24px;
+}
+
+/* Description text */
+.footer-description {
+    color: #d1d5db;
+    margin-bottom: 24px;
+}
+
+/* Email row */
+.footer-email-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    align-items: center;
+    box-sizing: border-box;
+}
+
+/* Email link */
+.footer-email-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-email-link:hover {
+    color: #ec4899;
+}
+
+/* Section titles (e.g., “Social Media”, “Newsletter”) */
+.footer-section-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 24px;
+}
+
+/* Social icons container */
+.footer-social-icons {
+    display: flex;
+    gap: 24px;
+    font-size: 24px;
+    box-sizing: border-box;
+}
+
+/* Individual social icon link */
+.footer-social-icon {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.footer-social-icon:hover {
+    color: #ec4899;
+}
+
+/* Newsletter title */
+.footer-newsletter-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+/* Newsletter description */
+.footer-newsletter-desc {
+    color: #d1d5db;
+    margin-bottom: 24px;
+}
+
+/* Privacy link */
+.footer-privacy {
+    margin-top: 16px;
+    font-size: 14px;
+    text-decoration: underline;
+    color: inherit;
+    transition: color 0.2s;
+}
+
+.footer-privacy:hover {
+    color: #ffffff;
+}
+
+/* Copyright text */
+.footer-copyright {
+    border-top: 1px solid #374151;
+    padding-top: 24px;
+    text-align: center;
+    color: #ffffff;
+    margin-top: 24px;
+}

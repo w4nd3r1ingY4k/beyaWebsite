@@ -1,0 +1,56 @@
+/* TeamMember.css */
+
+/* Wrapper for each team member */
+.team-member {
+    text-align: center;
+    padding: 1rem;
+    box-sizing: border-box;
+}
+
+/* Circular image */
+.team-member-image {
+    border-radius: 50%;
+    display: block;
+    margin: 0 auto 1rem auto;
+    width: 10rem;
+    height: 10rem;
+    object-fit: cover;
+}
+
+/* Name heading */
+.team-member-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #3a3a3a;
+    margin: 0;
+}
+
+/* School and major paragraphs */
+.team-member-school,
+.team-member-major {
+    margin: 0;
+    font-size: 0.875rem;
+    color: #6b7280;
+}
+
+/* Add a tiny gap above the major */
+.team-member-major {
+    margin-top: 4px;
+}
+
+/* Role paragraph (with extra gap above) */
+.team-member-role {
+    margin: 0;
+    margin-top: 8px;
+    font-weight: 600;
+    color: #3a3a3a;
+}
+
+/* Container for social links */
+.team-member-socials {
+    margin-top: 0.5rem;
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    box-sizing: border-box;
+}

@@ -12,7 +12,8 @@ const imgStyle: React.CSSProperties = {
   width: "100%",
   height: "12rem",
   objectFit: "cover",
-  padding: "1.25rem",
+  padding: "1.25rem 1.25rem 0 1.25rem",
+  borderRadius: "1.5rem",
 };
 
 const divStyle: React.CSSProperties = {

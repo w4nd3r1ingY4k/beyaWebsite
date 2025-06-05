@@ -1,53 +1,36 @@
 import React from "react";
 import { SocialLink } from "../SocialLink";
+import "./TeamMember.css";
 
-export const TeamMember: React.FC<{
+interface TeamMemberProps {
   image: string;
   name: string;
   school: string;
   major: string;
   role: string;
   socialLinks: { href: string; text: string }[];
-}> = ({ image, name, school, major, role, socialLinks }) => {
+}
+
+export const TeamMember: React.FC<TeamMemberProps> = ({
+  image,
+  name,
+  school,
+  major,
+  role,
+  socialLinks,
+}) => {
   return (
-    <div
-      style={{
-        textAlign: "center",
-        padding: "1rem",
-      }}
-    >
+    <div className="team-member">
       <img
         src={image}
         alt={name}
-        style={{
-          borderRadius: "50%",
-          display: "block",
-          margin: "0 auto 1rem auto",
-          width: "10rem",
-          height: "10rem",
-          objectFit: "cover",
-        }}
+        className="team-member-image"
       />
-      <h3
-        style={{
-          fontSize: "1.25rem",
-          fontWeight: 600,
-          color: "#3A3A3A",
-        }}
-      >
-        {name}
-      </h3>
-      <p style={{ fontSize: "0.875rem", color: "#6B7280" }}>{school}</p>
-      <p style={{ fontSize: "0.875rem", color: "#6B7280" }}>{major}</p>
-      <p style={{ fontWeight: 600, color: "#3A3A3A" }}>{role}</p>
-      <div
-        style={{
-          marginTop: "0.5rem",
-          display: "flex",
-          justifyContent: "center",
-          gap: "1rem",
-        }}
-      >
+      <h3 className="team-member-name">{name}</h3>
+      <p className="team-member-school">{school}</p>
+      <p className="team-member-major">{major}</p>
+      <p className="team-member-role">{role}</p>
+      <div className="team-member-socials">
         {socialLinks.map((link, index) => (
           <SocialLink key={index} {...link} />
         ))}

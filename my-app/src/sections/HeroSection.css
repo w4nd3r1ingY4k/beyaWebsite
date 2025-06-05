@@ -1,0 +1,117 @@
+/* HeroSection.css */
+
+/* Section wrapper */
+.hero-section {
+    position: relative;
+    background: linear-gradient(to right, #F472B6, #DB2777);
+    padding-top: 160px;
+    padding-bottom: 160px;
+}
+
+/* Centered container */
+.hero-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding-left: 16px;
+    padding-right: 16px;
+    box-sizing: border-box;
+}
+
+/* Flex row: side-by-side on wide screens, wraps on narrow */
+.hero-flex-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+}
+
+/* Text section (white box wrapper is inside this) */
+.hero-text-section {
+    flex: 1;
+    max-width: 90%;
+    padding-left: 16px;
+    padding-right: 16px;
+    margin-top: 0;
+    margin-bottom: 0;
+    box-sizing: border-box;
+}
+
+/* White “card” behind the text */
+.hero-white-box {
+    background: #ffffff;
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    margin-right: 20px;
+    box-sizing: border-box;
+}
+
+/* Title inside the white box */
+.hero-title {
+    font-size: 40px;
+    font-weight: bold;
+    color: #1a202c;
+    margin-bottom: 24px;
+}
+
+/* Description paragraph */
+.hero-desc {
+    font-size: 20px;
+    color: #374151;
+    margin-bottom: 32px;
+}
+
+/* Wireframe link paragraph */
+.hero-wireframe {
+    margin-bottom: 16px;
+}
+
+/* “Download App Now” heading style */
+.hero-download-title {
+    font-size: 24px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: #1a202c;
+}
+
+/* When greyed out is true, apply these overrides */
+.hero-greyed-out {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Image container section */
+.hero-image-section {
+    flex: 1;
+    max-width: 30%;
+    display: flex;
+    justify-content: center;
+    padding-left: 16px;
+    padding-right: 16px;
+    box-sizing: border-box;
+    margin-left: 20px;
+}
+
+/* The actual <img> inside the image section */
+.hero-img {
+    width: 100%;
+    height: auto;
+    max-height: 500px;
+    object-fit: contain;
+    border-radius: 12px;
+}
+
+/* Responsive adjustment: if viewport ≤ 640px, stack sections */
+@media (max-width: 640px) {
+    .hero-text-section {
+        max-width: 100%;
+        margin-bottom: 24px;
+        /* add some spacing before image */
+    }
+
+    .hero-image-section {
+        max-width: 100%;
+        margin-left: 0;
+    }
+}

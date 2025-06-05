@@ -1,5 +1,6 @@
 import React from "react";
 import { AppDownloadProps } from "../../ComponentTypes";
+import "./AppDownload.css";
 
 export const AppDownload: React.FC<AppDownloadProps> = ({
   googlePlayLink,
@@ -7,33 +8,35 @@ export const AppDownload: React.FC<AppDownloadProps> = ({
   googlePlayImage,
   appStoreImage,
   disabled = false,
-}) => (
-  <div
-    className={`flex gap-4 items-center ${
-      disabled ? 'opacity-50 pointer-events-none cursor-not-allowed' : ''
-    }`}
-  >
-    <a
-      href={googlePlayLink}
-      className="transition-transform hover:scale-105 flex items-center"
-      aria-label="Download on Google Play"
+}) => {
+  return (
+    <div
+      className={`app-download-container ${disabled ? "app-download-disabled" : ""
+        }`}
     >
-      <img
-        src={googlePlayImage}
-        alt="Get it on Google Play"
-        className="h-12 w-auto object-contain"
-      />
-    </a>
-    <a
-      href={appStoreLink}
-      className="transition-transform hover:scale-105 flex items-center"
-      aria-label="Download on App Store"
-    >
-      <img
-        src={appStoreImage}
-        alt="Download on the App Store"
-        className="h-12 w-auto object-contain mb-[0.25em]"
-      />
-    </a>
-  </div>
-);
+      <a
+        href={googlePlayLink}
+        aria-label="Download on Google Play"
+        className="app-download-link"
+      >
+        <img
+          src={googlePlayImage}
+          alt="Get it on Google Play"
+          className="app-download-img"
+        />
+      </a>
+
+      <a
+        href={appStoreLink}
+        aria-label="Download on App Store"
+        className="app-download-link"
+      >
+        <img
+          src={appStoreImage}
+          alt="Download on the App Store"
+          className="app-download-img"
+        />
+      </a>
+    </div>
+  );
+};

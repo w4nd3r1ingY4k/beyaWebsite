@@ -59,8 +59,7 @@ export interface SocialLinkProps {
   export interface FooterProps {
     logo: string;
     description: string;
-    socialLinks: SocialLinkProps[];
-    quickLinks: NavLinkProps[];
+    emailLink: string;
     newsletterTitle: string;
     newsletterDescription: string;
     copyrightText: string;

@@ -1,0 +1,49 @@
+/* Container for the two buttons */
+.app-download-container {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: flex-start; 
+}
+
+/* Individual link wrapper (for hover scale) */
+.app-download-link {
+    display: flex;
+    align-items: left;
+    transition: transform 0.2s;
+    text-decoration: none;
+}
+
+/* Common image style */
+.app-download-img {
+    height: 3rem;
+    width: auto;
+    object-fit: contain;
+    margin-bottom: 0.25em;
+}
+
+/* Disabled state */
+.app-download-disabled {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: not-allowed;
+}
+
+/* Hover effect (scale) */
+.app-download-link:hover {
+    transform: scale(1.05);
+}
+
+/* ===== Mobile breakpoint: stack vertically, shrink icons ===== */
+@media (max-width: 640px) {
+    .app-download-container {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .app-download-img {
+        height: 2.5rem;
+        /* slightly smaller on mobile */
+        margin-bottom: 0.5em;
+    }
+}
