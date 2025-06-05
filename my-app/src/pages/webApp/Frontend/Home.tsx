@@ -102,7 +102,7 @@ const navigate = useNavigate();
       />
 
       <div style={{ flex: 1, padding: 0 }}>
-        {/* <AIChatCircle /> */}
+        <AIChatCircle />
         {renderContent()}
       </div>
     </div>

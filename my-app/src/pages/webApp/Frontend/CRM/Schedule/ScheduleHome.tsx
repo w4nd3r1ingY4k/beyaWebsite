@@ -1,7 +1,24 @@
-// src/CalendarPage.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, NavigateAction } from 'react-big-calendar';
+import { format, parse, startOfWeek, getDay, parseISO, addHours, startOfDay, endOfDay } from 'date-fns';
+import { enUS } from 'date-fns/locale/en-US';
+import { X, Clock, CalendarIcon, MapPin, Users, Edit2, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 
-// Utility to format a JS Date as YYYY-MM-DD
+// ─────────── Date-Fns Localizer Setup ───────────
+const locales = {
+  'en-US': enUS,
+};
+
+const localizer = dateFnsLocalizer({
+  format,
+  parse: (value: string, formatString: string) => parse(value, formatString, new Date()),
+  startOfWeek: (date: Date) => startOfWeek(date, { weekStartsOn: 0 }),
+  getDay,
+  locales,
+});
+
+// ─────────── Utility Functions ───────────
 function formatDateKey(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -9,347 +26,1139 @@ function formatDateKey(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// Month names and weekday names
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December'
-];
-const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// ─────────── Enhanced Event Format ───────────
+interface EventData {
+  id: string;
+  title: string;
+  time?: string;
+  location?: string;
+  attendees?: string[];
+  notes?: string;
+}
 
-// Inline styles for various parts of the calendar
+interface EventsByDate {
+  [dateKey: string]: EventData[];
+}
+
+interface RBCEvent extends EventData {
+  start: Date;
+  end: Date;
+  allDay: boolean;
+}
+
+// ─────────── Style Constants ───────────
 const styles = {
   container: {
-    fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-    color: '#374151',
+    height: '100vh',
+    backgroundColor: '#F9FAFB',
     display: 'flex',
     flexDirection: 'column' as const,
-    alignItems: 'center' as const,
-    padding: '16px',
-    backgroundColor: '#FFFBFA',
-    minHeight: '100vh',
-    boxSizing: 'border-box' as const,
   },
   header: {
+    backgroundColor: 'white',
+    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+    borderBottom: '1px solid #E5E7EB',
+    padding: '16px 0',
+  },
+  headerTitle: {
+    fontSize: '24px',
+    fontWeight: '600',
+    color: '#111827',
+    padding: '0 24px',
+    margin: 0,
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  mainContent: {
+    flex: 1,
+    padding: '24px',
+  },
+  calendarWrapper: {
+    backgroundColor: 'white',
+    borderRadius: '12px',
+    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+    height: '100%',
+    padding: '16px',
+  },
+  toolbar: {
     display: 'flex',
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    width: '100%',
-    maxWidth: '800px',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: '16px',
+    padding: '0 16px',
+  },
+  toolbarLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  todayButton: {
+    padding: '8px 16px',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#374151',
+    backgroundColor: 'white',
+    border: '1px solid #D1D5DB',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
   },
   navButton: {
-    background: 'transparent',
-    border: '1px solid #d1d5db',
-    borderRadius: '4px',
-    padding: '6px 12px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    color: '#374151',
-    transition: 'background 0.2s',
-  },
-  navLabel: {
-    fontSize: '18px',
-    fontWeight: 600 as const,
-    textAlign: 'center' as const,
-    flex: 1,
-  },
-  weekdayRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    width: '100%',
-    maxWidth: '800px',
-    marginBottom: '4px',
-  },
-  weekdayCell: {
-    textAlign: 'center' as const,
-    padding: '8px 0',
-    fontSize: '14px',
-    fontWeight: 600 as const,
+    padding: '8px',
     color: '#4B5563',
-  },
-  calendarGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gridAutoRows: '100px',
-    gap: '1px',
-    backgroundColor: '#E5E7EB',
-    width: '100%',
-    maxWidth: '800px',
-  },
-  dayCell: {
-    backgroundColor: '#ffffff',
-    position: 'relative' as const,
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
     cursor: 'pointer',
-    overflow: 'hidden' as const,
+    transition: 'background-color 0.2s',
+  },
+  monthLabel: {
+    fontSize: '20px',
+    fontWeight: '600',
+    color: '#1F2937',
+    marginLeft: '16px',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  viewSwitcher: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    backgroundColor: '#F3F4F6',
+    padding: '4px',
+    borderRadius: '8px',
+  },
+  viewButton: (isActive: boolean) => ({
+    padding: '8px 16px',
+    fontSize: '14px',
+    fontWeight: '500',
+    borderRadius: '6px',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    backgroundColor: isActive ? 'white' : 'transparent',
+    color: isActive ? '#111827' : '#4B5563',
+    boxShadow: isActive ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  }),
+  modal: {
+    position: 'fixed' as const,
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 50,
+    padding: '16px',
+  },
+  modalContent: {
+    backgroundColor: 'white',
+    borderRadius: '16px',
+    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+    maxWidth: '512px',
+    width: '100%',
+    maxHeight: '90vh',
+    overflowY: 'auto' as const,
+  },
+  modalHeader: {
+    padding: '24px',
+    borderBottom: '1px solid #F3F4F6',
+  },
+  modalHeaderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalTitle: {
+    fontSize: '24px',
+    fontWeight: '600',
+    color: '#111827',
+    margin: 0,
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  closeButton: {
+    padding: '8px',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  modalBody: {
+    padding: '24px',
     display: 'flex',
     flexDirection: 'column' as const,
-    justifyContent: 'flex-start' as const,
-    padding: '4px',
+    gap: '16px',
+  },
+  inputGroup: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '4px',
+  },
+  label: {
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: '4px',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  input: {
+    width: '100%',
+    padding: '8px 16px',
+    border: '1px solid #D1D5DB',
+    borderRadius: '8px',
+    fontSize: '16px',
+    outline: 'none',
+    transition: 'all 0.2s',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
     boxSizing: 'border-box' as const,
   },
-  dayNumber: {
-    fontSize: '14px',
-    fontWeight: 500 as const,
-    color: '#1F2937',
+  textarea: {
+    width: '100%',
+    padding: '8px 16px',
+    border: '1px solid #D1D5DB',
+    borderRadius: '8px',
+    fontSize: '16px',
+    outline: 'none',
+    transition: 'all 0.2s',
+    resize: 'none' as const,
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    boxSizing: 'border-box' as const,
   },
-  eventDotsContainer: {
-    marginTop: 'auto',
+  iconRow: {
     display: 'flex',
-    gap: '4px',
-    paddingBottom: '4px',
+    alignItems: 'center',
+    gap: '8px',
   },
-  eventDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    backgroundColor: '#DE1785',
+  dateDisplay: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: '#4B5563',
   },
-  tooltip: {
-    position: 'absolute' as const,
-    top: '20px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    backgroundColor: '#111827',
-    color: '#ffffff',
-    padding: '6px 8px',
+  attendeeInput: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '8px',
+  },
+  addButton: {
+    padding: '8px',
+    backgroundColor: '#FDF2F8',
+    color: '#EC4899',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+  },
+  attendeeList: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: '8px',
+  },
+  attendeeItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    padding: '8px 12px',
+    borderRadius: '8px',
+  },
+  attendeeText: {
+    fontSize: '14px',
+    color: '#374151',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  removeButton: {
+    color: '#9CA3AF',
+    backgroundColor: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'color 0.2s',
+  },
+  modalFooter: {
+    padding: '24px',
+    borderTop: '1px solid #F3F4F6',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deleteButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 16px',
+    color: '#DC2626',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  buttonGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginLeft: 'auto',
+  },
+  cancelButton: {
+    padding: '8px 16px',
+    color: '#4B5563',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  saveButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 24px',
+    backgroundColor: '#EC4899',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'background-color 0.2s',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  eventComponent: {
+    height: '100%',
+    padding: '4px',
+  },
+  eventTitle: {
+    fontWeight: '500',
+    fontSize: '14px',
+  },
+  eventTime: {
     fontSize: '12px',
-    borderRadius: '4px',
-    pointerEvents: 'none' as const,
-    whiteSpace: 'pre-wrap' as const,
-    zIndex: 1000,
-    maxWidth: '120px',
-    textAlign: 'left' as const,
+    opacity: 0.9,
+  },
+  eventLocation: {
+    fontSize: '12px',
+    opacity: 0.75,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+    marginTop: '4px',
   },
 };
 
-interface EventsByDate {
-  [dateKey: string]: string[];
-}
+// ─────────── Custom Toolbar Component ───────────
+const CustomToolbar = ({ date, view, onView, onNavigate }: any) => {
+  const goToBack = () => onNavigate('PREV');
+  const goToNext = () => onNavigate('NEXT');
+  const goToToday = () => onNavigate('TODAY');
 
+  const label = () => {
+    const d = date;
+    if (view === Views.DAY) return format(d, 'EEEE, MMMM d, yyyy');
+    if (view === Views.WEEK) return `Week of ${format(d, 'MMMM d, yyyy')}`;
+    return format(d, 'MMMM yyyy');
+  };
+
+  return (
+    <div style={styles.toolbar}>
+      <div style={styles.toolbarLeft}>
+        <button
+          onClick={goToToday}
+          style={styles.todayButton}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+        >
+          Today
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <button
+            onClick={goToBack}
+            style={styles.navButton}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <ChevronLeft size={20} />
+          </button>
+          <button
+            onClick={goToNext}
+            style={styles.navButton}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+        <h2 style={styles.monthLabel}>{label()}</h2>
+      </div>
+      
+      <div style={styles.viewSwitcher}>
+        <button
+          onClick={() => onView(Views.DAY)}
+          style={styles.viewButton(view === Views.DAY)}
+          onMouseEnter={(e) => {
+            if (view !== Views.DAY) e.currentTarget.style.color = '#111827';
+          }}
+          onMouseLeave={(e) => {
+            if (view !== Views.DAY) e.currentTarget.style.color = '#4B5563';
+          }}
+        >
+          Day
+        </button>
+        <button
+          onClick={() => onView(Views.WEEK)}
+          style={styles.viewButton(view === Views.WEEK)}
+          onMouseEnter={(e) => {
+            if (view !== Views.WEEK) e.currentTarget.style.color = '#111827';
+          }}
+          onMouseLeave={(e) => {
+            if (view !== Views.WEEK) e.currentTarget.style.color = '#4B5563';
+          }}
+        >
+          Week
+        </button>
+        <button
+          onClick={() => onView(Views.MONTH)}
+          style={styles.viewButton(view === Views.MONTH)}
+          onMouseEnter={(e) => {
+            if (view !== Views.MONTH) e.currentTarget.style.color = '#111827';
+          }}
+          onMouseLeave={(e) => {
+            if (view !== Views.MONTH) e.currentTarget.style.color = '#4B5563';
+          }}
+        >
+          Month
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─────────── Event Summary Modal Component ───────────
+const EventSummaryModal = ({ event, onClose, onEdit, onDelete }: {
+  event: RBCEvent | null;
+  onClose: () => void;
+  onEdit: () => void;
+  onDelete: (eventId: string) => void;
+}) => {
+  if (!event) return null;
+
+  const summaryStyles = {
+    modal: {
+      position: 'fixed' as const,
+      inset: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 50,
+      padding: '16px',
+    },
+    content: {
+      backgroundColor: 'white',
+      borderRadius: '16px',
+      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
+      maxWidth: '400px',
+      width: '100%',
+    },
+    header: {
+      padding: '20px 24px',
+      borderBottom: '1px solid #F3F4F6',
+      position: 'relative' as const,
+    },
+    closeButton: {
+      position: 'absolute' as const,
+      top: '20px',
+      right: '20px',
+      padding: '8px',
+      backgroundColor: 'transparent',
+      border: 'none',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      transition: 'background-color 0.2s',
+    },
+    title: {
+      fontSize: '20px',
+      fontWeight: '600',
+      color: '#111827',
+      margin: 0,
+      paddingRight: '40px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    },
+    body: {
+      padding: '24px',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      gap: '16px',
+    },
+    infoRow: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '12px',
+    },
+    icon: {
+      marginTop: '2px',
+      flexShrink: 0,
+    },
+    infoContent: {
+      flex: 1,
+    },
+    infoLabel: {
+      fontSize: '12px',
+      color: '#6B7280',
+      marginBottom: '2px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    },
+    infoText: {
+      fontSize: '14px',
+      color: '#111827',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+    },
+    attendeeChip: {
+      display: 'inline-block',
+      backgroundColor: '#F3F4F6',
+      padding: '4px 8px',
+      borderRadius: '6px',
+      fontSize: '12px',
+      marginRight: '6px',
+      marginTop: '4px',
+    },
+    footer: {
+      padding: '16px 24px',
+      borderTop: '1px solid #F3F4F6',
+      display: 'flex',
+      gap: '8px',
+      justifyContent: 'flex-end',
+    },
+    actionButton: {
+      padding: '8px 16px',
+      backgroundColor: 'white',
+      color: '#374151',
+      border: '1px solid #D1D5DB',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      fontSize: '14px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+    },
+    primaryButton: {
+      padding: '8px 16px',
+      backgroundColor: '#EC4899',
+      color: 'white',
+      border: 'none',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      transition: 'background-color 0.2s',
+      fontSize: '14px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+    },
+    deleteButton: {
+      padding: '8px 16px',
+      backgroundColor: 'white',
+      color: '#DC2626',
+      border: '1px solid #FCA5A5',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      fontSize: '14px',
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+    },
+  };
+
+  return (
+    <div style={summaryStyles.modal} onClick={onClose}>
+      <div style={summaryStyles.content} onClick={(e) => e.stopPropagation()}>
+        <div style={summaryStyles.header}>
+          <h2 style={summaryStyles.title}>{event.title}</h2>
+          <button
+            onClick={onClose}
+            style={summaryStyles.closeButton}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+          >
+            <X size={20} color="#6B7280" />
+          </button>
+        </div>
+
+        <div style={summaryStyles.body}>
+          {/* Date and Time */}
+          <div style={summaryStyles.infoRow}>
+            <CalendarIcon size={18} color="#6B7280" style={summaryStyles.icon} />
+            <div style={summaryStyles.infoContent}>
+              <div style={summaryStyles.infoLabel}>Date & Time</div>
+              <div style={summaryStyles.infoText}>
+                {format(event.start, 'EEEE, MMMM d, yyyy')}
+                {event.time && (
+                  <span> at {event.time}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Location */}
+          {event.location && (
+            <div style={summaryStyles.infoRow}>
+              <MapPin size={18} color="#6B7280" style={summaryStyles.icon} />
+              <div style={summaryStyles.infoContent}>
+                <div style={summaryStyles.infoLabel}>Location</div>
+                <div style={summaryStyles.infoText}>{event.location}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Attendees */}
+          {event.attendees && event.attendees.length > 0 && (
+            <div style={summaryStyles.infoRow}>
+              <Users size={18} color="#6B7280" style={summaryStyles.icon} />
+              <div style={summaryStyles.infoContent}>
+                <div style={summaryStyles.infoLabel}>Attendees ({event.attendees.length})</div>
+                <div>
+                  {event.attendees.map((attendee, index) => (
+                    <span key={index} style={summaryStyles.attendeeChip}>
+                      {attendee}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {event.notes && (
+            <div style={summaryStyles.infoRow}>
+              <Edit2 size={18} color="#6B7280" style={summaryStyles.icon} />
+              <div style={summaryStyles.infoContent}>
+                <div style={summaryStyles.infoLabel}>Notes</div>
+                <div style={summaryStyles.infoText}>{event.notes}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div style={summaryStyles.footer}>
+          <button
+            onClick={() => {
+              onDelete(event.id);
+              onClose();
+            }}
+            style={summaryStyles.deleteButton}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#FEE2E2';
+              e.currentTarget.style.borderColor = '#F87171';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'white';
+              e.currentTarget.style.borderColor = '#FCA5A5';
+            }}
+          >
+            <Trash2 size={14} />
+            Delete
+          </button>
+          <button
+            onClick={onEdit}
+            style={summaryStyles.primaryButton}
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DB2777'}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EC4899'}
+          >
+            <Edit2 size={14} />
+            Edit Event
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────── Event Modal Component ───────────
+const EventModal = ({ event, onClose, onSave, onDelete }: {
+  event: RBCEvent | null;
+  onClose: () => void;
+  onSave: (event: EventData) => void;
+  onDelete: (eventId: string) => void;
+}) => {
+  const [editedEvent, setEditedEvent] = useState<EventData>(
+    event || {
+      id: Date.now().toString(),
+      title: '',
+      time: '',
+      location: '',
+      attendees: [],
+      notes: ''
+    }
+  );
+  const [attendeeInput, setAttendeeInput] = useState('');
+
+  if (!event) return null;
+
+  const handleSave = () => {
+    if (editedEvent.title.trim()) {
+      onSave(editedEvent);
+      onClose();
+    }
+  };
+
+  const addAttendee = () => {
+    if (attendeeInput.trim()) {
+      setEditedEvent({
+        ...editedEvent,
+        attendees: [...(editedEvent.attendees || []), attendeeInput.trim()]
+      });
+      setAttendeeInput('');
+    }
+  };
+
+  const removeAttendee = (index: number) => {
+    setEditedEvent({
+      ...editedEvent,
+      attendees: editedEvent.attendees?.filter((_, i) => i !== index) || []
+    });
+  };
+
+  return (
+    <div style={styles.modal}>
+      <div style={styles.modalContent}>
+        <div style={styles.modalHeader}>
+          <div style={styles.modalHeaderRow}>
+            <h2 style={styles.modalTitle}>
+              {event.id ? 'Edit Event' : 'New Event'}
+            </h2>
+            <button
+              onClick={onClose}
+              style={styles.closeButton}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <X size={20} color="#6B7280" />
+            </button>
+          </div>
+        </div>
+
+        <div style={styles.modalBody}>
+          {/* Title */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Event Title</label>
+            <input
+              type="text"
+              value={editedEvent.title}
+              onChange={(e) => setEditedEvent({ ...editedEvent, title: e.target.value })}
+              style={styles.input}
+              placeholder="Enter event title"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#EC4899';
+                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#D1D5DB';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            />
+          </div>
+
+          {/* Date */}
+          <div style={styles.dateDisplay}>
+            <CalendarIcon size={20} />
+            <span style={{ fontSize: '14px' }}>
+              {format(event.start, 'EEEE, MMMM d, yyyy')}
+            </span>
+          </div>
+
+          {/* Time */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Time</label>
+            <div style={styles.iconRow}>
+              <Clock size={20} color="#9CA3AF" />
+              <input
+                type="text"
+                value={editedEvent.time || ''}
+                onChange={(e) => setEditedEvent({ ...editedEvent, time: e.target.value })}
+                style={{ ...styles.input, flex: 1 }}
+                placeholder="e.g., 2:00 PM - 3:00 PM"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#EC4899';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#D1D5DB';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Location */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Location</label>
+            <div style={styles.iconRow}>
+              <MapPin size={20} color="#9CA3AF" />
+              <input
+                type="text"
+                value={editedEvent.location || ''}
+                onChange={(e) => setEditedEvent({ ...editedEvent, location: e.target.value })}
+                style={{ ...styles.input, flex: 1 }}
+                placeholder="Add location"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#EC4899';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#D1D5DB';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Attendees */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Attendees</label>
+            <div style={styles.attendeeInput}>
+              <Users size={20} color="#9CA3AF" />
+              <input
+                type="text"
+                value={attendeeInput}
+                onChange={(e) => setAttendeeInput(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addAttendee()}
+                style={{ ...styles.input, flex: 1 }}
+                placeholder="Add attendee email"
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = '#EC4899';
+                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = '#D1D5DB';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              />
+              <button
+                onClick={addAttendee}
+                style={styles.addButton}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCE7F3'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FDF2F8'}
+              >
+                <Plus size={20} />
+              </button>
+            </div>
+            <div style={styles.attendeeList}>
+              {editedEvent.attendees?.map((attendee, index) => (
+                <div key={index} style={styles.attendeeItem}>
+                  <span style={styles.attendeeText}>{attendee}</span>
+                  <button
+                    onClick={() => removeAttendee(index)}
+                    style={styles.removeButton}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#EF4444'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#9CA3AF'}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Notes */}
+          <div style={styles.inputGroup}>
+            <label style={styles.label}>Notes</label>
+            <textarea
+              value={editedEvent.notes || ''}
+              onChange={(e) => setEditedEvent({ ...editedEvent, notes: e.target.value })}
+              style={styles.textarea}
+              rows={3}
+              placeholder="Add notes or description"
+              onFocus={(e) => {
+                e.currentTarget.style.borderColor = '#EC4899';
+                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.borderColor = '#D1D5DB';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={styles.modalFooter}>
+          {event.id && (
+            <button
+              onClick={() => {
+                onDelete(event.id);
+                onClose();
+              }}
+              style={styles.deleteButton}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+          )}
+          <div style={styles.buttonGroup}>
+            <button
+              onClick={onClose}
+              style={styles.cancelButton}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              style={styles.saveButton}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DB2777'}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EC4899'}
+            >
+              <Edit2 size={16} />
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────── Main Calendar Component ───────────
 const CalendarPage: React.FC = () => {
-  // 1) Track current year/month (0-indexed month)
-  const today = new Date();
-  const [currentYear, setCurrentYear] = useState(today.getFullYear());
-  const [currentMonth, setCurrentMonth] = useState(today.getMonth());
-
-  // 2) Load existing events from localStorage (if any)
   const [eventsByDate, setEventsByDate] = useState<EventsByDate>({});
+  const [currentView, setCurrentView] = useState<View>(Views.MONTH);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedEvent, setSelectedEvent] = useState<RBCEvent | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
 
+  // Load events from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem('calendarEvents');
+    const stored = localStorage.getItem('calendarEventsEnhanced');
     if (stored) {
       try {
         setEventsByDate(JSON.parse(stored));
       } catch {
-        setEventsByDate({});
+        // Try to migrate from old format
+        const oldStored = localStorage.getItem('calendarEvents');
+        if (oldStored) {
+          try {
+            const oldData = JSON.parse(oldStored);
+            const migrated: EventsByDate = {};
+            Object.entries(oldData).forEach(([dateKey, titles]: [string, any]) => {
+              if (Array.isArray(titles)) {
+                migrated[dateKey] = titles.map((title: string) => ({
+                  id: Date.now().toString() + Math.random(),
+                  title,
+                }));
+              }
+            });
+            setEventsByDate(migrated);
+          } catch {
+            setEventsByDate({});
+          }
+        }
       }
     }
   }, []);
 
-  // 3) Persist events to localStorage whenever they change
+  // Persist events to localStorage
   useEffect(() => {
-    localStorage.setItem('calendarEvents', JSON.stringify(eventsByDate));
+    localStorage.setItem('calendarEventsEnhanced', JSON.stringify(eventsByDate));
   }, [eventsByDate]);
 
-  // 4) Compute the days to render for the current month view
-  const generateCalendarMatrix = useCallback(() => {
-    // a) First day of this month
-    const firstOfMonth = new Date(currentYear, currentMonth, 1);
-    const weekdayOfFirst = firstOfMonth.getDay(); // 0=Sun, 6=Sat
-    // b) Number of days in this month
-    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-    // c) Build array of Date objects (or null) for each cell, starting from Sunday
-    const matrix: (Date | null)[] = [];
-    // Prepend blanks until first-of-month’s weekday
-    for (let i = 0; i < weekdayOfFirst; i++) {
-      matrix.push(null);
-    }
-    // Add each date of this month
-    for (let day = 1; day <= daysInMonth; day++) {
-      matrix.push(new Date(currentYear, currentMonth, day));
-    }
-    // After inserting all days, fill remaining cells to complete the last week row
-    while (matrix.length % 7 !== 0) {
-      matrix.push(null);
-    }
-    return matrix;
-  }, [currentYear, currentMonth]);
+  // Convert events to RBC format
+  const rbEvents: RBCEvent[] = useMemo(() => {
+    const out: RBCEvent[] = [];
+    Object.entries(eventsByDate).forEach(([dateKey, events]) => {
+      const dayStart = parseISO(dateKey);
+      events.forEach((event) => {
+        // Parse time if available for day/week views
+        let start = dayStart;
+        let end = dayStart;
+        let allDay = true;
 
-  const calendarMatrix = generateCalendarMatrix();
-
-  // 5) Handlers for Prev/Next month buttons
-  const goToPrevMonth = () => {
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear((y) => y - 1);
-    } else {
-      setCurrentMonth((m) => m - 1);
-    }
-  };
-
-  const goToNextMonth = () => {
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear((y) => y + 1);
-    } else {
-      setCurrentMonth((m) => m + 1);
-    }
-  };
-
-  // 6) Day‐cell click: either add or manage existing events
-  const onDayClick = (dateObj: Date) => {
-    const key = formatDateKey(dateObj);
-    const existing = eventsByDate[key] || [];
-
-    if (existing.length === 0) {
-      // No events yet → prompt to add one
-      const newEvent = window.prompt(`Add an event for ${key}:`);
-      if (newEvent && newEvent.trim()) {
-        setEventsByDate((prev) => ({
-          ...prev,
-          [key]: [newEvent.trim()],
-        }));
-      }
-    } else {
-      // There are existing events: show them, let user remove or add
-      const list = existing.map((e, i) => `${i + 1}. ${e}`).join('\n');
-      const action = window.prompt(
-        `Events on ${key}:\n${list}\n\nType the number to delete, or type a new event to append:\n(Leave blank or Cancel to dismiss)`
-      );
-      if (!action) return; // user cancelled or empty
-      // If action is a number, delete that event
-      const maybeIndex = parseInt(action, 10);
-      if (
-        !isNaN(maybeIndex) &&
-        maybeIndex >= 1 &&
-        maybeIndex <= existing.length
-      ) {
-        const idx = maybeIndex - 1;
-        const updated = [...existing];
-        updated.splice(idx, 1);
-        setEventsByDate((prev) => {
-          const copy = { ...prev };
-          if (updated.length === 0) {
-            delete copy[key];
-          } else {
-            copy[key] = updated;
+        if (event.time && currentView !== Views.MONTH) {
+          // Simple time parsing (e.g., "2:00 PM" -> 14:00)
+          const timeMatch = event.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+          if (timeMatch) {
+            let hours = parseInt(timeMatch[1]);
+            const minutes = parseInt(timeMatch[2]);
+            const isPM = timeMatch[3]?.toUpperCase() === 'PM';
+            
+            if (isPM && hours !== 12) hours += 12;
+            if (!isPM && hours === 12) hours = 0;
+            
+            start = new Date(dayStart);
+            start.setHours(hours, minutes, 0, 0);
+            end = addHours(start, 1); // Default 1 hour duration
+            allDay = false;
           }
-          return copy;
-        });
-      } else {
-        // Otherwise treat it as a new event string
-        const newEvent = action.trim();
-        if (newEvent.length > 0) {
-          setEventsByDate((prev) => ({
-            ...prev,
-            [key]: [...existing, newEvent],
-          }));
         }
+
+        out.push({
+          ...event,
+          start,
+          end,
+          allDay,
+        });
+      });
+    });
+    return out;
+  }, [eventsByDate, currentView]);
+
+  // Handle slot selection
+  const handleSelectSlot = useCallback(({ start }: SlotInfo) => {
+    const newEvent: RBCEvent = {
+      id: '',
+      title: '',
+      start,
+      end: start,
+      allDay: currentView === Views.MONTH,
+    };
+    setSelectedEvent(newEvent);
+    setShowModal(true);
+  }, [currentView]);
+
+  // Handle event selection
+  const handleSelectEvent = useCallback((event: RBCEvent) => {
+    setSelectedEvent(event);
+    setShowSummaryModal(true);
+  }, []);
+
+  // Save event
+  const handleSaveEvent = useCallback((eventData: EventData) => {
+    const dateKey = formatDateKey(selectedEvent!.start);
+    setEventsByDate((prev) => {
+      const copy = { ...prev };
+      const existing = copy[dateKey] || [];
+      
+      if (selectedEvent!.id) {
+        // Update existing
+        copy[dateKey] = existing.map(e => 
+          e.id === selectedEvent!.id ? eventData : e
+        );
+      } else {
+        // Add new
+        copy[dateKey] = [...existing, { ...eventData, id: Date.now().toString() }];
       }
-    }
+      
+      return copy;
+    });
+  }, [selectedEvent]);
+
+  // Delete event
+  const handleDeleteEvent = useCallback((eventId: string) => {
+    const dateKey = formatDateKey(selectedEvent!.start);
+    setEventsByDate((prev) => {
+      const copy = { ...prev };
+      copy[dateKey] = (copy[dateKey] || []).filter(e => e.id !== eventId);
+      if (copy[dateKey].length === 0) {
+        delete copy[dateKey];
+      }
+      return copy;
+    });
+  }, [selectedEvent]);
+
+  // Event styling
+  const eventStyleGetter = useCallback((event: RBCEvent) => {
+    const style: React.CSSProperties = {
+      backgroundColor: '#EC4899',
+      borderRadius: '6px',
+      opacity: 0.9,
+      color: 'white',
+      border: 'none',
+      display: 'block',
+      fontSize: currentView === Views.MONTH ? '0.75em' : '0.85em',
+      padding: currentView === Views.MONTH ? '2px 4px' : '4px 8px',
+      cursor: 'pointer',
+    };
+    return { style };
+  }, [currentView]);
+
+  // Custom event component for day/week views
+  const EventComponent = ({ event }: { event: RBCEvent }) => {
+    return (
+      <div style={styles.eventComponent}>
+        <div style={styles.eventTitle}>{event.title}</div>
+        {event.time && currentView !== Views.MONTH && (
+          <div style={styles.eventTime}>{event.time}</div>
+        )}
+        {event.location && (
+          <div style={styles.eventLocation}>
+            <MapPin size={12} />
+            {event.location}
+          </div>
+        )}
+      </div>
+    );
   };
 
-  // 7) Hover tooltip state
-  const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
-  const [tooltipPosition, setTooltipPosition] = useState<{
-    x: number;
-    y: number;
-  } | null>(null);
-
-  // Render
   return (
     <div style={styles.container}>
-      {/* Header: Month navigation */}
       <div style={styles.header}>
-        <button
-          style={styles.navButton}
-          onClick={goToPrevMonth}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#F3F4F6')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-        >
-          ‹ Prev
-        </button>
-        <div style={styles.navLabel}>
-          {MONTH_NAMES[currentMonth]} {currentYear}
+        <h1 style={styles.headerTitle}>My Calendar</h1>
+      </div>
+      
+      <div style={styles.mainContent}>
+        <div style={styles.calendarWrapper}>
+          <Calendar
+            localizer={localizer}
+            events={rbEvents}
+            startAccessor="start"
+            endAccessor="end"
+            selectable
+            onSelectSlot={handleSelectSlot}
+            onSelectEvent={handleSelectEvent}
+            view={currentView}
+            onView={setCurrentView}
+            date={currentDate}
+            onNavigate={setCurrentDate}
+            views={[Views.DAY, Views.WEEK, Views.MONTH]}
+            defaultView={Views.MONTH}
+            eventPropGetter={eventStyleGetter}
+            components={{
+              toolbar: CustomToolbar,
+              event: EventComponent,
+            }}
+            popup
+            step={60}
+            timeslots={1}
+            min={new Date(0, 0, 0, 6, 0, 0)}
+            max={new Date(0, 0, 0, 22, 0, 0)}
+            dayLayoutAlgorithm="no-overlap"
+          />
         </div>
-        <button
-          style={styles.navButton}
-          onClick={goToNextMonth}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#F3F4F6')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-        >
-          Next ›
-        </button>
       </div>
 
-      {/* Weekday header */}
-      <div style={styles.weekdayRow}>
-        {WEEKDAY_NAMES.map((wd) => (
-          <div key={wd} style={styles.weekdayCell}>
-            {wd}
-          </div>
-        ))}
-      </div>
+      {showSummaryModal && (
+        <EventSummaryModal
+          event={selectedEvent}
+          onClose={() => {
+            setShowSummaryModal(false);
+            setSelectedEvent(null);
+          }}
+          onEdit={() => {
+            setShowSummaryModal(false);
+            setShowModal(true);
+          }}
+          onDelete={handleDeleteEvent}
+        />
+      )}
 
-      {/* Calendar grid */}
-      <div style={styles.calendarGrid}>
-        {calendarMatrix.map((cell, idx) => {
-          if (!cell) {
-            // Empty cell
-            return <div key={idx} style={{ backgroundColor: '#F9FAFB' }} />;
-          }
-
-          const dateKey = formatDateKey(cell);
-          const events = eventsByDate[dateKey] || [];
-
-          return (
-            <div
-              key={idx}
-              style={styles.dayCell}
-              onClick={() => onDayClick(cell)}
-              onMouseEnter={(e) => {
-                if (events.length > 0) {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setTooltipPosition({ x: rect.left + rect.width / 2, y: rect.top + 4 });
-                  setHoveredDateKey(dateKey);
-                }
-              }}
-              onMouseLeave={() => {
-                setHoveredDateKey(null);
-                setTooltipPosition(null);
-              }}
-            >
-              {/* Day number in top-left */}
-              <div style={styles.dayNumber}>{cell.getDate()}</div>
-
-              {/* Event dots at bottom */}
-              {events.length > 0 && (
-                <div style={styles.eventDotsContainer}>
-                  {events.slice(0, 3).map((_, dotIdx) => (
-                    <div key={dotIdx} style={styles.eventDot} />
-                  ))}
-                  {events.length > 3 && (
-                    <div style={{ fontSize: '10px', color: '#6B7280' }}>+{events.length - 3}</div>
-                  )}
-                </div>
-              )}
-
-              {/* Tooltip for events on hover */}
-              {hoveredDateKey === dateKey && tooltipPosition && (
-                <div
-                  style={{
-                    ...styles.tooltip,
-                    top: tooltipPosition.y,
-                    left: tooltipPosition.x,
-                  }}
-                >
-                  {events.map((ev, i) => `• ${ev}`).join('\n')}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {showModal && (
+        <EventModal
+          event={selectedEvent}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedEvent(null);
+          }}
+          onSave={handleSaveEvent}
+          onDelete={handleDeleteEvent}
+        />
+      )}
     </div>
   );
 };

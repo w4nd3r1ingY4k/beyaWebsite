@@ -89,10 +89,11 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
     const activeIndex = icons.findIndex(i => i.id === activeIcon);
     const getIndexMultiplier = (index: number) => {
         console.log(index);
-      if (index === 1) return 7;
-      if (index === 2) return 3.5;
-      if (index === 3) return 2.5;
-        if (index === 4) return 1.8;
+      if (index === 1) return 2;
+      if (index === 2) return 2;
+      if (index === 3) return 1.3;
+      if (index === 4) return 0.9;
+      if (index === 5) return 0.7;
       return 1.4;
     };
 
@@ -236,7 +237,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
                     borderRadius: '50%',
                     backgroundColor: borderColor,
                     transition: 'all 0.3s',
-                    top: isActive ? '36%' : (DOT_SIZE),
+                    top: isActive ? '46%' : (DOT_SIZE),
                     left: isActive ? ICON_SIZE - 11 : '50%',
                     transform: isActive ? 'translateY(-50%)' : 'translateX(-50%)'
                   }}
