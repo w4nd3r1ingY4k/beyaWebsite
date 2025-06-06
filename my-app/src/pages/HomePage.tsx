@@ -3,11 +3,11 @@ import { useLocation } from "react-router-dom";
 import { Footer } from "../components/Footer";
 import { FeaturesSection } from "../sections/FeaturesSection";
 import { HeroSection } from "../sections/HeroSection";
+import { BeyaFeaturesSection } from "../sections/BeyaFeaturesSection";
 import { StatisticsSection } from "../sections/StatisticsSection";
 import { TeamSection } from "../sections/TeamSection";
 import { BlogSection } from "../sections/BlogSection";
 import { NavigationBar } from "../components/navigation/NavigationBar";
-import SolariDisplay from "../sections/SolariDisplay";
 import ScrollDown from "../components/ScrollDown";
 import {
   heroData,
@@ -17,14 +17,6 @@ import {
   features,
   blogPosts,
 } from "../ContentData";
-
-const phrases = [
-  "Powering You",
-  "Community Centric Commerce",
-  "Scaling Local Growing Global",
-  "Pioneering Big Small Business",
-  "Fueling Small Business Success",
-];
 
 const HomePage = () => {
   const location = useLocation();
@@ -44,13 +36,13 @@ const HomePage = () => {
   }, [location.state]);
 
   return (
-    <div className="min-h-screen bg-red-500">
+    <div className="min-h-screen bg-red-500 width-full overflow-x-hidden">
       <NavigationBar />
-      <SolariDisplay phrases={phrases} speed={100} phraseDelay={4000} />
       <ScrollDown />
       <HeroSection {...heroData} />
-      <FeaturesSection features={features} />
-      <StatisticsSection statistics={statistics} />
+      <BeyaFeaturesSection />
+      {/* <FeaturesSection features={features} /> */}
+      {/* <StatisticsSection statistics={statistics} /> */}
       <BlogSection blogPosts={blogPosts} />
       <TeamSection teamMembers={teamMembers} />
       <Footer {...footerData} />
