@@ -55,9 +55,9 @@ export const BlogPost: React.FC<BlogPostProps> = ({
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        style={linkStyle}
-        onMouseOver={e => (e.currentTarget.style.color = "#C7D2FE")}
-        onMouseOut={e => (e.currentTarget.style.color = "#6366F1")}
+        style={{ ...linkStyle, color: "#DE1785" }}
+        onMouseOver={e => (e.currentTarget.style.color = "#F7B2D9")} // light pink as subcolour
+        onMouseOut={e => (e.currentTarget.style.color = "#DE1785")}
       >
         Read More
       </a>
