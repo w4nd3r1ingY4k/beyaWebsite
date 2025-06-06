@@ -84,7 +84,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               </b>
             </motion.p>
 
-            <motion.div variants={itemVariants} className="mb-8">
+            {/* <motion.div variants={itemVariants} className="mb-8">
               <a
                 href="#beta"
                 target="_blank"
@@ -102,21 +102,21 @@ export const HeroSection: React.FC<HeroSectionProps> = ({
               >
                 Join Our Beta Testing
               </a>
-            </motion.div>
+            </motion.div> */}
 
             {/* (existing AppDownload block commented out) */}
-            {/* <motion.div variants={itemVariants} className="mb-8">
+            <motion.div variants={itemVariants} className="mb-8">
               <h2
                 className={`text-xl sm:text-2xl font-semibold mb-4 ${
                   isGreyedOut ? "text-gray-400" : "text-gray-900"
                 }`}
               >
-                Download App (Soon)
+                Download App (Coming Soon)
               </h2>
               <div className={isGreyedOut ? "greyed-out" : ""}>
                 <AppDownload {...appDownload} />
               </div>
-            </motion.div> */}
+            </motion.div>
           </motion.div>
         </div>
 
