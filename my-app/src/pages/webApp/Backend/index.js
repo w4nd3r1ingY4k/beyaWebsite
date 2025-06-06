@@ -10,7 +10,6 @@ require('dotenv').config();
 // In production you should do: 
 //    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 // and keep your key in a .env file, not in source.
-const OPENAI_API_KEY = "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";
 
 function createApp() {
   const app = express();
@@ -37,7 +36,7 @@ function createApp() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${OPENAI_API_KEY}`
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
           },
           body: JSON.stringify(req.body),
           // Optional: add a timeout if your runtime supports it (Node 18+):
