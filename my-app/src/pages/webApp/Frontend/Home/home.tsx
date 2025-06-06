@@ -12,6 +12,11 @@ interface Message {
   hasChart?: boolean;
 }
 
+interface OpenAIMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
 const Homer: React.FC = () => {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -30,6 +35,7 @@ const Homer: React.FC = () => {
     },
   ]);
   const [isTyping, setIsTyping] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -55,25 +61,87 @@ const Homer: React.FC = () => {
     { time: 17, value: 85 },
   ];
 
-  // Pre‐defined “AI” responses
-  const aiResponses: string[] = [
-    "Great question! Let me analyze that for you. Based on the current data, I can see a positive trend in your business performance.",
-    "I've compared today's performance with last Sunday's data. You're showing a 15% improvement in key metrics!",
-    "Looking at the weekly overview, your peak performance times are between 2-5 PM. Would you like me to break down the specific factors contributing to this?",
-    "I can help you optimize your business strategy. What specific aspect would you like to focus on - revenue, customer engagement, or operational efficiency?",
-    "Based on your historical data, I predict continued growth of 3-5% over the next week if current trends continue.",
-  ];
+  // System prompt to define the assistant's behavior
+  const systemPrompt: OpenAIMessage = {
+    role: 'system',
+    content: `You are B, a helpful business assistant that provides insights about business performance. 
+    You should be conversational, helpful, and occasionally suggest showing charts or graphs when discussing metrics or trends.
+    When the user asks about performance, metrics, or trends, you can mention that you could show them a graph.
+    Keep responses concise and actionable.`
+  };
+
+  // Convert our messages to OpenAI format
+  const convertToOpenAIMessages = (): OpenAIMessage[] => {
+    const openAIMessages: OpenAIMessage[] = [systemPrompt];
+    
+    messages.forEach(msg => {
+      openAIMessages.push({
+        role: msg.type === 'user' ? 'user' : 'assistant',
+        content: msg.content
+      });
+    });
+    
+    return openAIMessages;
+  };
+
+  // Call backend (Express on localhost:5000)
+  const callOpenAI = async (userMessage: string): Promise<string> => {
+    const openAIMessages = convertToOpenAIMessages();
+    openAIMessages.push({ role: 'user', content: userMessage });
+
+    console.log('Making request with messages:', openAIMessages);
+
+    try {
+      const response = await fetch('http://localhost:2074/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: openAIMessages,
+          temperature: 0.7,
+          max_tokens: 500,
+          presence_penalty: 0.3,
+          frequency_penalty: 0.3
+        })
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API Error response:', errorData);
+        throw new Error(
+          `OpenAI API error: ${response.status} ${response.statusText} - ${
+            (errorData as any).error?.message || 'Unknown error'
+          }`
+        );
+      }
+
+      const data = await response.json();
+      console.log('API Response data:', data);
+      
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error('Invalid response format from OpenAI');
+      }
+      
+      return data.choices[0].message.content;
+    } catch (error) {
+      console.error('Error calling OpenAI:', error);
+      throw error;
+    }
+  };
 
   // Scroll to bottom whenever messages array changes
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // Called when user clicks “send”
-  const handleSendMessage = () => {
+  // Called when user clicks "send"
+  const handleSendMessage = async () => {
     if (!message.trim()) return;
 
     const newUserMsg: Message = {
@@ -85,22 +153,51 @@ const Homer: React.FC = () => {
     setMessages(prev => [...prev, newUserMsg]);
     setMessage('');
     setIsTyping(true);
+    setError(null);
 
-    // Fake AI “thinking” delay
-    setTimeout(() => {
-      const randomResponse = aiResponses[Math.floor(Math.random() * aiResponses.length)];
-      const includeChart = Math.random() < 0.3; // 30% chance to include a chart
+    try {
+      console.log('Calling backend API...');
+      const aiResponse = await callOpenAI(newUserMsg.content);
+      console.log('Received response:', aiResponse);
+      
+      // Determine if we should show a chart based on keywords in the response
+      const chartKeywords = [
+        'graph',
+        'chart',
+        'trend',
+        'performance',
+        'metrics',
+        'growth',
+        'increase',
+        'decrease'
+      ];
+      const shouldShowChart = chartKeywords.some(keyword =>
+        aiResponse.toLowerCase().includes(keyword)
+      );
 
       const newAIMessage: Message = {
         id: messages.length + 2,
         type: 'assistant',
-        content: randomResponse,
-        hasChart: includeChart,
+        content: aiResponse,
+        hasChart: shouldShowChart && Math.random() < 0.5, // 50% chance if keywords present
       };
 
       setMessages(prev => [...prev, newAIMessage]);
+    } catch (error: any) {
+      const errorMsg = error.message || 'Failed to get response. Please try again.';
+      setError(errorMsg);
+      console.error('Error details:', error);
+
+      // Fallback message
+      const errorMessage: Message = {
+        id: messages.length + 2,
+        type: 'assistant',
+        content: `I'm having trouble connecting right now. Error: ${errorMsg}`,
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1000 + Math.random() * 1000);
+    }
   };
 
   return (
@@ -113,6 +210,38 @@ const Homer: React.FC = () => {
         overflow: 'hidden',
       }}
     >
+      {/* Error Banner */}
+      {error && (
+        <div
+          style={{
+            backgroundColor: '#FEE2E2',
+            color: '#991B1B',
+            padding: '12px 24px',
+            margin: '16px',
+            borderRadius: '8px',
+            fontSize: '0.875rem',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span>{error}</span>
+          <button
+            onClick={() => setError(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#991B1B',
+              cursor: 'pointer',
+              fontSize: '1.25rem',
+              padding: '0 8px',
+            }}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* ───── Messages Container ───── */}
       <div
         style={{
@@ -150,7 +279,8 @@ const Homer: React.FC = () => {
               color: '#1F2937',                   // gray‐700 text
               borderRadius: 24,
               padding: '16px 24px',
-              boxShadow: 'none',                  // explicitly no shadow
+              backgroundColor: 'white',
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
             };
 
             return (
@@ -245,91 +375,91 @@ const Homer: React.FC = () => {
             );
           })}
 
-            {isTyping && (
-              <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                <div
-                  style={{
-                    background: 'rgba(255,255,255,0.85)',
-                    borderRadius: 24,
-                    padding: '20px 36px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 18,
-                    boxShadow: '0 6px 32px 0 rgba(31,41,55,0.10), 0 1.5px 4px 0 rgba(236,72,153,0.10)',
-                    border: '1px solid #E5E7EB',
-                    backdropFilter: 'blur(8px)',
-                  }}
-                >
-                  {/* Subtle animated dots */}
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #EC4899 60%, #F9A8D4 100%)',
-                        opacity: 0.85,
-                        animation: 'dotFade 1.2s infinite',
-                        animationDelay: '0ms',
-                        display: 'inline-block',
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #EC4899 60%, #F9A8D4 100%)',
-                        opacity: 0.7,
-                        animation: 'dotFade 1.2s infinite',
-                        animationDelay: '200ms',
-                        display: 'inline-block',
-                      }}
-                    />
-                    <span
-                      style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        background: 'linear-gradient(135deg, #EC4899 60%, #F9A8D4 100%)',
-                        opacity: 0.55,
-                        animation: 'dotFade 1.2s infinite',
-                        animationDelay: '400ms',
-                        display: 'inline-block',
-                      }}
-                    />
-                  </div>
+          {isTyping && (
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div
+                style={{
+                  background: 'rgba(255,255,255,0.85)',
+                  borderRadius: 24,
+                  padding: '20px 36px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 18,
+                  boxShadow: '0 6px 32px 0 rgba(31,41,55,0.10), 0 1.5px 4px 0 rgba(236,72,153,0.10)',
+                  border: '1px solid #E5E7EB',
+                  backdropFilter: 'blur(8px)',
+                }}
+              >
+                {/* Subtle animated dots */}
+                <div style={{ display: 'flex', gap: 6 }}>
                   <span
                     style={{
-                      marginLeft: 18,
-                      fontWeight: 600,
-                      fontSize: '1.1rem',
-                      letterSpacing: 0.2,
-                      fontFamily: 'SF Pro Display, Inter, Arial, sans-serif',
-                      opacity: 0.92,
-                      textShadow: '0 1px 8px #F9A8D422',
-                      animation: 'fadeInText 1.5s infinite alternate',
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #EC4899 60%, #F9A8D4 100%)',
+                      opacity: 0.85,
+                      animation: 'dotFade 1.2s infinite',
+                      animationDelay: '0ms',
+                      display: 'inline-block',
                     }}
-                  >
-                    B is thinking...
-                  </span>
+                  />
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #EC4899 60%, #F9A8D4 100%)',
+                      opacity: 0.7,
+                      animation: 'dotFade 1.2s infinite',
+                      animationDelay: '200ms',
+                      display: 'inline-block',
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #EC4899 60%, #F9A8D4 100%)',
+                      opacity: 0.55,
+                      animation: 'dotFade 1.2s infinite',
+                      animationDelay: '400ms',
+                      display: 'inline-block',
+                    }}
+                  />
                 </div>
-                <style>
-                  {`
-                    @keyframes dotFade {
-                      0% { opacity: 0.3; transform: scale(1); }
-                      30% { opacity: 1; transform: scale(1.25); }
-                      60% { opacity: 0.7; transform: scale(1); }
-                      100% { opacity: 0.3; transform: scale(1); }
-                    }
-                    @keyframes fadeInText {
-                      0% { opacity: 0.7; }
-                      100% { opacity: 1; }
-                    }
-                  `}
-                </style>
+                <span
+                  style={{
+                    marginLeft: 18,
+                    fontWeight: 600,
+                    fontSize: '1.1rem',
+                    letterSpacing: 0.2,
+                    fontFamily: 'SF Pro Display, Inter, Arial, sans-serif',
+                    opacity: 0.92,
+                    textShadow: '0 1px 8px #F9A8D422',
+                    animation: 'fadeInText 1.5s infinite alternate',
+                  }}
+                >
+                  B is thinking...
+                </span>
               </div>
-            )}
+              <style>
+                {`
+                  @keyframes dotFade {
+                    0% { opacity: 0.3; transform: scale(1); }
+                    30% { opacity: 1; transform: scale(1.25); }
+                    60% { opacity: 0.7; transform: scale(1); }
+                    100% { opacity: 0.3; transform: scale(1); }
+                  }
+                  @keyframes fadeInText {
+                    0% { opacity: 0.7; }
+                    100% { opacity: 1; }
+                  }
+                `}
+              </style>
+            </div>
+          )}
 
           <div ref={messagesEndRef} />
         </div>
@@ -346,7 +476,7 @@ const Homer: React.FC = () => {
             message={message}
             setMessage={setMessage}
             onSend={handleSendMessage}
-            isDisabled={!message.trim()}
+            isDisabled={!message.trim() || isTyping}
           />
         </div>
       </div>
