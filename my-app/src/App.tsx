@@ -5,21 +5,32 @@ import {
   Navigate,
 } from "react-router-dom";
 
-// Example Pages
 import HomePage from "./pages/HomePage";
 import Privacy from "./pages/Privacy";
-// import AboutPage from "./pages/AboutPage";
-// import BlogPage from "./pages/BlogPage";
+import Login from "./webapp/pages/Login";
+import Homes from "./webapp/pages/Home";
+import SignUp from "./webapp/pages/Signup";
+import Confirm from "./webapp/pages/Confirm";
+import SettingsPage from "./webapp/pages/Settings";
+import { AuthProvider } from "./AuthContext";
 
 export default function App() {
   return (
-    <    BrowserRouter
->
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/privacy" element={<Privacy />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/privacy" element={<Privacy />} />
+
+          <Route path="/login" element={<Login />} />
+          <Route path="/webapp" element={<Homes />} />
+          <Route path="/signup"  element={<SignUp />} />
+          <Route path="/confirm" element={<Confirm />} />
+          <Route path="/settings" element={<SettingsPage />} />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }

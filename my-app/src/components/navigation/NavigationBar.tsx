@@ -60,17 +60,27 @@ export const NavigationBar: React.FC = () => {
             <div className="relative flex items-center justify-between py-8 px-8 w-full max-w-screen-xl mx-auto">
                 {/* Left Navigation Links */}
                 <div className="hidden md:flex space-x-6">
-                    <button onClick={() => handleClick("mission")} className="text-sm hover:text-purple-500">
+                    <button
+                        onClick={() => handleClick("mission")}
+                        className="text-sm hover:text-purple-500"
+                    >
                         Our Mission
                     </button>
-                    <button onClick={() => handleClick("what-we-do")} className="text-sm hover:text-purple-500">
+                    <button
+                        onClick={() => handleClick("what-we-do")}
+                        className="text-sm hover:text-purple-500"
+                    >
                         What We Do
                     </button>
-                    <button onClick={() => handleClick("features")} className="text-sm hover:text-purple-500">
+                    <button
+                        onClick={() => handleClick("features")}
+                        className="text-sm hover:text-purple-500"
+                    >
                         Features
                     </button>
                 </div>
 
+                {/* Center Logo */}
                 <div className="absolute left-1/2 transform -translate-x-1/2 flex-shrink-0">
                     <img
                         loading="lazy"
@@ -80,18 +90,40 @@ export const NavigationBar: React.FC = () => {
                     />
                 </div>
 
-                <div className="hidden md:flex space-x-6">
-                    <button onClick={() => handleClick("impact")} className="text-sm hover:text-purple-500">
+                {/* Right Navigation Links + Login (Desktop Only) */}
+                <div className="hidden md:flex items-center space-x-6">
+                    <button
+                        onClick={() => handleClick("impact")}
+                        className="text-sm hover:text-purple-500"
+                    >
                         Impact
                     </button>
-                    <button onClick={() => handleClick("blog")} className="text-sm hover:text-purple-500">
+                    <button
+                        onClick={() => handleClick("blog")}
+                        className="text-sm hover:text-purple-500"
+                    >
                         Blog
                     </button>
-                    <button onClick={() => handleClick("our-team")} className="text-sm hover:text-purple-500">
+                    <button
+                        onClick={() => handleClick("our-team")}
+                        className="text-sm hover:text-purple-500"
+                    >
                         Our Team
+                    </button>
+
+                    {/* —— Login Button (Desktop) —— */}
+                    <button
+                        onClick={() => {
+                            setIsMobileMenuOpen(false);
+                            navigate("/login");
+                        }}
+                        className="ml-4 text-sm font-medium text-white bg-purple-600 px-4 py-2 rounded-md hover:bg-purple-700 transition"
+                    >
+                        Login
                     </button>
                 </div>
 
+                {/* Mobile Menu Toggle Button */}
                 <button
                     className="md:hidden p-2 focus:outline-none"
                     onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -109,6 +141,7 @@ export const NavigationBar: React.FC = () => {
                 </button>
             </div>
 
+            {/* —— Mobile Dropdown Menu —— */}
             {isMobileMenuOpen && (
                 <div className="md:hidden bg-white shadow-lg border-t border-gray-200">
                     <div className="flex flex-col">
@@ -129,6 +162,18 @@ export const NavigationBar: React.FC = () => {
                                 {label}
                             </button>
                         ))}
+
+                        {/* —— Login Button (Mobile) —— */}
+                        <button
+                            onClick={() => {
+                                setIsMobileMenuOpen(false);
+                                navigate("/login");
+                            }}
+                            className="text-sm py-3 px-6 mt-2 transition-colors duration-200 hover:bg-gray-50 hover:text-purple-500"
+                            aria-label="Login"
+                        >
+                            Login
+                        </button>
                     </div>
                 </div>
             )}

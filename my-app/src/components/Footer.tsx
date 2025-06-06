@@ -34,7 +34,7 @@ export const Footer: React.FC<FooterProps> = ({
           <img
             src={logo}
             alt="Company logo"
-            className="h-10 filter invert brightness-0 "
+            className="h-10 filter invert brightness-0"
           />
         </div>
 
@@ -82,3 +82,5 @@ export const Footer: React.FC<FooterProps> = ({
     </div>
   </footer>
 );
+
+export default Footer;
