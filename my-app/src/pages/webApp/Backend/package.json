@@ -2,6 +2,7 @@
   "name": "backend",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -10,7 +11,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@pipedream/sdk": "^1.6.7",
     "cors": "^2.8.5",
-    "node-fetch": "^3.3.2"
+    "dotenv": "^16.5.0",
+    "node-fetch": "^3.3.2",
+    "openai": "^5.1.1"
   }
 }
