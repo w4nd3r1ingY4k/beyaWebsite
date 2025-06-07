@@ -62,6 +62,10 @@ If the final state is \`{ "locations_from_step_1": { "locations": [{"name": "Dow
     Notion: {
       app_slug: "notion",
       app_label: "Notion",
+    },
+    Shopify: {
+      app_slug: "shopify",
+      app_label: "Shopify",
     }
   };
 
@@ -128,6 +132,37 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
     *   \`get_database_items\`: Retrieves items from a specific database.
     *   \`create_page\`: Creates a new page in a workspace, page, or database.
     *   \`update_page\`: Updates the properties of an existing page.
+*   **\`Shopify\`**: An ecommerce platform for managing products, orders, and customers. Key actions include:
+    *   \`update_product\`: Update an existing product. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productUpdate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - images: Return JSON in this format: string[] - tags: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
+    *   \`update_product_variant\`: Update an existing product variant. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productVariantsBulkUpdate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - optionIds: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
+    *   \`update_page\`: Update an existing page. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/pageUpdate)
+    *   \`update_metaobject\`: Updates a metaobject. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metaobjectUpdate)
+    *   \`update_metafield\`: Updates a metafield belonging to a resource. [See the documentation]()
+    *   \`update_inventory_level\`: Sets the inventory level for an inventory item at a location. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/inventorySetOnHandQuantities)
+    *   \`update_article\`: Update a blog article. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/articleUpdate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - tags: Return JSON in this format: string[]
+    *   \`search_products\`: Search for products. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/products) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - productIds: Return JSON in this format: string[]
+    *   \`search_product_variant\`: Search for product variants or create one if not found. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/productVariants)
+    *   \`search_custom_collection_by_name\`: Search for a custom collection by name/title. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/collections)
+    *   \`get_pages\`: Retrieve a list of all pages. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/pages)
+    *   \`get_metaobjects\`: Retrieves a list of metaobjects. [See the documentation](https://shopify.dev/docs/api/admin-graphql/unstable/queries/metaobjects)
+    *   \`get_metafields\`: Retrieves a list of metafields that belong to a resource. [See the documentation](https://shopify.dev/docs/api/admin-graphql/unstable/queries/metafields) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - namespace: Return JSON in this format: string[] - key: Return JSON in this format: string[]
+    *   \`get_articles\`: Retrieve a list of all articles from a blog. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/articles)
+    *   \`delete_page\`: Delete an existing page. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/pageDelete)
+    *   \`delete_metafield\`: Deletes a metafield belonging to a resource. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metafieldsDelete)
+    *   \`delete_blog\`: Delete an existing blog. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/blogDelete)
+    *   \`delete_article\`: Delete an existing blog article. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/articleDelete)
+    *   \`create_smart_collection\`: Creates a smart collection. You can fill in any number of rules by selecting more than one option in each prop.[See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionCreate)
+    *   \`create_product\`: Create a new product. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - images: Return JSON in this format: string[] - options: Return JSON in this format: string[] - tags: Return JSON in this format: string[]
+    *   \`create_product_variant\`: Create a new product variant. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productVariantsBulkCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - optionIds: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
+    *   \`create_page\`: Create a new page. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/pageCreate)
+    *   \`create_metaobject\`: Creates a metaobject. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metaobjectCreate)
+    *   \`create_metafield\`: Creates a metafield belonging to a resource. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metafieldDefinitionCreate)
+    *   \`create_custom_collection\`: Create a new custom collection. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - products: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
+    *   \`create_blog\`: Create a new blog. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/blogCreate)
+    *   \`create_article\`: Create a new blog article. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/articleCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - tags: Return JSON in this format: string[]
+    *   \`bulk_import\`: Execute bulk mutations by uploading a JSONL file containing mutation variables. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/bulkoperationrunmutation)
+    *   \`add_tags\`: Add tags. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/tagsAdd) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - tags: Return JSON in this format: string[]
+    *   \`add_product_to_custom_collection\`: Adds a product or products to a custom collection. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionAddProductsV2) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - productIds: Return JSON in this format: string[]
 
 ---
 
