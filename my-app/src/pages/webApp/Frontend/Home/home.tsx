@@ -87,46 +87,59 @@ const Homer: React.FC = () => {
   // Call backend (Express on localhost:5000)
   const callOpenAI = async (userMessage: string): Promise<string> => {
     const openAIMessages = convertToOpenAIMessages();
-    openAIMessages.push({ role: 'user', content: userMessage });
-
-    console.log('Making request with messages:', openAIMessages);
-
+    openAIMessages.push({ role: "user", content: userMessage });
+  
+    console.log("Making request with messages:", openAIMessages);
+  
     try {
-      const response = await fetch('http://localhost:2074/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("http://localhost:2074/workflow", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: openAIMessages,
-          temperature: 0.7,
-          max_tokens: 500,
-          presence_penalty: 0.3,
-          frequency_penalty: 0.3
-        })
+          userRequest: userMessage,
+          externalUserId: "test-user-123",
+        }),
       });
-
-      console.log('Response status:', response.status);
-
+  
+      console.log("Response status:", response.status);
+  
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error('API Error response:', errorData);
+        console.error("API Error response:", errorData);
         throw new Error(
           `OpenAI API error: ${response.status} ${response.statusText} - ${
-            (errorData as any).error?.message || 'Unknown error'
+            (errorData as any).error?.message || "Unknown error"
           }`
         );
       }
-
+  
       const data = await response.json();
-      console.log('API Response data:', data);
-      
-      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error('Invalid response format from OpenAI');
+      console.log("API Response data:", data);
+  
+      // DEBUG: Show exactly which keys data.state has:
+      console.log(">>> data.state keys:", Object.keys(data.state || {}));
+  
+      // 1) Plain-text fallback (Slack, etc.):
+      if (data.state && typeof data.state.output_text_from_step_1 === "string") {
+        return data.state.output_text_from_step_1;
       }
-      
-      return data.choices[0].message.content;
+  
+      // 2) Otherwise, if some other JSON‐based field exists for step 1, show it:
+      if (data.state) {
+        const step1Keys = Object.keys(data.state).filter((k) =>
+          k.endsWith("_from_step_1")
+        );
+        if (step1Keys.length > 0) {
+          // e.g. databases_from_step_1 or messages_from_step_1, etc.
+          const whatever = data.state[step1Keys[0]];
+          return JSON.stringify(whatever, null, 2);
+        }
+      }
+  
+      // 3) If neither exists, throw:
+      throw new Error("No output_text_from_step_1 or other step‐1 key in response");
     } catch (error) {
-      console.error('Error calling OpenAI:', error);
+      console.error("Error calling OpenAI:", error);
       throw error;
     }
   };
@@ -267,10 +280,10 @@ const Homer: React.FC = () => {
 
             // User‐bubble style: darker pink border + light pink background
             const userBubbleStyle: React.CSSProperties = {
-              border: '1px solid #DB2777',       // #DB2777 is a darker pink
+              border: '1px solid #DE1785',       // #DB2777 is a darker pink
               backgroundColor: '#FCE7F3',         // #FCE7F3 is a very light pink
               color: '#831843',                   // text in dark pink for contrast
-              borderRadius: 24,
+              borderRadius: 6,
               padding: '16px 24px',
             };
 
@@ -279,8 +292,6 @@ const Homer: React.FC = () => {
               color: '#1F2937',                   // gray‐700 text
               borderRadius: 24,
               padding: '16px 24px',
-              backgroundColor: 'white',
-              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
             };
 
             return (
