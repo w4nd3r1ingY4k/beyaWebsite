@@ -9,6 +9,37 @@ dotenv.config({ path: "./.env" });
  * runWorkflow: 1) Ask the LLM to produce a JSON plan, then 2) execute each step.
  */
 export async function runWorkflow(userRequest, externalUserId) {
+  const presenterSystemPrompt = `
+You are B, a helpful and friendly business assistant. Your role is to interpret a JSON object containing the results of a completed workflow and present it to the user in a clear, conversational, and structured way.
+
+**Your Task:**
+Convert the final JSON state into a user-facing message. Use the following custom XML tags to format your response. Do not use any other tags.
+
+**Available Tags:**
+* \`<summary>\`...\`</summary>\`: For a high-level summary of the results.
+* \`<list>\`...\`</list>\`: To contain a list of items.
+* \`<item>\`...\`</item>\`: For each individual item in a list.
+* \`<strong>\`...\`</strong>\`: To emphasize important text, like key metrics or names.
+* \`<suggestion>\`...\`</suggestion>\`: To suggest a next logical step or question for the user.
+* \`<chart>\`...\`</chart>\`: To indicate a chart should be displayed with a title inside the tags.
+
+**Example:**
+If the final state is \`{ "locations_from_step_1": { "locations": [{"name": "Downtown"}, {"name": "Uptown"}] } }\`, a good response would be:
+
+<summary>I found <strong>2</strong> locations for you.</summary>
+<list>
+  <item>Downtown</item>
+  <item>Uptown</item>
+</list>
+<suggestion>Would you like to see recent sales for one of these locations?</suggestion>
+
+
+**IMPORTANT:**
+*   You MUST use the provided tags for formatting.
+*   Your output should be a single block of this XML-style text. No markdown, no JSON.
+*   Be friendly and conversational in your tone. The user is interacting with 'B', not a raw data feed.
+`;
+
   // Define the single source of truth for tool details.
   // This maps the planner's friendly names to exact technical details.
   const toolManifest = {
@@ -22,17 +53,16 @@ export async function runWorkflow(userRequest, externalUserId) {
     },
     Google_Sheets: {
       app_slug: "google_sheets",
-      app_label: "Google Sheets",
+      app_label: "Google_Sheets",
+    },
+    HubSpot: {
+      app_slug: "hubspot",
+      app_label: "HubSpot",
     },
     Notion: {
       app_slug: "notion",
       app_label: "Notion",
-    },
-    OpenAI: {
-      // Internal tool, doesn't have an app_slug
-      app_slug: null,
-      app_label: "OpenAI",
-    },
+    }
   };
 
   // 1) Initialize both SDKs once:
@@ -61,56 +91,70 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
     4.  \`args\`: A JSON object of the arguments required for that action.
 
 **Reasoning Process:**
-1.  Analyze the user's request to understand the ultimate goal.
-2.  For each step required to achieve the goal, consult the \`AVAILABLE_TOOLS\` list.
-3.  Read the description for each tool to select the one that is most appropriate for the current step.
-4.  Formulate the step with the chosen tool, action, and arguments.
+1.  **Deconstruct Request:** Break down the user's request into a series of logical, sequential actions required to fulfill the goal.
+2.  **Tool Selection:** For each action, look at the \`AVAILABLE_TOOLS\` list and select the single most appropriate tool for that specific action.
+3.  **Action Identification:** Before deciding on an action, you MUST review the list of available actions for the selected tool. From that list, choose the one action that best fits the current step.
+4.  **Argument Formulation:** Determine the necessary arguments for the chosen action. To use an output from a previous step, use the format \`{{key_from_step_N}}\`.
+5.  **JSON Construction:** Assemble the step into the final JSON object format. Repeat for all actions.
 
 ---
 
 **\`AVAILABLE_TOOLS\`:**
-*   **http**: A generic tool for making any HTTP request. Use this to interact with any API endpoint. Key action is http-custom-request.
-*   **\`Square\`**: A point-of-sale and payment processing service for businesses. Use for managing transactions, customers, and business locations.
-*   **\`Slack\`**: A business communication platform. Use for sending messages to channels or users, and managing team communications.
-*   **\`Google_Sheets\`**: A spreadsheet application. Use for creating, reading, and updating data in spreadsheets.
-*   **\`Notion\`**: A workspace for notes, tasks, and databases. Use for managing pages and database items.
-*   **\`OpenAI\`**: The direct AI model. Use for tasks that involve language processing, summarization, or generation without needing external data.
+*   **\`Square\`**: A point-of-sale and payment processing service for businesses. Use for managing transactions, customers, and business locations. Key actions include:
+    *   \`create_customer\`: Creates a new customer profile.
+    *   \`list_customers\`: Retrieves a list of customers.
+    *   \`create_payment\`: Creates a payment.
+    *   \`list_payments\`: Retrieves a list of payments.
+*   **\`Slack\`**: A business communication platform. Use for sending messages to channels or users, and managing team communications. Key actions include:
+    *   \`send_message\`: Sends a message to a channel or user.
+    *   \`create_channel\`: Creates a new public or private channel.
+    *   \`list_users\`: Retrieves a list of all users in the workspace.
+*   **\`Google_Sheets\`**: A spreadsheet application. Use for creating, reading, and updating data in spreadsheets. Key actions include:
+    *   \`add_single_row\`: Adds a single row of data to a sheet.
+    *   \`get_sheet_values\`: Retrieves values from a range of cells.
+    *   \`update_single_row\`: Updates a specific row in a sheet.
+    *   \`create-spreadsheet\`: Creates a new spreadsheet.
+*   **\`HubSpot\`**: A CRM platform for managing customer relationships, sales, and marketing. Key actions include:
+    *   \`search_crm_objects\`: Search for companies, contacts, deals, and more.
+    *   \`update_objects\`: Update leads, deals, custom objects, contacts, and companies.
+    *   \`retrieve_objects\`: Get specific meetings, deals, contacts, companies, and associated meetings.
+    *   \`create_objects\`: Create tickets, tasks, contacts, meetings, leads, deals, custom objects, companies, and communications.
+    *   \`enroll_contacts\`: Add contacts to a specific workflow.
+    *   \`create_associations\`: Create associations between various objects.
+    *   \`batch_operations\`: Create or update batches of contacts.
+    *   \`add_contacts_to_lists\`: Add a contact to a specific static list.
+*   **\`Notion\`**: A workspace for notes, tasks, and databases. Use for managing pages and database items. Key actions include:
+    *   \`list_databases\`: Retrieves a list of all databases.
+    *   \`get_database_items\`: Retrieves items from a specific database.
+    *   \`create_page\`: Creates a new page in a workspace, page, or database.
+    *   \`update_page\`: Updates the properties of an existing page.
 
 ---
 
-**Example for a request "Find the top 3 projects in my Notion workspace and post the summary to the #general channel in Slack":**
+**Example for a request "Use AI to write a haiku about business and post it to the #general channel in Slack":**
 \`\`\`json
 [
   {
     "step": 1,
-    "tool": "Notion",
-    "action": "list_databases",
-    "args": {}
+    "tool": "OpenAI",
+    "action": "chat.completions.create",
+    "args": {
+      "model": "gpt-4o-mini",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Write a haiku about business."
+        }
+      ]
+    }
   },
   {
     "step": 2,
-    "tool": "Notion",
-    "action": "get_database_items",
-    "args": {
-      "database_id": "step1.output.database_id",
-      "page_size": 3
-    }
-  },
-  {
-    "step": 3,
-    "tool": "OpenAI",
-    "action": "summarize",
-    "args": {
-      "text": "step2.output.items"
-    }
-  },
-  {
-    "step": 4,
     "tool": "Slack",
     "action": "send_message",
     "args": {
       "channel": "#general",
-      "text": "step3.output.summary"
+      "text": "{{result_step_1}}"
     }
   }
 ]
@@ -146,7 +190,7 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
     );
   }
 
-  // 4) Shared state: store every step’s result so later steps can reference them
+  // 4) Shared state: store every step's result so later steps can reference them
   const state = { externalUserId };
 
   // 5) Define an internal recursive executor. It runs step #i, then calls itself for i+1.
@@ -176,7 +220,7 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
     );
     let result;
 
-    // 5b) If the tool is “openai”, call LLM directly
+    // 5b) If the tool is "openai", call LLM directly
     if (tool.toLowerCase() === "openai") {
       if (action === "chat.completions.create") {
         const resp = await openai.chat.completions.create(interpolatedArgs);
@@ -199,7 +243,7 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
       // 5d) Get a fresh access token
       const accessToken = await pd.rawAccessToken();
 
-      // 5e) Build the “tools” array for a single-tool MCP call:
+      // 5e) Build the "tools" array for a single-tool MCP call:
       const mcpToolSpec = {
         type: "mcp",
         server_label: appLabel,
@@ -214,7 +258,7 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
         require_approval: "never",
       };
 
-      // 5f) Call OpenAI’s “responses” endpoint with one MCP tool
+      // 5f) Call OpenAI's "responses" endpoint with one MCP tool
       const mcpInput = {
         action,
         arguments: interpolatedArgs,
@@ -242,7 +286,7 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
         } catch (parseErr) {
           result = { output_text: raw };
         }
-        // 2) Otherwise, if there's a plain‐text fallback in `resp.output_text`, use that:
+        // 2) Otherwise, if there's a plain-text fallback in `resp.output_text`, use that:
       } else if (
         typeof resp.output_text === "string" &&
         resp.output_text.trim().length > 0
@@ -271,8 +315,33 @@ You are a methodical Planner Agent. Your sole purpose is to convert a user's req
   // 6) Kick off the recursion at index 0
   await executeStepAtIndex(0);
 
-  // 7) Once recursion unwinds, “state” holds every step’s outputs.
-  return state;
+  // 7) Once recursion unwinds, use a "Presenter" LLM to format the state for the user
+  console.log("🎁 Final state for Presenter:", JSON.stringify(state, null, 2));
+
+  const presenterResponse = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: presenterSystemPrompt },
+      {
+        role: "user",
+        content: `Here is the final state JSON from the workflow that you need to present to the user:\n${JSON.stringify(
+          state,
+          null,
+          2
+        )}`,
+      },
+    ],
+    temperature: 0.2,
+  });
+
+  const formattedOutput = presenterResponse.choices[0].message.content;
+  console.log("🎨 Formatted output from Presenter:", formattedOutput);
+
+  // 8) Return the formatted string instead of the raw state object
+  return (
+    formattedOutput ||
+    "<summary>I've completed the task, but I'm not sure how to describe it. You can check your server logs for the full details.</summary>"
+  );
 }
 
 // ---------------------
@@ -291,8 +360,8 @@ app.post("/workflow", async (req, res) => {
   }
 
   try {
-    const finalState = await runWorkflow(userRequest, externalUserId);
-    return res.status(200).json({ state: finalState });
+    const formattedResponse = await runWorkflow(userRequest, externalUserId);
+    return res.status(200).json({ response: formattedResponse });
   } catch (err) {
     console.error("🔥 Error running workflow:", err);
     return res.status(500).json({ error: err.message || "Internal Server Error" });
