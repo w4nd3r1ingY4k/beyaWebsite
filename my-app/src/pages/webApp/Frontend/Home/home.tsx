@@ -12,10 +12,26 @@ interface Message {
   hasChart?: boolean;
 }
 
-interface OpenAIMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
-}
+const renderTaggedContent = (content: string) => {
+  // A simple parser using regex and string replacement.
+  // This is not robust for heavily nested tags but is perfect for our use case.
+  let html = content;
+
+  // Replace block tags first
+  html = html.replace(/<summary>([\s\S]*?)<\/summary>/g, '<p style="margin: 0 0 16px 0;">$1</p>');
+  html = html.replace(/<list>([\s\S]*?)<\/list>/g, '<ul style="padding-left: 20px; margin: 16px 0;">$1</ul>');
+  html = html.replace(/<suggestion>([\s\S]*?)<\/suggestion>/g, '<p style="font-style: italic; color: #6B7280; margin: 16px 0 0 0;">$1</p>');
+  
+  // Replace inline tags
+  html = html.replace(/<item>([\s\S]*?)<\/item>/g, '<li>$1</li>');
+  html = html.replace(/<strong>([\s\S]*?)<\/strong>/g, '<strong>$1</strong>');
+
+  // The chart tag is used to toggle the chart display, so we just remove it from the text.
+  html = html.replace(/<chart>([\s\S]*?)<\/chart>/g, ''); 
+
+  // Use dangerouslySetInnerHTML to render the resulting HTML.
+  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+};
 
 const Homer: React.FC = () => {
   const [message, setMessage] = useState('');
@@ -61,36 +77,10 @@ const Homer: React.FC = () => {
     { time: 17, value: 85 },
   ];
 
-  // System prompt to define the assistant's behavior
-  const systemPrompt: OpenAIMessage = {
-    role: 'system',
-    content: `You are B, a helpful business assistant that provides insights about business performance. 
-    You should be conversational, helpful, and occasionally suggest showing charts or graphs when discussing metrics or trends.
-    When the user asks about performance, metrics, or trends, you can mention that you could show them a graph.
-    Keep responses concise and actionable.`
-  };
+  // The system prompt is now managed by the backend's "Presenter" AI.
 
-  // Convert our messages to OpenAI format
-  const convertToOpenAIMessages = (): OpenAIMessage[] => {
-    const openAIMessages: OpenAIMessage[] = [systemPrompt];
-    
-    messages.forEach(msg => {
-      openAIMessages.push({
-        role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content
-      });
-    });
-    
-    return openAIMessages;
-  };
-
-  // Call backend (Express on localhost:5000)
+  // Call backend (Express on localhost:2074)
   const callOpenAI = async (userMessage: string): Promise<string> => {
-    const openAIMessages = convertToOpenAIMessages();
-    openAIMessages.push({ role: "user", content: userMessage });
-  
-    console.log("Making request with messages:", openAIMessages);
-  
     try {
       const response = await fetch("http://localhost:2074/workflow", {
         method: "POST",
@@ -100,46 +90,29 @@ const Homer: React.FC = () => {
           externalUserId: "test-user-123",
         }),
       });
-  
-      console.log("Response status:", response.status);
-  
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        console.error("API Error response:", errorData);
         throw new Error(
-          `OpenAI API error: ${response.status} ${response.statusText} - ${
+          `API error: ${response.status} ${response.statusText} - ${
             (errorData as any).error?.message || "Unknown error"
           }`
         );
       }
-  
+
       const data = await response.json();
       console.log("API Response data:", data);
-  
-      // DEBUG: Show exactly which keys data.state has:
-      console.log(">>> data.state keys:", Object.keys(data.state || {}));
-  
-      // 1) Plain-text fallback (Slack, etc.):
-      if (data.state && typeof data.state.output_text_from_step_1 === "string") {
-        return data.state.output_text_from_step_1;
+
+      if (data && typeof data.response === "string") {
+        return data.response;
       }
-  
-      // 2) Otherwise, if some other JSON‐based field exists for step 1, show it:
-      if (data.state) {
-        const step1Keys = Object.keys(data.state).filter((k) =>
-          k.endsWith("_from_step_1")
-        );
-        if (step1Keys.length > 0) {
-          // e.g. databases_from_step_1 or messages_from_step_1, etc.
-          const whatever = data.state[step1Keys[0]];
-          return JSON.stringify(whatever, null, 2);
-        }
-      }
-  
-      // 3) If neither exists, throw:
-      throw new Error("No output_text_from_step_1 or other step‐1 key in response");
+
+      const received = JSON.stringify(data, null, 2);
+      throw new Error(
+        `Invalid or missing response from the backend. Received: ${received}`
+      );
     } catch (error) {
-      console.error("Error calling OpenAI:", error);
+      console.error("Error calling backend:", error);
       throw error;
     }
   };
@@ -173,26 +146,12 @@ const Homer: React.FC = () => {
       const aiResponse = await callOpenAI(newUserMsg.content);
       console.log('Received response:', aiResponse);
       
-      // Determine if we should show a chart based on keywords in the response
-      const chartKeywords = [
-        'graph',
-        'chart',
-        'trend',
-        'performance',
-        'metrics',
-        'growth',
-        'increase',
-        'decrease'
-      ];
-      const shouldShowChart = chartKeywords.some(keyword =>
-        aiResponse.toLowerCase().includes(keyword)
-      );
-
       const newAIMessage: Message = {
         id: messages.length + 2,
         type: 'assistant',
         content: aiResponse,
-        hasChart: shouldShowChart && Math.random() < 0.5, // 50% chance if keywords present
+        // The chart is now displayed if the <chart> tag is present in the response
+        hasChart: aiResponse.includes('<chart>'),
       };
 
       setMessages(prev => [...prev, newAIMessage]);
@@ -216,7 +175,7 @@ const Homer: React.FC = () => {
   return (
     <div
       style={{
-        marginTop: '4vh',
+        marginTop: '1vh',
         height: '96vh',
         display: 'flex',
         flexDirection: 'column',
@@ -309,9 +268,9 @@ const Homer: React.FC = () => {
                   }}
                 >
                   <div style={isUser ? userBubbleStyle : assistantBubbleStyle}>
-                    <p style={{ fontSize: '1.125rem', lineHeight: '1.75rem', margin: 0 }}>
-                      {msg.content}
-                    </p>
+                    <div style={{ fontSize: '1.125rem', lineHeight: '1.75rem', margin: 0 }}>
+                      {renderTaggedContent(msg.content)}
+                    </div>
 
                     {msg.hasChart && (
                       <div style={{ marginTop: 24 }}>

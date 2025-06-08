@@ -143,7 +143,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
   ].join(' ');
 
   return (
-    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 0, position: 'relative'}}>
+    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative'}}>
       {/* Background */}
       {/* Spine line */}
     <div style={{ zIndex: 1, position: 'absolute', top: 0, left: spineX }}>

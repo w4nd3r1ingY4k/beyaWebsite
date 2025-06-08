@@ -6,6 +6,7 @@ body, html {
   margin: 0;
   padding: 0;
   font-family: Arial, sans-serif;
+  overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
 .inbox-container {
@@ -21,9 +22,11 @@ body, html {
 }
 
 .main {
+  margin-top: 5vh; /* Increased from 4vh to clear the SideMenu header line (45px + some padding) */
   flex: 1;
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* Prevent page-level scrolling */
 }
 
 .topbar {
@@ -40,8 +43,7 @@ body, html {
 }
 
 .content {
-  margin-top: 2vh;
-  height: 100vh;
+  height: calc(100vh - 65px); /* Subtract the margin-top to prevent overflow */
   display: flex;
   overflow: hidden;
 
