@@ -1,413 +1,847 @@
+// Load environment variables from .env file
+import dotenv from "dotenv";
+dotenv.config({ path: "./.env" });
+
 import express from "express";
 import OpenAI from "openai";
 import { createBackendClient } from "@pipedream/sdk/server";
 import cors from "cors";
-import dotenv from "dotenv";
-dotenv.config({ path: "./.env" });
+
+// Initialize SDKs
+const pd = createBackendClient({
+  environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
+  credentials: {
+    clientId: process.env.PIPEDREAM_CLIENT_ID,
+    clientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
+  },
+  projectId: process.env.PIPEDREAM_PROJECT_ID,
+});
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Import Square SDK for native fallback
+import square from 'square';
+const { Client } = square;
 
 /**
- * runWorkflow: 1) Ask the LLM to produce a JSON plan, then 2) execute each step.
+ * Get connected account credentials from Pipedream
  */
-export async function runWorkflow(userRequest, externalUserId) {
-  const presenterSystemPrompt = `
-You are B, a helpful and friendly business assistant. Your role is to interpret a JSON object containing the results of a completed workflow and present it to the user in a clear, conversational, and structured way.
-
-**Your Task:**
-Convert the final JSON state into a user-facing message. Use the following custom XML tags to format your response. Do not use any other tags.
-
-**Available Tags:**
-* \`<summary>\`...\`</summary>\`: For a high-level summary of the results.
-* \`<list>\`...\`</list>\`: To contain a list of items.
-* \`<item>\`...\`</item>\`: For each individual item in a list.
-* \`<strong>\`...\`</strong>\`: To emphasize important text, like key metrics or names.
-* \`<suggestion>\`...\`</suggestion>\`: To suggest a next logical step or question for the user.
-* \`<chart>\`...\`</chart>\`: To indicate a chart should be displayed with a title inside the tags.
-
-**Example:**
-If the final state is \`{ "locations_from_step_1": { "locations": [{"name": "Downtown"}, {"name": "Uptown"}] } }\`, a good response would be:
-
-<summary>I found <strong>2</strong> locations for you.</summary>
-<list>
-  <item>Downtown</item>
-  <item>Uptown</item>
-</list>
-<suggestion>Would you like to see recent sales for one of these locations?</suggestion>
-
-
-**IMPORTANT:**
-*   You MUST use the provided tags for formatting.
-*   Your output should be a single block of this XML-style text. No markdown, no JSON.
-*   Be friendly and conversational in your tone. The user is interacting with 'B', not a raw data feed.
-`;
-
-  // Define the single source of truth for tool details.
-  // This maps the planner's friendly names to exact technical details.
-  const toolManifest = {
-    Square: {
-      app_slug: "square",
-      app_label: "Square",
-    },
-    Slack: {
-      app_slug: "slack",
-      app_label: "Slack",
-    },
-    Google_Sheets: {
-      app_slug: "google_sheets",
-      app_label: "Google_Sheets",
-    },
-    HubSpot: {
-      app_slug: "hubspot",
-      app_label: "HubSpot",
-    },
-    Notion: {
-      app_slug: "notion",
-      app_label: "Notion",
-    },
-    Shopify: {
-      app_slug: "shopify",
-      app_label: "Shopify",
+async function getConnectedAccountCredentials(appSlug, externalUserId) {
+  try {
+    // Get the connected account for this user
+    const connectedAccounts = await pd.getConnectedAccounts({
+      app_slug: appSlug,
+      external_user_id: externalUserId
+    });
+    
+    if (connectedAccounts && connectedAccounts.length > 0) {
+      // Return the first connected account's credentials
+      return connectedAccounts[0].credentials;
     }
-  };
+    
+    return null;
+  } catch (error) {
+    console.error(`Error fetching connected account for ${appSlug}:`, error);
+    return null;
+  }
+}
 
-  // 1) Initialize both SDKs once:
-  const pd = createBackendClient({
-    environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
-    credentials: {
-      clientId: process.env.PIPEDREAM_CLIENT_ID,
-      clientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
-    },
-    projectId: process.env.PIPEDREAM_PROJECT_ID,
+/**
+ * Initialize Square client with Pipedream credentials
+ */
+async function getSquareClient(externalUserId) {
+  const credentials = await getConnectedAccountCredentials('square', externalUserId);
+  
+  if (!credentials || !credentials.access_token) {
+    throw new Error('Square account not connected or credentials not available');
+  }
+  
+  return new Client({
+    accessToken: credentials.access_token,
+    environment: credentials.sandbox ? 'sandbox' : 'production'
   });
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
-  // 2) Ask the LLM to produce a pure-JSON plan
-  const systemPrompt = `
-You are a methodical Planner Agent. Your sole purpose is to convert a user's request into a precise, step-by-step execution plan in JSON format.
-
-**Your task:** Given the user's request, produce ONLY a JSON array of sequential steps.
-
-**Output Constraints:**
-*   You MUST output a valid JSON array and nothing else. No explanatory text, no markdown formatting.
-*   Each object in the array represents a single step and MUST contain exactly these four fields:
-    1.  \`step\`: An integer, starting sequentially from 1.
-    2.  \`tool\`: The name of the tool to use for this step. **You MUST choose a tool name from the \`AVAILABLE_TOOLS\` list provided below.**
-    3.  \`action\`: The specific action to perform with the chosen tool (e.g., \`list_locations\`, \`send_message\`).
-    4.  \`args\`: A JSON object of the arguments required for that action.
-
-**Reasoning Process:**
-1.  **Deconstruct Request:** Break down the user's request into a series of logical, sequential actions required to fulfill the goal.
-2.  **Tool Selection:** For each action, look at the \`AVAILABLE_TOOLS\` list and select the single most appropriate tool for that specific action.
-3.  **Action Identification:** Before deciding on an action, you MUST review the list of available actions for the selected tool. From that list, choose the one action that best fits the current step.
-4.  **Argument Formulation:** Determine the necessary arguments for the chosen action. To use an output from a previous step, use the format \`{{key_from_step_N}}\`.
-5.  **JSON Construction:** Assemble the step into the final JSON object format. Repeat for all actions.
-
----
-
-**\`AVAILABLE_TOOLS\`:**
-*   **\`Square\`**: A point-of-sale and payment processing service for businesses. Use for managing transactions, customers, and business locations. Key actions include:
-    *   \`create_customer\`: Creates a new customer profile.
-    *   \`list_customers\`: Retrieves a list of customers.
-    *   \`create_payment\`: Creates a payment.
-    *   \`list_payments\`: Retrieves a list of payments.
-*   **\`Slack\`**: A business communication platform. Use for sending messages to channels or users, and managing team communications. Key actions include:
-    *   \`send_message\`: Sends a message to a channel or user.
-    *   \`create_channel\`: Creates a new public or private channel.
-    *   \`list_users\`: Retrieves a list of all users in the workspace.
-*   **\`Google_Sheets\`**: A spreadsheet application. Use for creating, reading, and updating data in spreadsheets. Key actions include:
-    *   \`add_single_row\`: Adds a single row of data to a sheet.
-    *   \`get_sheet_values\`: Retrieves values from a range of cells.
-    *   \`update_single_row\`: Updates a specific row in a sheet.
-    *   \`create-spreadsheet\`: Creates a new spreadsheet.
-*   **\`HubSpot\`**: A CRM platform for managing customer relationships, sales, and marketing. Key actions include:
-    *   \`search_crm_objects\`: Search for companies, contacts, deals, and more.
-    *   \`update_objects\`: Update leads, deals, custom objects, contacts, and companies.
-    *   \`retrieve_objects\`: Get specific meetings, deals, contacts, companies, and associated meetings.
-    *   \`create_objects\`: Create tickets, tasks, contacts, meetings, leads, deals, custom objects, companies, and communications.
-    *   \`enroll_contacts\`: Add contacts to a specific workflow.
-    *   \`create_associations\`: Create associations between various objects.
-    *   \`batch_operations\`: Create or update batches of contacts.
-    *   \`add_contacts_to_lists\`: Add a contact to a specific static list.
-*   **\`Notion\`**: A workspace for notes, tasks, and databases. Use for managing pages and database items. Key actions include:
-    *   \`list_databases\`: Retrieves a list of all databases.
-    *   \`get_database_items\`: Retrieves items from a specific database.
-    *   \`create_page\`: Creates a new page in a workspace, page, or database.
-    *   \`update_page\`: Updates the properties of an existing page.
-*   **\`Shopify\`**: An ecommerce platform for managing products, orders, and customers. Key actions include:
-    *   \`update_product\`: Update an existing product. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productUpdate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - images: Return JSON in this format: string[] - tags: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
-    *   \`update_product_variant\`: Update an existing product variant. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productVariantsBulkUpdate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - optionIds: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
-    *   \`update_page\`: Update an existing page. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/pageUpdate)
-    *   \`update_metaobject\`: Updates a metaobject. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metaobjectUpdate)
-    *   \`update_metafield\`: Updates a metafield belonging to a resource. [See the documentation]()
-    *   \`update_inventory_level\`: Sets the inventory level for an inventory item at a location. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/inventorySetOnHandQuantities)
-    *   \`update_article\`: Update a blog article. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/articleUpdate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - tags: Return JSON in this format: string[]
-    *   \`search_products\`: Search for products. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/products) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - productIds: Return JSON in this format: string[]
-    *   \`search_product_variant\`: Search for product variants or create one if not found. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/productVariants)
-    *   \`search_custom_collection_by_name\`: Search for a custom collection by name/title. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/collections)
-    *   \`get_pages\`: Retrieve a list of all pages. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/pages)
-    *   \`get_metaobjects\`: Retrieves a list of metaobjects. [See the documentation](https://shopify.dev/docs/api/admin-graphql/unstable/queries/metaobjects)
-    *   \`get_metafields\`: Retrieves a list of metafields that belong to a resource. [See the documentation](https://shopify.dev/docs/api/admin-graphql/unstable/queries/metafields) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - namespace: Return JSON in this format: string[] - key: Return JSON in this format: string[]
-    *   \`get_articles\`: Retrieve a list of all articles from a blog. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/queries/articles)
-    *   \`delete_page\`: Delete an existing page. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/pageDelete)
-    *   \`delete_metafield\`: Deletes a metafield belonging to a resource. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metafieldsDelete)
-    *   \`delete_blog\`: Delete an existing blog. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/blogDelete)
-    *   \`delete_article\`: Delete an existing blog article. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/articleDelete)
-    *   \`create_smart_collection\`: Creates a smart collection. You can fill in any number of rules by selecting more than one option in each prop.[See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionCreate)
-    *   \`create_product\`: Create a new product. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - images: Return JSON in this format: string[] - options: Return JSON in this format: string[] - tags: Return JSON in this format: string[]
-    *   \`create_product_variant\`: Create a new product variant. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/productVariantsBulkCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - optionIds: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
-    *   \`create_page\`: Create a new page. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/pageCreate)
-    *   \`create_metaobject\`: Creates a metaobject. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metaobjectCreate)
-    *   \`create_metafield\`: Creates a metafield belonging to a resource. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/metafieldDefinitionCreate)
-    *   \`create_custom_collection\`: Create a new custom collection. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - products: Return JSON in this format: string[] - metafields: Return JSON in this format: string[]
-    *   \`create_blog\`: Create a new blog. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/blogCreate)
-    *   \`create_article\`: Create a new blog article. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/articleCreate) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - tags: Return JSON in this format: string[]
-    *   \`bulk_import\`: Execute bulk mutations by uploading a JSONL file containing mutation variables. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/bulkoperationrunmutation)
-    *   \`add_tags\`: Add tags. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/tagsAdd) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - tags: Return JSON in this format: string[]
-    *   \`add_product_to_custom_collection\`: Adds a product or products to a custom collection. [See the documentation](https://shopify.dev/docs/api/admin-graphql/latest/mutations/collectionAddProductsV2) IMPORTANT: The arguments have specific formats. Please follow the instructions below: - productIds: Return JSON in this format: string[]
-
----
-
-**Example for a request "Use AI to write a haiku about business and post it to the #general channel in Slack":**
-\`\`\`json
-[
-  {
-    "step": 1,
-    "tool": "OpenAI",
-    "action": "chat.completions.create",
-    "args": {
-      "model": "gpt-4o-mini",
-      "messages": [
-        {
-          "role": "user",
-          "content": "Write a haiku about business."
-        }
-      ]
+// Tool manifest with proper MCP tool names (UPPERCASE with hyphens)
+const toolManifest = {
+  Square: {
+    app_slug: "square",
+    app_label: "Square",
+    actions: {
+      "create_customer": "SQUARE-CREATE-CUSTOMER",
+      "list_customers": "SQUARE-LIST-CUSTOMERS",
+      "create_payment": "SQUARE-CREATE-PAYMENT",
+      "list_payments": "SQUARE-LIST-PAYMENTS",
+      "create_invoice": "SQUARE-CREATE-INVOICE",
+      "send_invoice": "SQUARE-SEND-INVOICE",
+      "create_order": "SQUARE-CREATE-ORDER"
     }
   },
-  {
-    "step": 2,
-    "tool": "Slack",
-    "action": "send_message",
-    "args": {
-      "channel": "#general",
-      "text": "{{result_step_1}}"
+  Slack: {
+    app_slug: "slack",
+    app_label: "Slack",
+    actions: {
+      "send_message": "SLACK-SEND-MESSAGE",
+      "create_channel": "SLACK-CREATE-CHANNEL",
+      "list_users": "SLACK-LIST-USERS"
     }
+  },
+  Google_Sheets: {
+    app_slug: "google_sheets",
+    app_label: "Google Sheets",
+    actions: {
+      "add_single_row": "GOOGLE-SHEETS-ADD-SINGLE-ROW",
+      "get_values": "GOOGLE-SHEETS-GET-VALUES",
+      "update_row": "GOOGLE-SHEETS-UPDATE-ROW",
+      "create_spreadsheet": "GOOGLE-SHEETS-CREATE-SPREADSHEET"
+    }
+  },
+  HubSpot: {
+    app_slug: "hubspot",
+    app_label: "HubSpot",
+    actions: {
+      "search_crm": "HUBSPOT-SEARCH-CRM",
+      "update_lead": "HUBSPOT-UPDATE-LEAD",
+      "update_deal": "HUBSPOT-UPDATE-DEAL",
+      "update_custom_object": "HUBSPOT-UPDATE-CUSTOM-OBJECT",
+      "update_contact": "HUBSPOT-UPDATE-CONTACT",
+      "update_company": "HUBSPOT-UPDATE-COMPANY",
+      "get_meeting": "HUBSPOT-GET-MEETING",
+      "get_file_public_url": "HUBSPOT-GET-FILE-PUBLIC-URL",
+      "get_deal": "HUBSPOT-GET-DEAL",
+      "get_contact": "HUBSPOT-GET-CONTACT",
+      "get_company": "HUBSPOT-GET-COMPANY",
+      "get_associated_meetings": "HUBSPOT-GET-ASSOCIATED-MEETINGS",
+      "enroll_contact_into_workflow": "HUBSPOT-ENROLL-CONTACT-INTO-WORKFLOW",
+      "create_ticket": "HUBSPOT-CREATE-TICKET",
+      "create_task": "HUBSPOT-CREATE-TASK",
+      "create_or_update_contact": "HUBSPOT-CREATE-OR-UPDATE-CONTACT",
+      "create_meeting": "HUBSPOT-CREATE-MEETING",
+      "create_lead": "HUBSPOT-CREATE-LEAD",
+      "create_engagement": "HUBSPOT-CREATE-ENGAGEMENT",
+      "create_deal": "HUBSPOT-CREATE-DEAL",
+      "create_custom_object": "HUBSPOT-CREATE-CUSTOM-OBJECT",
+      "create_company": "HUBSPOT-CREATE-COMPANY",
+      "create_communication": "HUBSPOT-CREATE-COMMUNICATION",
+      "create_associations": "HUBSPOT-CREATE-ASSOCIATIONS",
+      "batch_create_or_update_contact": "HUBSPOT-BATCH-CREATE-OR-UPDATE-CONTACT",
+      "add_contact_to_list": "HUBSPOT-ADD-CONTACT-TO-LIST"
+    }
+  },
+  OpenAI: {
+    app_slug: "openai",
+    app_label: "OpenAI"
   }
-]
-\`\`\`
-`;
-  const planResponse = await openai.chat.completions.create({
-    model: "gpt-4.1",
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      { role: "user", content: userRequest },
-    ],
-    temperature: 0.0,
-  });
-  console.log("📝 planResponse =", JSON.stringify(planResponse, null, 2));
+};
 
-  // 3) Parse that JSON into an array of step-objects
-  let plan;
+/**
+ * Debug function to list available tools for an app
+ */
+async function debugListTools(appSlug, accessToken, externalUserId) {
+  console.log(`\n🔍 Debugging: Listing tools for ${appSlug}...`);
+  
   try {
-    plan = JSON.parse(planResponse.choices[0].message.content);
-  } catch (e) {
-    throw new Error(
-      "Planner did not return valid JSON. Response was:\n" +
-        planResponse.choices[0].message.content
-    );
-  }
-  if (!Array.isArray(plan)) {
-    throw new Error(
-      "Planner returned a JSON but not an array. Got:\n" +
-        JSON.stringify(plan, null, 2)
-    );
-  }
-
-  // 4) Shared state: store every step's result so later steps can reference them
-  const state = { externalUserId };
-
-  // 5) Define an internal recursive executor. It runs step #i, then calls itself for i+1.
-  async function executeStepAtIndex(i) {
-    if (i >= plan.length) return;
-
-    const { step, tool, action, args } = plan[i];
-
-    // 5a) Interpolate any placeholders in args using state
-    const rawArgsString = JSON.stringify(args);
-    const interpolatedArgsString = rawArgsString.replace(
-      /\{\{([^}]+)\}\}/g,
-      (_, key) => {
-        const k = key.trim();
-        if (typeof state[k] === "undefined") {
-          throw new Error(`Cannot resolve placeholder "{{${k}}}" in step ${step}`);
-        }
-        return state[k];
-      }
-    );
-    const interpolatedArgs = JSON.parse(interpolatedArgsString);
-
-    console.log(
-      `🚀 Executing Step ${step}: ${tool}.${action} with args ${JSON.stringify(
-        interpolatedArgs
-      )}`
-    );
-    let result;
-
-    // 5b) If the tool is "openai", call LLM directly
-    if (tool.toLowerCase() === "openai") {
-      if (action === "chat.completions.create") {
-        const resp = await openai.chat.completions.create(interpolatedArgs);
-        result = resp.choices[0].message.content;
-        state[`result_step_${step}`] = result;
-      } else {
-        throw new Error(`Unsupported OpenAI action: ${action}`);
-      }
-    } else {
-      // 5c) It's an MCP connector. Look up its details from the manifest.
-      const toolDetails = toolManifest[tool];
-      if (!toolDetails || !toolDetails.app_slug) {
-        throw new Error(
-          `Execution error: Tool "${tool}" from the plan is not a valid, recognized MCP connector in the tool manifest.`
-        );
-      }
-      const appSlug = toolDetails.app_slug;
-      const appLabel = toolDetails.app_label;
-
-      // 5d) Get a fresh access token
-      const accessToken = await pd.rawAccessToken();
-
-      // 5e) Build the "tools" array for a single-tool MCP call:
-      const mcpToolSpec = {
+    const response = await openai.responses.create({
+      model: "gpt-4.1",
+      input: "Please list all available tools for this integration.",
+      tools: [{
         type: "mcp",
-        server_label: appLabel,
+        server_label: "pipedream", // Changed to "pipedream"
         server_url: "https://remote.mcp.pipedream.net",
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          "Authorization": `Bearer ${accessToken}`,
           "x-pd-project-id": process.env.PIPEDREAM_PROJECT_ID,
           "x-pd-environment": process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
           "x-pd-external-user-id": externalUserId,
-          "x-pd-app-slug": appSlug,
+          "x-pd-app-slug": appSlug
         },
-        require_approval: "never",
-      };
+        allowed_tools: ["*"],
+        require_approval: "never"
+      }],
+      temperature: 0,
+      max_output_tokens: 2048,
+      store: true
+    });
+    
+    // Look for mcp_list_tools in the output
+    const toolsList = response.output?.find(o => o.type === "mcp_list_tools");
+    if (toolsList && toolsList.tools) {
+      console.log(`✅ Found ${toolsList.tools.length} tools:`, toolsList.tools);
+      return toolsList.tools;
+    } else {
+      console.log("⚠️ No tools found in response");
+      return [];
+    }
+  } catch (error) {
+    console.error(`❌ Error listing tools:`, error.message);
+    return [];
+  }
+}
 
-      // 5f) Call OpenAI's "responses" endpoint with one MCP tool
-      const mcpInput = {
-        action,
-        arguments: interpolatedArgs,
-      };
-      const resp = await openai.responses.create({
-        model: "gpt-4o-mini",
-        tools: [mcpToolSpec],
-        input: JSON.stringify(mcpInput),
-      });
-
-      console.log(
-        `🔍 MCP response for step ${step} (${tool}.${action}):`,
-        JSON.stringify(resp, null, 2)
-      );
-
-      const toolCalls = Array.isArray(resp.output)
-        ? resp.output.filter((o) => o.type === "mcp_call" && o.output !== null)
-        : [];
-
-      // 1) If the MCP call returned something in `output`, try to parse it as JSON first:
-      if (toolCalls.length > 0) {
-        const raw = toolCalls[0].output;
-        try {
-          result = JSON.parse(raw);
-        } catch (parseErr) {
-          result = { output_text: raw };
+/**
+ * Execute Square operation using native SDK as fallback
+ */
+async function executeSquareNativeFallback(action, args, externalUserId) {
+  console.log(`🔄 Attempting Square native SDK fallback for ${action}`);
+  
+  try {
+    const squareClient = await getSquareClient(externalUserId);
+    
+    switch (action) {
+      case 'create_customer': {
+        const { customersApi } = squareClient;
+        const response = await customersApi.createCustomer({
+          givenName: args.given_name || args.name?.split(' ')[0],
+          familyName: args.family_name || args.name?.split(' ').slice(1).join(' '),
+          emailAddress: args.email,
+          phoneNumber: args.phone,
+          companyName: args.company,
+          note: args.note
+        });
+        
+        if (response.result.errors) {
+          throw new Error(response.result.errors[0].detail);
         }
-        // 2) Otherwise, if there's a plain-text fallback in `resp.output_text`, use that:
-      } else if (
-        typeof resp.output_text === "string" &&
-        resp.output_text.trim().length > 0
-      ) {
-        result = { output_text: resp.output_text };
-        // 3) If neither exists, it truly failed:
-      } else {
-        const fallback = JSON.stringify(resp, null, 2);
-        throw new Error(
-          `Step ${step} (${tool}.${action}) failed with no output:\n${fallback}`
-        );
+        
+        return response.result.customer;
       }
+      
+      case 'list_customers': {
+        const { customersApi } = squareClient;
+        const response = await customersApi.listCustomers({
+          limit: args.limit || 100,
+          cursor: args.cursor
+        });
+        
+        if (response.result.errors) {
+          throw new Error(response.result.errors[0].detail);
+        }
+        
+        return response.result.customers || [];
+      }
+      
+      case 'create_payment': {
+        const { paymentsApi } = squareClient;
+        const response = await paymentsApi.createPayment({
+          sourceId: args.source_id,
+          idempotencyKey: args.idempotency_key || Date.now().toString(),
+          amountMoney: {
+            amount: args.amount,
+            currency: args.currency || 'USD'
+          },
+          customerId: args.customer_id,
+          note: args.note
+        });
+        
+        if (response.result.errors) {
+          throw new Error(response.result.errors[0].detail);
+        }
+        
+        return response.result.payment;
+      }
+      
+      case 'list_payments': {
+        const { paymentsApi } = squareClient;
+        const response = await paymentsApi.listPayments({
+          limit: args.limit || 100,
+          cursor: args.cursor,
+          locationId: args.location_id
+        });
+        
+        if (response.result.errors) {
+          throw new Error(response.result.errors[0].detail);
+        }
+        
+        return response.result.payments || [];
+      }
+      
+      // Add more Square operations as needed
+      default:
+        throw new Error(`Square native operation '${action}' not implemented`);
+    }
+  } catch (error) {
+    console.error(`❌ Square native fallback failed:`, error.message);
+    throw error;
+  }
+}
 
-      // 5h) Save any fields from result into state
-      Object.keys(result).forEach((key) => {
-        state[`${key}_from_step_${step}`] = result[key];
+/**
+ * Execute MCP tool with proper formatting, auth link detection, and native fallback
+ */
+async function executeMCPTool(toolConfig, action, args, state) {
+  const accessToken = await pd.rawAccessToken();
+  const mcpToolName = toolConfig.actions[action];
+  
+  // Debug: List available tools on first call
+  if (!state._debuggedTools?.[toolConfig.app_slug]) {
+    state._debuggedTools = state._debuggedTools || {};
+    const availableTools = await debugListTools(toolConfig.app_slug, accessToken, state.externalUserId);
+    state._debuggedTools[toolConfig.app_slug] = availableTools;
+    
+    // Check if our expected tool is in the list
+    const expectedTool = mcpToolName;
+    const foundTool = availableTools.find(t => 
+      t.name === expectedTool || 
+      t.name === expectedTool.toUpperCase() ||
+      t.name === expectedTool.replace(/-/g, '_').toUpperCase()
+    );
+    
+    if (foundTool) {
+      console.log(`✅ Found matching tool: ${foundTool.name}`);
+    } else {
+      console.log(`⚠️ Expected tool "${expectedTool}" not found in available tools`);
+      
+      // If it's Square and tool not found, try native fallback
+      if (toolConfig.app_slug === 'square') {
+        console.log(`🔄 Attempting Square native SDK fallback...`);
+        try {
+          return await executeSquareNativeFallback(action, args, state.externalUserId);
+        } catch (fallbackError) {
+          console.error(`❌ Square native fallback also failed:`, fallbackError.message);
+          // Continue with MCP attempt anyway
+        }
+      }
+    }
+  }
+  
+  // Create the MCP configuration
+  const mcpConfig = {
+    type: "mcp",
+    server_label: "pipedream", // Changed from toolConfig.app_label to "pipedream"
+    server_url: "https://remote.mcp.pipedream.net",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "x-pd-project-id": process.env.PIPEDREAM_PROJECT_ID,
+      "x-pd-environment": process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
+      "x-pd-external-user-id": state.externalUserId,
+      "x-pd-app-slug": toolConfig.app_slug
+    },
+    allowed_tools: [mcpToolName], // Only allow the specific tool we need
+    require_approval: "never"
+  };
+
+  // Create a prompt that explicitly requests tool use
+  let toolPrompt;
+  if (Object.keys(args).length === 0) {
+    toolPrompt = `Use the ${mcpToolName} tool to ${action.replace(/_/g, ' ')}.`;
+  } else {
+    toolPrompt = `Use the ${mcpToolName} tool to ${action.replace(/_/g, ' ')} with these parameters: ${JSON.stringify(args, null, 2)}`;
+  }
+
+  console.log(`\n📞 Attempting to call: ${mcpToolName}`);
+  console.log(`📝 Prompt: ${toolPrompt}`);
+
+  try {
+    const response = await openai.responses.create({
+      model: "gpt-4.1",
+      input: toolPrompt,
+      tools: [mcpConfig],
+      temperature: 0,
+      max_output_tokens: 2048,
+      top_p: 1,
+      store: true
+    });
+
+    console.log(`\n📊 Response structure:`);
+    console.log(`- Status: ${response.status}`);
+    console.log(`- Output items: ${response.output?.length || 0}`);
+    if (response.output) {
+      response.output.forEach((item, idx) => {
+        console.log(`  [${idx}] Type: ${item.type}`);
+        if (item.type === "mcp_call") {
+          console.log(`      Tool: ${item.name}`);
+          console.log(`      Has output: ${item.output !== null}`);
+        }
+        if (item.type === "message" && item.content) {
+          // Check for auth links in message content
+          item.content.forEach(content => {
+            if (content.type === "text" && content.text) {
+              // Look for Pipedream auth URLs
+              const authUrlMatch = content.text.match(/https:\/\/[^\s]+pipedream[^\s]+connect[^\s]+/i);
+              if (authUrlMatch) {
+                console.log(`🔗 Found authorization URL: ${authUrlMatch[0]}`);
+              }
+            }
+          });
+        }
       });
     }
 
-    console.log(
-      `✅ Step ${step} (${tool}.${action}) completed. Result stored in state.`
-    );
-    await executeStepAtIndex(i + 1);
+    // Extract the tool call result
+    const toolCall = response.output?.find(o => o.type === "mcp_call" && o.output !== null);
+    
+    if (toolCall) {
+      console.log(`✅ Tool call successful!`);
+      try {
+        const parsedOutput = JSON.parse(toolCall.output);
+        return parsedOutput;
+      } catch {
+        return toolCall.output;
+      }
+    }
+
+    // Check for auth required response
+    // Pipedream typically returns a message with an authorization URL when the app isn't connected
+    const messageOutput = response.output?.find(o => o.type === "message");
+    if (messageOutput && messageOutput.content) {
+      let authUrl = null;
+      let fullText = "";
+      
+      // Extract text and look for auth URL
+      messageOutput.content.forEach(content => {
+        if (content.type === "text" && content.text) {
+          fullText += content.text + "\n";
+          // Look for Pipedream connect URLs
+          const urlMatch = content.text.match(/https:\/\/[^\s]+pipedream[^\s]+connect[^\s]+/i) ||
+                          content.text.match(/https:\/\/connect\.pipedream\.com[^\s]+/i);
+          if (urlMatch) {
+            authUrl = urlMatch[0];
+          }
+        }
+      });
+
+      if (authUrl) {
+        console.log(`⚠️ ${toolConfig.app_label} requires authorization`);
+        return {
+          error: true,
+          requiresAuth: true,
+          authUrl: authUrl,
+          message: `Please connect your ${toolConfig.app_label} account to continue`,
+          details: fullText.trim()
+        };
+      }
+
+      // No auth URL found, but got a message response
+      console.log(`⚠️ Got message instead of tool call`);
+      
+      // Try Square native fallback if MCP failed
+      if (toolConfig.app_slug === 'square' && !authUrl) {
+        console.log(`🔄 MCP failed, attempting Square native SDK fallback...`);
+        try {
+          const nativeResult = await executeSquareNativeFallback(action, args, state.externalUserId);
+          console.log(`✅ Square native fallback successful!`);
+          return nativeResult;
+        } catch (fallbackError) {
+          console.error(`❌ Square native fallback also failed:`, fallbackError.message);
+          return {
+            error: true,
+            message: `Unable to call ${toolConfig.app_label} tool via MCP or native SDK`,
+            details: `MCP: ${fullText.trim() || response.output_text}\nNative: ${fallbackError.message}`
+          };
+        }
+      }
+      
+      return {
+        error: true,
+        message: `Unable to call ${toolConfig.app_label} tool`,
+        details: fullText.trim() || response.output_text
+      };
+    }
+
+    throw new Error(`No tool call or meaningful output found in response`);
+
+  } catch (error) {
+    console.error(`❌ Error calling MCP tool:`, error.message);
+    
+    // Final fallback attempt for Square
+    if (toolConfig.app_slug === 'square') {
+      console.log(`🔄 Final Square native SDK fallback attempt...`);
+      try {
+        return await executeSquareNativeFallback(action, args, state.externalUserId);
+      } catch (fallbackError) {
+        console.error(`❌ Final Square fallback failed:`, fallbackError.message);
+      }
+    }
+    
+    throw error;
   }
-
-  // 6) Kick off the recursion at index 0
-  await executeStepAtIndex(0);
-
-  // 7) Once recursion unwinds, use a "Presenter" LLM to format the state for the user
-  console.log("🎁 Final state for Presenter:", JSON.stringify(state, null, 2));
-
-  const presenterResponse = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: presenterSystemPrompt },
-      {
-        role: "user",
-        content: `Here is the final state JSON from the workflow that you need to present to the user:\n${JSON.stringify(
-          state,
-          null,
-          2
-        )}`,
-      },
-    ],
-    temperature: 0.2,
-  });
-
-  const formattedOutput = presenterResponse.choices[0].message.content;
-  console.log("🎨 Formatted output from Presenter:", formattedOutput);
-
-  // 8) Return the formatted string instead of the raw state object
-  return (
-    formattedOutput ||
-    "<summary>I've completed the task, but I'm not sure how to describe it. You can check your server logs for the full details.</summary>"
-  );
 }
 
-// ---------------------
-// Express server setup
+/**
+ * Main workflow execution
+ */
+export async function runWorkflow(userRequest, externalUserId = 'test-user-123') {
+  console.log("\n" + "=".repeat(60));
+  console.log("🚀 STARTING WORKFLOW EXECUTION");
+  console.log("=".repeat(60));
+  console.log(`User Request: "${userRequest}"`);
+  console.log(`External User ID: ${externalUserId}`);
+  
+  // Step 1: Create the plan
+  const plannerPrompt = `
+You are a methodical Planner Agent. Your sole purpose is to convert a user's request into a precise, step-by-step execution plan.
 
+**CRITICAL**: You must return a JSON object with exactly one key "steps" containing an array of step objects.
+
+Example output:
+{
+  "steps": [
+    {
+      "step": 1,
+      "tool": "Square",
+      "action": "list_customers",
+      "args": {}
+    },
+    {
+      "step": 2,
+      "tool": "Slack",
+      "action": "send_message",
+      "args": {
+        "channel": "#general",
+        "text": "Found {{count_from_step_1}} customers"
+      }
+    }
+  ]
+}
+
+**Available Tools and Actions:**
+- Square: create_customer, list_customers, create_payment, list_payments, create_invoice, send_invoice, create_order
+- Slack: send_message, create_channel, list_users
+- Google_Sheets: add_single_row, get_values, update_row, create_spreadsheet
+- HubSpot: search_crm, update_lead, update_deal, update_custom_object, update_contact, update_company, get_meeting, get_file_public_url, get_deal, get_contact, get_company, get_associated_meetings, enroll_contact_into_workflow, create_ticket, create_task, create_or_update_contact, create_meeting, create_lead, create_engagement, create_deal, create_custom_object, create_company, create_communication, create_associations, batch_create_or_update_contact, add_contact_to_list
+- OpenAI: chat.completions.create
+
+**Important Rules:**
+1. Use exact action names as listed above
+2. Use {{key_from_step_N}} to reference outputs from previous steps
+3. For array results, you can use {{count_from_step_N}} to get the count
+4. Keep plans simple and focused on the user's request
+5. When you need to transform data or process arrays (like creating multiple items from a list), use OpenAI to help:
+   - First get the data
+   - Then use OpenAI to transform/iterate over the data
+   - Then execute the actions with the transformed data
+
+**Handling Arrays and Batch Operations:**
+- If the user wants to "create replicas", "copy all", or process multiple items, use OpenAI as an intermediary step
+- Example: To create Square customers from HubSpot contacts:
+  Step 1: Get HubSpot contacts
+  Step 2: Use OpenAI to transform the data into individual creation commands
+  Step 3+: Execute each creation command
+
+**Data References:**
+- {{result_step_N}} - The full result from step N
+- {{items_from_step_N}} - If step N returned an array
+- {{count_from_step_N}} - The count of items if step N returned an array
+- {{key_from_step_N}} - A specific field from step N's result`;
+
+  const planResponse = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: plannerPrompt },
+      { role: "user", content: userRequest }
+    ],
+    temperature: 0.0,
+    response_format: { type: "json_object" }
+  });
+
+  let plan;
+  try {
+    const parsedOutput = JSON.parse(planResponse.choices[0].message.content);
+    plan = parsedOutput.steps;
+    if (!Array.isArray(plan)) {
+      throw new Error("Plan must contain a 'steps' array");
+    }
+  } catch (e) {
+    throw new Error(`Failed to parse plan: ${e.message}`);
+  }
+
+  console.log("\n📝 Generated plan:", JSON.stringify(plan, null, 2));
+
+  // Step 2: Execute the plan
+  const state = { 
+    externalUserId,
+    _debuggedTools: {},
+    _startTime: Date.now()
+  };
+
+  for (const step of plan) {
+    console.log("\n" + "-".repeat(60));
+    console.log(`📍 Step ${step.step}: ${step.tool}.${step.action}`);
+    console.log("-".repeat(60));
+    
+    try {
+      // Interpolate arguments
+      const interpolatedArgs = interpolateArgs(step.args, state);
+      console.log(`📌 Arguments:`, JSON.stringify(interpolatedArgs, null, 2));
+      
+      if (step.tool.toLowerCase() === "openai") {
+        // Handle OpenAI calls directly
+        if (step.action === "chat.completions.create") {
+          console.log(`🤖 Calling OpenAI directly...`);
+          const resp = await openai.chat.completions.create(interpolatedArgs);
+          const result = resp.choices[0].message.content;
+          
+          state[`result_step_${step.step}`] = result;
+          state[`content_from_step_${step.step}`] = result;
+          console.log(`✅ OpenAI response received (${result.length} chars)`);
+        } else {
+          throw new Error(`Unknown OpenAI action: ${step.action}`);
+        }
+      } else {
+        // Handle MCP tool calls
+        const toolConfig = toolManifest[step.tool];
+        if (!toolConfig) {
+          throw new Error(`Unknown tool: ${step.tool}`);
+        }
+
+        if (!toolConfig.actions[step.action]) {
+          throw new Error(`Unknown action ${step.action} for tool ${step.tool}`);
+        }
+
+        const result = await executeMCPTool(toolConfig, step.action, interpolatedArgs, state);
+        
+        // Store results in state
+        state[`result_step_${step.step}`] = result;
+        if (result && !result.error) {
+          // Store the complete result
+          state[`result_step_${step.step}`] = result;
+          
+          // If it's an object with nested structure, extract useful fields
+          if (typeof result === 'object' && !Array.isArray(result)) {
+            // Store individual fields
+            Object.entries(result).forEach(([key, value]) => {
+              state[`${key}_from_step_${step.step}`] = value;
+            });
+            
+            // Special handling for common patterns
+            if (result.results && Array.isArray(result.results)) {
+              state[`items_from_step_${step.step}`] = result.results;
+              state[`count_from_step_${step.step}`] = result.results.length;
+            }
+          }
+          
+          // If result is directly an array
+          if (Array.isArray(result)) {
+            state[`items_from_step_${step.step}`] = result;
+            state[`count_from_step_${step.step}`] = result.length;
+            console.log(`📊 Stored array with ${result.length} items`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`\n❌ Step ${step.step} failed:`, error.message);
+      state[`error_from_step_${step.step}`] = error.message;
+      
+      // Decide whether to continue or stop
+      if (step.tool === "Square" || step.tool === "HubSpot") {
+        console.log(`⚠️ Continuing despite error (non-critical tool)`);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  // Calculate execution time
+  state._executionTime = Date.now() - state._startTime;
+  console.log(`\n⏱️ Total execution time: ${state._executionTime}ms`);
+
+  // Step 3: Present the results
+  return await presentResults(state);
+}
+
+/**
+ * Helper function to interpolate arguments with state values
+ */
+function interpolateArgs(args, state) {
+  const argsString = JSON.stringify(args);
+  const interpolated = argsString.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
+    const trimmedKey = key.trim();
+    
+    // Handle array indexing like items_from_step_1[0]
+    const arrayMatch = trimmedKey.match(/^(.+)\[(\d+)\]$/);
+    if (arrayMatch) {
+      const [, baseKey, index] = arrayMatch;
+      if (state[baseKey] && Array.isArray(state[baseKey])) {
+        return JSON.stringify(state[baseKey][parseInt(index)]);
+      }
+    }
+    
+    // Handle dot notation like items_from_step_1.0.name
+    if (trimmedKey.includes('.')) {
+      const parts = trimmedKey.split('.');
+      let value = state;
+      for (const part of parts) {
+        if (value && typeof value === 'object') {
+          value = value[part];
+        } else {
+          console.warn(`⚠️ Warning: Cannot access "${part}" in path "${trimmedKey}"`);
+          return '""';
+        }
+      }
+      return JSON.stringify(value);
+    }
+    
+    // Regular key access
+    if (!(trimmedKey in state)) {
+      console.warn(`⚠️ Warning: Key "${trimmedKey}" not found in state, using empty string`);
+      return '""';
+    }
+    return JSON.stringify(state[trimmedKey]);
+  });
+  
+  try {
+    return JSON.parse(interpolated);
+  } catch (error) {
+    throw new Error(`Failed to parse interpolated args: ${error.message}`);
+  }
+}
+
+/**
+ * Present results to the user
+ */
+async function presentResults(state) {
+  // Remove internal fields from state before presenting
+  const cleanState = Object.entries(state).reduce((acc, [key, value]) => {
+    if (!key.startsWith('_')) {
+      acc[key] = value;
+    }
+    return acc;
+  }, {});
+
+  // Check if there are any auth URLs to present
+  let authUrls = [];
+  Object.entries(cleanState).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && value.requiresAuth && value.authUrl) {
+      authUrls.push({
+        tool: key.replace('result_step_', 'Step '),
+        url: value.authUrl,
+        app: value.message.match(/connect your (\w+) account/i)?.[1] || 'service'
+      });
+    }
+  });
+
+  const presenterPrompt = `
+You are B, a helpful business assistant. Convert the workflow results into a user-friendly message.
+
+Use these XML tags for formatting:
+- <summary>...</summary>: High-level summary
+- <list>...</list>: Container for lists  
+- <item>...</item>: List items
+- <strong>...</strong>: Emphasis
+- <suggestion>...</suggestion>: Next steps
+
+Important:
+- If there are errors in the results, acknowledge them gracefully
+- If there are authUrl fields with requiresAuth: true, present them as clickable links for the user to connect their accounts
+- Focus on what was successful
+- Be conversational and friendly
+- Keep the response concise`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: presenterPrompt },
+      { role: "user", content: `Present these results to the user:\n${JSON.stringify(cleanState, null, 2)}` }
+    ],
+    temperature: 0.2
+  });
+
+  let finalResponse = response.choices[0].message.content;
+
+  // If there are auth URLs, append them in a clear format
+  if (authUrls.length > 0) {
+    finalResponse += "\n\n<summary><strong>Action Required:</strong> Please connect your accounts</summary>\n<list>";
+    authUrls.forEach(auth => {
+      finalResponse += `\n<item>Connect ${auth.app}: ${auth.url}</item>`;
+    });
+    finalResponse += "\n</list>\n<suggestion>After connecting your accounts, please try your request again.</suggestion>";
+  }
+
+  return finalResponse;
+}
+
+// Express server setup
 const app = express();
-app.use(cors({ origin: "*" }));
+app.use(cors({ origin: "*" })); // Configure appropriately for production
 app.use(express.json());
 
+// Main workflow endpoint
 app.post("/workflow", async (req, res) => {
   const { userRequest, externalUserId } = req.body;
-  if (!userRequest || !externalUserId) {
-    return res
-      .status(400)
-      .json({ error: "`userRequest` and `externalUserId` are required in the body." });
+  if (!userRequest) {
+    return res.status(400).json({ error: "userRequest is required" });
   }
 
   try {
-    const formattedResponse = await runWorkflow(userRequest, externalUserId);
-    return res.status(200).json({ response: formattedResponse });
-  } catch (err) {
-    console.error("🔥 Error running workflow:", err);
-    return res.status(500).json({ error: err.message || "Internal Server Error" });
+    const result = await runWorkflow(userRequest, externalUserId || 'test-user-123');
+    return res.status(200).json({ response: result });
+  } catch (error) {
+    console.error("🔥 Workflow error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Internal Server Error",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
+});
+
+// Debug endpoint to test tool listing
+app.post("/debug/list-tools", async (req, res) => {
+  const { appSlug, externalUserId } = req.body;
+  if (!appSlug) {
+    return res.status(400).json({ error: "appSlug is required" });
+  }
+
+  try {
+    const accessToken = await pd.rawAccessToken();
+    const tools = await debugListTools(appSlug, accessToken, externalUserId || 'test-user-123');
+    return res.status(200).json({ tools });
+  } catch (error) {
+    console.error("🔥 Debug error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug endpoint to check connected accounts
+app.post("/debug/check-connection", async (req, res) => {
+  const { appSlug, externalUserId } = req.body;
+  if (!appSlug) {
+    return res.status(400).json({ error: "appSlug is required" });
+  }
+
+  try {
+    const credentials = await getConnectedAccountCredentials(appSlug, externalUserId || 'test-user-123');
+    
+    if (credentials) {
+      // Don't expose sensitive data, just confirm connection
+      return res.status(200).json({ 
+        connected: true,
+        hasAccessToken: !!credentials.access_token,
+        appSlug: appSlug
+      });
+    } else {
+      return res.status(200).json({ 
+        connected: false,
+        appSlug: appSlug
+      });
+    }
+  } catch (error) {
+    console.error("🔥 Connection check error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
+    timestamp: new Date().toISOString()
+  });
 });
 
 const PORT = process.env.PORT || 2074;
 app.listen(PORT, () => {
-  // ← log the correct env var here
-  console.log("Pipedream env =", process.env.PIPEDREAM_PROJECT_ENVIRONMENT);
-  console.log(`🚀 Server listening on http://localhost:${PORT}`);
+  console.log("\n" + "=".repeat(60));
+  console.log("🚀 MCP WORKFLOW SERVER STARTED");
+  console.log("=".repeat(60));
+  console.log(`📍 URL: http://localhost:${PORT}`);
+  console.log(`📋 Environment: ${process.env.PIPEDREAM_PROJECT_ENVIRONMENT}`);
+  console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? '✓ Loaded' : '✗ Missing'}`);
+  console.log(`🔑 Pipedream Client ID: ${process.env.PIPEDREAM_CLIENT_ID ? '✓ Loaded' : '✗ Missing'}`);
+  console.log(`🔑 Pipedream Project ID: ${process.env.PIPEDREAM_PROJECT_ID ? '✓ Loaded' : '✗ Missing'}`);
+  console.log("\nEndpoints:");
+  console.log("  POST /workflow - Execute a workflow");
+  console.log("  POST /debug/list-tools - List available tools for an app");
+  console.log("  GET /health - Health check");
+  console.log("=".repeat(60) + "\n");
 });
-
-
