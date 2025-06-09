@@ -10,8 +10,8 @@ interface Props {
   onSelect: (id: string) => void;
   userId: string;
   statusFilter?: Status | 'all';
-  categoryFilter?: string;
-  onCategoryFilterChange?: (category: string) => void;
+  categoryFilter?: string[];
+  onCategoryFilterChange?: (categories: string[]) => void;
   onCompose?: () => void;
 }
 
@@ -22,7 +22,7 @@ const ThreadList: React.FC<Props> = ({
   onSelect, 
   userId,
   statusFilter: externalStatusFilter = 'all',
-  categoryFilter: externalCategoryFilter = 'all',
+  categoryFilter: externalCategoryFilter = [],
   onCategoryFilterChange,
   onCompose
 }) => {
@@ -37,6 +37,13 @@ const ThreadList: React.FC<Props> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
+  
+  // Collapsible sections state
+  const [expandedSections, setExpandedSections] = useState({
+    inbox: true,
+    sharedWithMe: true,
+    sharedByMe: true
+  });
 
   // Refs
   const tagDropdownRef = useRef<HTMLDivElement>(null);
@@ -44,7 +51,9 @@ const ThreadList: React.FC<Props> = ({
 
   // Derived data
   const ownedFlows = useMemo(() => {
-    return Array.isArray(flows) ? flows.filter(f => f.contactId === userId) : [];
+    const result = Array.isArray(flows) ? flows.filter(f => f.contactId === userId) : [];
+    console.log('📋 ThreadList ownedFlows recalculated:', result.length, 'flows');
+    return result;
   }, [flows, userId]);
   
   const sharedWithMe = useMemo(() => {
@@ -65,11 +74,31 @@ const ThreadList: React.FC<Props> = ({
     const options = new Set<string>();
     options.add('all');
     ownedFlows.forEach(f => {
+      // Add primary tags
+      if (f.primaryTag) {
+        options.add(f.primaryTag.toLowerCase());
+      }
+      
+      // Add secondary tags
+      if (Array.isArray(f.secondaryTags)) {
+        f.secondaryTags.forEach((tag: string) => {
+          if (tag) options.add(tag.toLowerCase());
+        });
+      }
+      
+      // Legacy support - add old tags/category
+      if (Array.isArray(f.tags)) {
+        f.tags.forEach((tag: string) => {
+          if (tag) options.add(tag.toLowerCase());
+        });
+      }
       if (f.category) {
         options.add(f.category.toLowerCase());
       }
     });
-    return Array.from(options).sort();
+    const result = Array.from(options).sort();
+    console.log('📋 ThreadList categoryFilterOptions recalculated:', result);
+    return result;
   }, [ownedFlows]);
 
   const filteredThreads = useMemo(() => {
@@ -85,13 +114,26 @@ const ThreadList: React.FC<Props> = ({
     const baseFlowIds = new Set(baseFlows.map(f => f.flowId));
     let result = threads.filter(id => baseFlowIds.has(id));
   
-    if (categoryFilter !== "all") {
+    if (categoryFilter.length > 0) {
       const matching = new Set(
         baseFlows
-          .filter(f =>
-            typeof f.category === "string" &&
-            f.category.toLowerCase() === categoryFilter.toLowerCase()
-          )
+          .filter(f => {
+            // Check primary tag
+            if (f.primaryTag && categoryFilter.some(filter => f.primaryTag.toLowerCase() === filter.toLowerCase())) {
+              return true;
+            }
+            // Check secondary tags
+            if (Array.isArray(f.secondaryTags) && f.secondaryTags.some((tag: string) => 
+              tag && categoryFilter.some(filter => tag.toLowerCase() === filter.toLowerCase())
+            )) {
+              return true;
+            }
+            // Legacy support: check old tags and category
+            const flowTags = Array.isArray(f.tags) ? f.tags : (f.category ? [f.category] : []);
+            return flowTags.some((tag: string) => 
+              tag && categoryFilter.some(filter => tag.toLowerCase() === filter.toLowerCase())
+            );
+          })
           .map(f => f.flowId)
       );
       result = result.filter(id => matching.has(id));
@@ -191,6 +233,13 @@ const ThreadList: React.FC<Props> = ({
     }
   };
 
+  const toggleSection = (section: keyof typeof expandedSections) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   return (
     <div style={{
       width: '460px', // Increased width to accommodate both columns
@@ -212,7 +261,7 @@ const ThreadList: React.FC<Props> = ({
         borderRight: '1px solid #e5e7eb',
         display: 'flex',
         flexDirection: 'column',
-        background: '#f9fafb'
+        background: '#FFFBFA'
       }}>
         {/* Compose Button - Moved to top */}
         <div style={{
@@ -244,74 +293,187 @@ const ThreadList: React.FC<Props> = ({
           </button>
         </div>
 
-        {/* View Filter Buttons */}
+        {/* View Filter Sections */}
         <div style={{
-          padding: '16px',
-          borderBottom: '1px solid #e5e7eb'
+          padding: '16px'
         }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button
-              onClick={() => {
-                setViewFilter("owned");
-              }}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: viewFilter === "owned" ? "#EAE5E5" : "transparent",
-                border: "1px solid transparent",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "bold",
-                color: "#374151",
-                textAlign: "left",
-                transition: "background 0.18s",
-              }}
-            >
-              Inbox
-            </button>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {/* Inbox Section */}
+            <div>
+              <button
+                onClick={() => toggleSection('inbox')}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#6b7280",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "background 0.18s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  📧 Inbox
+                </div>
+                <span style={{ 
+                  fontSize: '12px',
+                  transform: expandedSections.inbox ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s'
+                }}>
+                  ▶
+                </span>
+              </button>
+              
+              {expandedSections.inbox && (
+                <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
+                  <button
+                    onClick={() => setViewFilter("owned")}
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      background: viewFilter === "owned" ? "#EAE5E5" : "transparent",
+                      border: "1px solid transparent",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      fontWeight: "500",
+                      color: "#374151",
+                      textAlign: "left",
+                      transition: "background 0.18s",
+                    }}
+                  >
+                    All Messages
+                  </button>
+                </div>
+              )}
+            </div>
 
-            <button
-              onClick={() => {
-                setViewFilter("sharedWithMe");
-              }}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: viewFilter === "sharedWithMe" ? "#EAE5E5" : "transparent",
-                border: "1px solid transparent",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "bold",
-                color: "#374151",
-                textAlign: "left",
-                transition: "background 0.18s",
-              }}
-            >
-              Shared With Me
-            </button>
+            {/* Shared With Me Section */}
+            <div>
+              <button
+                onClick={() => toggleSection('sharedWithMe')}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#6b7280",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "background 0.18s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  👥 Shared with me
+                </div>
+                <span style={{ 
+                  fontSize: '12px',
+                  transform: expandedSections.sharedWithMe ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s'
+                }}>
+                  ▶
+                </span>
+              </button>
+              
+              {expandedSections.sharedWithMe && (
+                <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
+                  <button
+                    onClick={() => setViewFilter("sharedWithMe")}
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      background: viewFilter === "sharedWithMe" ? "#EAE5E5" : "transparent",
+                      border: "1px solid transparent",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      fontWeight: "500",
+                      color: "#374151",
+                      textAlign: "left",
+                      transition: "background 0.18s",
+                    }}
+                  >
+                    Shared Conversations
+                  </button>
+                </div>
+              )}
+            </div>
 
-            <button
-              onClick={() => {
-                setViewFilter("sharedByMe");
-              }}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: viewFilter === "sharedByMe" ? "#EAE5E5" : "transparent",
-                border: "1px solid transparent",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "bold",
-                color: "#374151",
-                textAlign: "left",
-                transition: "background 0.18s",
-              }}
-            >
-              Shared By Me
-            </button>
+            {/* Shared By Me Section */}
+            <div>
+              <button
+                onClick={() => toggleSection('sharedByMe')}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#6b7280",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "background 0.18s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  📤 Shared by me
+                </div>
+                <span style={{ 
+                  fontSize: '12px',
+                  transform: expandedSections.sharedByMe ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s'
+                }}>
+                  ▶
+                </span>
+              </button>
+              
+              {expandedSections.sharedByMe && (
+                <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
+                  <button
+                    onClick={() => setViewFilter("sharedByMe")}
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      background: viewFilter === "sharedByMe" ? "#EAE5E5" : "transparent",
+                      border: "1px solid transparent",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      fontWeight: "500",
+                      color: "#374151",
+                      textAlign: "left",
+                      transition: "background 0.18s",
+                    }}
+                  >
+                    My Shared Items
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -331,7 +493,7 @@ const ThreadList: React.FC<Props> = ({
         {/* Thread List Header */}
         <div style={{
           padding: '10px',
-          background: '#fff'
+          background: '#FBF7F7' // Match the thread list container background
         }}>
           <div style={{
             display: 'flex',
@@ -403,12 +565,12 @@ const ThreadList: React.FC<Props> = ({
                 onClick={() => setShowTagDropdown(!showTagDropdown)}
                 style={{
                   padding: "8px 12px",
-                  background: "transparent",
-                  border: "1px solid #e5e7eb",
+                  background: categoryFilter.length > 0 ? "#f3f4f6" : "transparent",
+                  border: categoryFilter.length > 0 ? "1px solid #de1785" : "1px solid #e5e7eb",
                   borderRadius: "6px",
                   cursor: "pointer",
                   fontSize: "12px",
-                  color: "#6b7280",
+                  color: categoryFilter.length > 0 ? "#de1785" : "#6b7280",
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
@@ -417,6 +579,22 @@ const ThreadList: React.FC<Props> = ({
               >
                 <span style={{ fontSize: '14px' }}>🏷️</span>
                 Filter
+                {categoryFilter.length > 0 && (
+                  <span style={{
+                    background: '#de1785',
+                    color: '#fff',
+                    borderRadius: '50%',
+                    width: '16px',
+                    height: '16px',
+                    fontSize: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 'bold'
+                  }}>
+                    {categoryFilter.length}
+                  </span>
+                )}
                 <span style={{ fontSize: '10px' }}>
                   {showTagDropdown ? '▼' : '▶'}
                 </span>
@@ -459,16 +637,25 @@ const ThreadList: React.FC<Props> = ({
                       <button
                         key={tag}
                         onClick={() => {
-                          setShowTagDropdown(false);
-                          setTagSearch('');
                           if (onCategoryFilterChange) {
-                            onCategoryFilterChange(tag);
+                            if (tag === 'all') {
+                              onCategoryFilterChange([]);
+                            } else {
+                              const isSelected = categoryFilter.includes(tag);
+                              if (isSelected) {
+                                // Remove tag from selection
+                                onCategoryFilterChange(categoryFilter.filter(t => t !== tag));
+                              } else {
+                                // Add tag to selection
+                                onCategoryFilterChange([...categoryFilter, tag]);
+                              }
+                            }
                           }
                         }}
                         style={{
                           width: '100%',
                           padding: '8px 12px',
-                          background: categoryFilter === tag ? '#f3f4f6' : 'transparent',
+                          background: (tag === 'all' && categoryFilter.length === 0) || categoryFilter.includes(tag) ? '#f3f4f6' : 'transparent',
                           border: 'none',
                           textAlign: 'left',
                           fontSize: '12px',
@@ -476,17 +663,22 @@ const ThreadList: React.FC<Props> = ({
                           cursor: 'pointer'
                         }}
                         onMouseEnter={(e) => {
-                          if (categoryFilter !== tag) {
+                          if (!((tag === 'all' && categoryFilter.length === 0) || categoryFilter.includes(tag))) {
                             e.currentTarget.style.background = '#f9fafb';
                           }
                         }}
                         onMouseLeave={(e) => {
-                          if (categoryFilter !== tag) {
+                          if (!((tag === 'all' && categoryFilter.length === 0) || categoryFilter.includes(tag))) {
                             e.currentTarget.style.background = 'transparent';
                           }
                         }}
                       >
-                        {tag === 'all' ? 'All Tags' : tag.charAt(0).toUpperCase() + tag.slice(1)}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                          <span>{tag === 'all' ? 'All Tags' : tag.charAt(0).toUpperCase() + tag.slice(1)}</span>
+                          {((tag === 'all' && categoryFilter.length === 0) || categoryFilter.includes(tag)) && (
+                            <span style={{ color: '#de1785', fontWeight: 'bold' }}>✓</span>
+                          )}
+                        </div>
                       </button>
                     ))}
                 </div>
@@ -556,7 +748,9 @@ const ThreadList: React.FC<Props> = ({
         {/* Thread List */}
         <div style={{
           flex: 1,
-          overflowY: 'auto'
+          overflowY: 'auto',
+          background: '#FBF7F7', // Light background for the container
+          padding: '8px' // Add padding around the thread items
         }}>
           {filteredThreads.length === 0 ? (
             <div style={{
@@ -577,11 +771,28 @@ const ThreadList: React.FC<Props> = ({
                   onClick={() => onSelect(threadId)}
                   style={{
                     padding: '16px',
-                    borderBottom: '1px solid #f3f4f6',
+                    marginBottom: '8px', // Add space between thread items
                     cursor: 'pointer',
-                    background: isSelected ? '#f9fafb' : 'transparent',
-                    borderLeft: isSelected ? '3px solid #de1785' : '3px solid transparent',
-                    transition: 'background 0.15s'
+                    background: isSelected ? '#FFF4FA' : '#FFFBFA', // Different backgrounds for selected vs normal threads
+                    borderRadius: isSelected ? '12px' : '8px', // Full border radius, larger when selected
+                    border: isSelected ? '2px solid #de1785' : '1px solid #e5e7eb', // Full border instead of just left
+                    boxShadow: isSelected 
+                      ? '0 8px 25px -5px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)' // Stronger shadow when selected
+                      : '0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)', // Subtle shadow for all items
+                    transition: 'all 0.2s ease-in-out', // Smooth transitions for all properties
+                    transform: isSelected ? 'translateY(-1px)' : 'translateY(0)', // Slight lift when selected
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.boxShadow = '0 4px 12px -2px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.boxShadow = '0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }
                   }}
                 >
                   <div style={{
@@ -625,19 +836,64 @@ const ThreadList: React.FC<Props> = ({
                     {getPreviewText(threadId)}
                   </p>
                   
-                  {flow?.category && (
-                    <div style={{
-                      marginTop: '8px',
-                      fontSize: '10px',
-                      color: '#8b5cf6',
-                      background: '#f3f0ff',
-                      padding: '2px 6px',
-                      borderRadius: '10px',
-                      display: 'inline-block'
-                    }}>
-                      {flow.category}
-                    </div>
-                  )}
+                  <div style={{ marginTop: '8px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                    {/* Primary tag */}
+                    {flow?.primaryTag && (
+                      <div style={{
+                        fontSize: '10px',
+                        color: '#2563eb',
+                        background: '#dbeafe',
+                        padding: '2px 6px',
+                        borderRadius: '10px',
+                        display: 'inline-block',
+                        fontWeight: '500'
+                      }}>
+                        {flow.primaryTag}
+                      </div>
+                    )}
+                    
+                    {/* Secondary tags */}
+                    {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.slice(0, 3).map((tag: string, index: number) => (
+                      <div key={index} style={{
+                        fontSize: '10px',
+                        color: '#DE1785',
+                        background: '#FDE7F1',
+                        padding: '2px 6px',
+                        borderRadius: '10px',
+                        display: 'inline-block'
+                      }}>
+                        {tag}
+                      </div>
+                    ))}
+                    
+                    {/* Show +X more if there are more than 3 secondary tags */}
+                    {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.length > 3 && (
+                      <div style={{
+                        fontSize: '10px',
+                        color: '#6b7280',
+                        background: '#f3f4f6',
+                        padding: '2px 6px',
+                        borderRadius: '10px',
+                        display: 'inline-block'
+                      }}>
+                        +{flow.secondaryTags.length - 3}
+                      </div>
+                    )}
+                    
+                    {/* Legacy support - show old category if no primary tag exists */}
+                    {!flow?.primaryTag && flow?.category && (
+                      <div style={{
+                        fontSize: '10px',
+                        color: '#8b5cf6',
+                        background: '#f3f0ff',
+                        padding: '2px 6px',
+                        borderRadius: '10px',
+                        display: 'inline-block'
+                      }}>
+                        {flow.category}
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })

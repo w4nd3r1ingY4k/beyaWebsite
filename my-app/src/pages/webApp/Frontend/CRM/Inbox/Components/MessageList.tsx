@@ -77,7 +77,9 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
   // ─────────── Hardcoded Data & Options ───────────
   const currentUser = 'You' // Represents the logged-in user sending messages
   // Removed 'all' from tagOptions as 'all' is a filter option, not a tag to assign
-  const tagOptions = ['sales', 'logistics', 'support']
+  // Predefined tag options - separated into primary and secondary  
+  const primaryTagOptions = ['sales', 'logistics', 'support']
+  const secondaryTagOptions = ['urgent', 'vip', 'complex', 'enterprise', 'follow-up', 'escalated']
 
   // ─────────── Derived Data (Memoized for Performance) ───────────
   // Flows belonging to the current authenticated user
@@ -91,7 +93,7 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
     return flows.filter(f => f.contactId === user?.userId);
   }, [flows, user?.userId]);
   
-  // 2) Flows shared with me (I appear in participants, but I’m not the owner)
+  // 2) Flows shared with me (I appear in participants, but I'm not the owner)
   const sharedWithMe = useMemo(() => {
     return flows.filter(f =>
       Array.isArray(f.participants)
@@ -108,11 +110,29 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
   }, [ownedFlows]);
 
   // Filter options for categories (tags) available based on user's flows
-  const categoryFilterOptions = useMemo(() => {
+  const tagFilterOptions = useMemo(() => {
     const options = new Set<string>();
     options.add('all'); // Always show 'all' filter option
-    // 'inbox' is now a dedicated button, so remove from here to avoid redundancy
+    
     myFlows.forEach(f => {
+      // Add primary tags
+      if (f.primaryTag) {
+        options.add(f.primaryTag.toLowerCase());
+      }
+      
+      // Add secondary tags
+      if (Array.isArray(f.secondaryTags)) {
+        f.secondaryTags.forEach((tag: string) => {
+          if (tag) options.add(tag.toLowerCase());
+        });
+      }
+      
+      // Legacy support - add old tags/category
+      if (Array.isArray(f.tags)) {
+        f.tags.forEach((tag: string) => {
+          if (tag) options.add(tag.toLowerCase());
+        });
+      }
       if (f.category) {
         options.add(f.category.toLowerCase());
       }
@@ -152,11 +172,21 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
     if (categoryFilter !== "all") {
       const matching = new Set(
         baseFlows
-          .filter(
-            f =>
-              typeof f.category === "string" &&
-              f.category.toLowerCase() === categoryFilter.toLowerCase()
-          )
+          .filter(f => {
+            // Check primary tag
+            if (f.primaryTag && f.primaryTag.toLowerCase() === categoryFilter.toLowerCase()) {
+              return true;
+            }
+            // Check secondary tags
+            if (Array.isArray(f.secondaryTags) && f.secondaryTags.some((tag: string) => tag.toLowerCase() === categoryFilter.toLowerCase())) {
+              return true;
+            }
+            // Legacy support: check old category field
+            if (typeof f.category === "string" && f.category.toLowerCase() === categoryFilter.toLowerCase()) {
+              return true;
+            }
+            return false;
+          })
           .map(f => f.flowId)
       );
       result = result.filter(id => matching.has(id));
@@ -410,7 +440,7 @@ async function addParticipant(flowId: string, newEmail: string) {
   }
 
   if (lookupResponse.status === 404) {
-    // The user wasn’t found in the Users table
+    // The user wasn't found in the Users table
     throw new Error(`No user found with email "${newEmail}"`);
   }
 
@@ -461,7 +491,7 @@ async function addParticipant(flowId: string, newEmail: string) {
 
   // ─────────── Event Handlers ───────────
 
-  // Handles updating the category (tag) of the selected flow
+  // Handles adding/removing tags (multiple tags support)
   const handleTagSelect = async (tag: string) => {
     setShowTagDropdown(false) // Close dropdown
     setTagSearch('') // Clear search input
@@ -476,15 +506,27 @@ async function addParticipant(flowId: string, newEmail: string) {
       return
     }
     try {
-      // Call updateFlow with the new category (tag)
-      const { updated } = await updateFlow(flowToUpdate.flowId, { category: tag })
+      // Get existing tags or start with empty array
+      const existingTags = Array.isArray(flowToUpdate.tags) ? flowToUpdate.tags : 
+                          (flowToUpdate.category ? [flowToUpdate.category] : []); // Migrate old category
+      
+      // Toggle tag: add if not present, remove if present
+      const updatedTags = existingTags.includes(tag)
+        ? existingTags.filter((t: string) => t !== tag) // Remove tag
+        : [...existingTags, tag]; // Add tag
+      
+      // Call updateFlow with the new tags array
+      const { updated } = await updateFlow(flowToUpdate.flowId, { 
+        tags: updatedTags,
+        category: undefined // Clear old category field
+      })
       // Update local state with the new flow data
       setFlows(fs =>
         fs.map(f => (f.flowId === updated.flowId ? updated : f))
       )
     } catch (err: any) {
-      console.error('Failed to update category:', err)
-      alert('Could not update category: ' + err.message)
+      console.error('Failed to update tags:', err)
+      alert('Could not update tags: ' + err.message)
     }
   }
 // Add this helper function inside your component (but before the return statement)
@@ -1054,7 +1096,7 @@ setTeamChatInput("");
             {/* Category (Tag) filter buttons */}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
               <span style={{ fontSize: '14px', color: '#374151', fontWeight: 'bold' }}>Filter:</span>
-              {categoryFilterOptions.map(cat => (
+                              {tagFilterOptions.map((cat: string) => (
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
@@ -1107,19 +1149,35 @@ setTeamChatInput("");
                   }}
                 >
                   Tag
-                  {selectedFlow?.category && ( // Display actual flow category
-                    <span
-                      style={{
-                        background: '#DE1785',
-                        color: '#fff',
-                        padding: '2px 6px',
-                        borderRadius: '3px',
-                        fontSize: '12px',
-                      }}
-                    >
-                      {selectedFlow.category.charAt(0).toUpperCase() + selectedFlow.category.slice(1)}
-                    </span>
-                  )}
+                  {/* Display tags - handle both new tags array and legacy category */}
+                  {(() => {
+                    const flowTags = Array.isArray(selectedFlow?.tags) ? selectedFlow.tags : 
+                                    (selectedFlow?.category ? [selectedFlow.category] : []);
+                    return flowTags.slice(0, 2).map((tag: string, index: number) => ( // Show max 2 tags
+                      <span
+                        key={index}
+                        style={{
+                          background: '#DE1785',
+                          color: '#fff',
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          fontSize: '12px',
+                          marginLeft: '4px'
+                        }}
+                      >
+                        {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                      </span>
+                    ));
+                  })()}
+                  {(() => {
+                    const flowTags = Array.isArray(selectedFlow?.tags) ? selectedFlow.tags : 
+                                    (selectedFlow?.category ? [selectedFlow.category] : []);
+                    return flowTags.length > 2 && (
+                      <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '4px' }}>
+                        +{flowTags.length - 2} more
+                      </span>
+                    );
+                  })()}
                 </button>
                 {showTagDropdown && (
                   <div
@@ -1152,9 +1210,9 @@ setTeamChatInput("");
                       }}
                     />
                     <div style={{ height: '100%', overflowY: 'auto' }}>
-                      {tagOptions // Use tagOptions for assignable tags
-                        .filter(t => t.toLowerCase().includes(tagSearch.toLowerCase()))
-                        .map(t => (
+                      {([...primaryTagOptions, ...secondaryTagOptions] // Use combined tag options
+                        .filter((t: string) => t.toLowerCase().includes(tagSearch.toLowerCase()))
+                        .map((t: string) => (
                           <div
                             key={t}
                             onClick={() => handleTagSelect(t)}
@@ -1164,17 +1222,25 @@ setTeamChatInput("");
                               borderRadius: '4px',
                               fontSize: '14px',
                               color: '#374151',
-                              background: selectedFlow?.category?.toLowerCase() === t.toLowerCase() ? '#f3f4f6' : 'transparent', // Highlight based on flow's actual category
+                              background: (() => {
+                                const flowTags = Array.isArray(selectedFlow?.tags) ? selectedFlow.tags : 
+                                                (selectedFlow?.category ? [selectedFlow.category] : []);
+                                return flowTags.some((tag: string) => tag && tag.toLowerCase() === t.toLowerCase()) ? '#f3f4f6' : 'transparent';
+                              })(),
                               transition: 'background 0.2s',
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
                             onMouseLeave={e =>
-                              (e.currentTarget.style.background = selectedFlow?.category?.toLowerCase() === t.toLowerCase() ? '#f3f4f6' : 'transparent') // Highlight based on flow's actual category
+                              (e.currentTarget.style.background = (() => {
+                                const flowTags = Array.isArray(selectedFlow?.tags) ? selectedFlow.tags : 
+                                                (selectedFlow?.category ? [selectedFlow.category] : []);
+                                return flowTags.some((tag: string) => tag && tag.toLowerCase() === t.toLowerCase()) ? '#f3f4f6' : 'transparent';
+                              })())
                             }
                           >
                             {t.charAt(0).toUpperCase() + t.slice(1)}
                           </div>
-                        ))}
+                        )))}
                         {/* Option to clear/remove tag */}
                         <div
                             onClick={() => handleTagSelect('')} // Pass empty string to clear tag
@@ -1184,14 +1250,22 @@ setTeamChatInput("");
                                 borderRadius: '4px',
                                 fontSize: '14px',
                                 color: '#374151',
-                                background: !selectedFlow?.category ? '#f3f4f6' : 'transparent',
+                                background: (() => {
+                                  const flowTags = Array.isArray(selectedFlow?.tags) ? selectedFlow.tags : 
+                                                  (selectedFlow?.category ? [selectedFlow.category] : []);
+                                  return flowTags.length === 0 ? '#f3f4f6' : 'transparent';
+                                })(),
                                 transition: 'background 0.2s',
                                 marginTop: '4px',
                                 borderTop: '1px solid #eee'
                             }}
                             onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
                             onMouseLeave={e =>
-                                (e.currentTarget.style.background = !selectedFlow?.category ? '#f3f4f6' : 'transparent')
+                                (e.currentTarget.style.background = (() => {
+                                  const flowTags = Array.isArray(selectedFlow?.tags) ? selectedFlow.tags : 
+                                                  (selectedFlow?.category ? [selectedFlow.category] : []);
+                                  return flowTags.length === 0 ? '#f3f4f6' : 'transparent';
+                                })())
                             }
                         >
                             None
