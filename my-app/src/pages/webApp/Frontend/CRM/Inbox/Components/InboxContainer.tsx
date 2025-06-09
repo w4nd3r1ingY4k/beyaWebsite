@@ -42,7 +42,7 @@ const InboxContainer: React.FC<Props> = () => {
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'waiting' | 'resolved' | 'overdue'>('all');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
 
   // API Base URL
@@ -188,14 +188,20 @@ const InboxContainer: React.FC<Props> = () => {
       // For replies, use replyToId as the recipient; for new messages, use the user-entered 'to'
       const recipient = messageData.replyToId || messageData.to;
       
+      // Validate recipient
+      if (!recipient || !recipient.trim()) {
+        throw new Error('Recipient email/phone number is required');
+      }
+      
       if (messageData.channel === 'whatsapp') {
         await sendWhatsAppMessage(recipient, messageData.content);
       } else {
         await sendEmailMessage(
           recipient,
           messageData.subject || 'No subject',
-          messageData.content,
-          messageData.content
+          messageData.content, // plain text
+          messageData.html || messageData.content, // HTML content
+          messageData.originalMessageId // Pass original Message-ID for threading
         );
       }
       
@@ -261,6 +267,10 @@ const InboxContainer: React.FC<Props> = () => {
   const handleNewMessage = () => {
     setComposeMode('new');
     setIsComposeOpen(true);
+  };
+
+  const handleCategoryFilterChange = (categories: string[]) => {
+    setCategoryFilter(categories);
   };
 
   const handleStatusChange = async (status: string) => {
@@ -331,14 +341,25 @@ const InboxContainer: React.FC<Props> = () => {
 
   // Handle flow updates from MessageView
   const handleFlowUpdate = (updatedFlow: any) => {
-    console.log('Updating flow in parent state:', updatedFlow);
+    console.log('🔄 Flow Update Received:', updatedFlow);
+    console.log('🔄 Updated flow ID:', updatedFlow.flowId);
+    console.log('🔄 Current flows count:', flows.length);
+    
+    // Debug: log first few existing flow IDs
+    console.log('🔄 Existing flow IDs:', flows.slice(0, 3).map(f => f.flowId));
     
     // Update the flows array with the updated flow
-    setFlows(prevFlows => 
-      prevFlows.map(flow => 
+    setFlows(prevFlows => {
+      console.log('🔄 Looking for flowId:', updatedFlow.flowId);
+      console.log('🔄 Available flowIds:', prevFlows.map(f => f.flowId));
+      
+      const updated = prevFlows.map(flow => 
         flow.flowId === updatedFlow.flowId ? updatedFlow : flow
-      )
-    );
+      );
+      console.log('🔄 Updated flows count:', updated.length);
+      console.log('🔄 Updated flow found:', updated.find(f => f.flowId === updatedFlow.flowId));
+      return updated;
+    });
   };
 
   if (loading) {
@@ -436,7 +457,7 @@ const InboxContainer: React.FC<Props> = () => {
           justifyContent: 'space-between',
           alignItems: 'center',
           borderBottom: '1px solid #e5e7eb',
-          background: '#fff',
+          background: '#FFFBFA',
           zIndex: 10,
           height: '60px', // Fixed height for the status bar
           boxSizing: 'border-box'
@@ -615,7 +636,7 @@ const InboxContainer: React.FC<Props> = () => {
           userId={user!.userId}
           statusFilter={statusFilter}
           categoryFilter={categoryFilter}
-          onCategoryFilterChange={setCategoryFilter}
+          onCategoryFilterChange={handleCategoryFilterChange}
           onCompose={handleNewMessage}
         />
 
@@ -636,7 +657,7 @@ const InboxContainer: React.FC<Props> = () => {
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             categoryFilter={categoryFilter}
-            onCategoryFilterChange={setCategoryFilter}
+            onCategoryFilterChange={handleCategoryFilterChange}
             onFlowUpdate={handleFlowUpdate}
           />
         </div>

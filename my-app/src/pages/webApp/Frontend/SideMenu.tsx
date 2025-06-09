@@ -124,23 +124,31 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
       `L 0,${windowHeight}`
     ].join(' ');
 
-    const svgWidth = 0.1;          // same width you already use
+    const svgWidth = 1;          // Increase width to avoid rendering issues
 
-    const fillD = [
+    // Header horizontal section
+    const headerFillD = [
       `M 0,0`,                                         // Start at top-left corner
-      `L ${svgWidth},0`,                               // Across to right edge at top
-      `L ${svgWidth},${windowHeight}`,                 // Down to bottom
-      `L 0,${windowHeight}`,                           // Back to bottom-left
-      `L 0,${bulgeEndY}`,                              // Up to end of bulge
-      `C 0,${bulgeEndY - bulgeYSpan * 0.3} ${bulgeX * 1},${bulgeEndY - bulgeYSpan * 0.15} ${bulgeX},${centerY}`, // Bulge curve back
-      `C ${bulgeX * 1},${bulgeStartY + bulgeYSpan * 0.15} 0,${bulgeStartY + bulgeYSpan * 0.3} 0,${bulgeStartY}`, // Bulge curve up
-      `L 0,${headerHeight + headerCurveRadius}`,       // Up to curve start
-      `C 0,${headerHeight + headerCurveRadius * 0.4} ${headerCurveRadius * 0.4},${headerHeight} ${headerCurveRadius},${headerHeight}`, // Curve to horizontal
-      `L ${window.innerWidth},${headerHeight}`,        // Horizontal header line
-      `L ${window.innerWidth},0`,                      // Up to top-right of screen
+      `L ${window.innerWidth},0`,                      // Across to right edge at top
+      `L ${window.innerWidth},${headerHeight}`,        // Down to header height
+      `L ${headerCurveRadius},${headerHeight}`,        // Back to curve start
+      `C ${headerCurveRadius * 0.4},${headerHeight} 0,${headerHeight + headerCurveRadius * 0.4} 0,${headerHeight + headerCurveRadius}`, // Curve back
       `L 0,0`,                                         // Back to top-left
       `Z`                                              // Close path
-  ].join(' ');
+    ].join(' ');
+
+    // Divot/bulge area
+    const divotFillD = [
+      `M 0,${headerHeight + headerCurveRadius}`,       // Start after header curve
+      `L 0,${bulgeStartY}`,                            // Down to bulge start
+      `C 0,${bulgeStartY + bulgeYSpan * 0.3} ${bulgeX * 1},${bulgeStartY + bulgeYSpan * 0.15} ${bulgeX},${centerY}`, // Bulge curve out
+      `C ${bulgeX * 1},${bulgeEndY - bulgeYSpan * 0.15} 0,${bulgeEndY - bulgeYSpan * 0.3} 0,${bulgeEndY}`, // Bulge curve back
+      `L 0,${windowHeight}`,                           // Down to bottom
+      `L ${svgWidth},${windowHeight}`,                 // Across to right edge
+      `L ${svgWidth},${headerHeight + headerCurveRadius}`, // Up to after header curve
+      `L 0,${headerHeight + headerCurveRadius}`,       // Back to start
+      `Z`                                              // Close path
+    ].join(' ');
 
   return (
     <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative'}}>
@@ -152,13 +160,21 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
             height={windowHeight}
             style={{
                 overflow: 'visible',
-                zIndex: 1
+                zIndex: 1,
+                display: 'block'
             }}
         >
-            {/* FILLED SHAPE – colour for everything to the right of the bulge */}
+            {/* HEADER SECTION – match main container background */}
             <path
-                d={fillD}
-                fill="#FFFBFA" // 👈 change to any colour you want
+                d={headerFillD}
+                fill="#FBF7F7" // Match the main container background color
+                style={{ transition: 'd 0.3s cubic-bezier(0.4,0,0.2,1)' }}
+            />
+
+            {/* DIVOT/BULGE AREA – keep original color */}
+            <path
+                d={divotFillD}
+                fill="#FFFBFA" // Keep original color for the exterior divot area
                 style={{ transition: 'd 0.3s cubic-bezier(0.4,0,0.2,1)' }}
             />
 
