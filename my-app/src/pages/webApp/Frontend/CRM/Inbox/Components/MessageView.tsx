@@ -141,8 +141,6 @@ const MessageView: React.FC<MessageViewProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-
-
   const loadTeamMessages = async (threadId: string) => {
     try {
       console.log('Loading team messages for thread:', threadId);
@@ -545,8 +543,6 @@ const MessageView: React.FC<MessageViewProps> = ({
     }
   };
 
-
-
   // Helper function to safely format timestamps
   const formatTimestamp = (timestamp: number | string | undefined): string => {
     if (!timestamp) return new Date().toISOString();
@@ -586,6 +582,82 @@ const MessageView: React.FC<MessageViewProps> = ({
   });
 
   const normalizedMessages = messages.map(normalizeMessage);
+
+  // Helper functions for delete operations
+  const handleSoftDelete = async () => {
+    if (!selectedThreadId || !localFlow) {
+      alert('No conversation selected');
+      return;
+    }
+
+    try {
+      const existingSecondaryTags = Array.isArray(localFlow.secondaryTags) ? localFlow.secondaryTags : [];
+      
+      // Add 'deleted' tag if not already present
+      if (!existingSecondaryTags.includes('deleted')) {
+        const updatedSecondaryTags = [...existingSecondaryTags, 'deleted'];
+        
+        const updated = await updateFlow(localFlow.flowId, { 
+          primaryTag: localFlow.primaryTag,
+          secondaryTags: updatedSecondaryTags
+        });
+
+        if (onFlowUpdate) {
+          const flowToUpdate = updated.updated || updated;
+          onFlowUpdate(flowToUpdate);
+        }
+
+        alert('Conversation moved to deleted items');
+      }
+    } catch (error: any) {
+      console.error('Failed to delete conversation:', error);
+      alert('Failed to delete conversation: ' + error.message);
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!selectedThreadId || !localFlow) {
+      alert('No conversation selected');
+      return;
+    }
+
+    try {
+      const existingSecondaryTags = Array.isArray(localFlow.secondaryTags) ? localFlow.secondaryTags : [];
+      
+      // Remove 'deleted' tag if present
+      if (existingSecondaryTags.includes('deleted')) {
+        const updatedSecondaryTags = existingSecondaryTags.filter((tag: string) => tag !== 'deleted');
+        
+        const updated = await updateFlow(localFlow.flowId, { 
+          primaryTag: localFlow.primaryTag,
+          secondaryTags: updatedSecondaryTags
+        });
+
+        if (onFlowUpdate) {
+          const flowToUpdate = updated.updated || updated;
+          onFlowUpdate(flowToUpdate);
+        }
+
+        alert('Conversation restored');
+      }
+    } catch (error: any) {
+      console.error('Failed to restore conversation:', error);
+      alert('Failed to restore conversation: ' + error.message);
+    }
+  };
+
+  const handleHardDelete = async () => {
+    const confirmed = window.confirm('Are you sure you want to permanently delete this conversation? This action cannot be undone.');
+    if (!confirmed) return;
+    
+    try {
+      // TODO: Implement actual hard delete endpoint
+      alert('Hard delete feature needs to be implemented with a DELETE API endpoint');
+    } catch (error: any) {
+      console.error('Failed to permanently delete conversation:', error);
+      alert('Failed to permanently delete conversation: ' + error.message);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -649,7 +721,7 @@ const MessageView: React.FC<MessageViewProps> = ({
       background: '#FBF7F7' // Match the overall background color scheme
     }}>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px' }}>
         {!selectedThreadId ? (
           <p style={{ textAlign: 'center', color: '#666', fontSize: '16px', marginTop: '100px' }}>
             Select a conversation to view messages.
@@ -664,17 +736,24 @@ const MessageView: React.FC<MessageViewProps> = ({
             maxWidth: '100%',
             margin: '0 auto',
             overflowX: 'hidden',
-            boxSizing: 'border-box'
+            boxSizing: 'border-box',
+            position: 'relative',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
-            {/* Tag Header Section */}
+            {/* Tag Header Section - Now sticky */}
             <div style={{
               display: 'flex',
               justifyContent: 'flex-end',
               alignItems: 'center',
-              marginBottom: '16px',
-              padding: '8px 0',
-              borderBottom: '1px solid #e5e7eb',
-              gap: '12px'
+              padding: '0px 0',
+              gap: '32px',
+              position: 'sticky',
+              top: 0,
+              backgroundColor: '#FBF7F7',
+              zIndex: 10,
+              marginBottom: '10px'
             }}>
               {/* Primary Tag dropdown */}
               <div style={{ position: 'relative' }} ref={primaryTagDropdownRef}>
@@ -782,26 +861,6 @@ const MessageView: React.FC<MessageViewProps> = ({
                         </div>
                       );
                     })}
-                    {localFlow?.primaryTag && (
-                      <div
-                        onClick={() => handlePrimaryTagSelect('')}
-                        style={{
-                          padding: '6px 8px',
-                          cursor: 'pointer',
-                          borderRadius: '4px',
-                          fontSize: '14px',
-                          color: '#374151',
-                          background: 'transparent',
-                          transition: 'background 0.2s',
-                          marginTop: '4px',
-                          borderTop: '1px solid #eee'
-                        }}
-                        onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        Clear primary tag
-                      </div>
-                    )}
                   </div>
                 )}
               </div>
@@ -1008,159 +1067,250 @@ const MessageView: React.FC<MessageViewProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Delete/Restore Actions */}
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {localFlow && Array.isArray(localFlow.secondaryTags) && localFlow.secondaryTags.includes('deleted') ? (
+                  // Show restore and hard delete buttons for deleted items
+                  <>
+                    <button
+                      onClick={handleRestore}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        border: '1px solid #10b981',
+                        background: 'transparent',
+                        color: '#10b981',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        fontWeight: '500'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#10b981';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#10b981';
+                      }}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      onClick={handleHardDelete}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '12px',
+                        border: '1px solid #ef4444',
+                        background: 'transparent',
+                        color: '#ef4444',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        fontWeight: '500'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#ef4444';
+                        e.currentTarget.style.color = '#fff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = '#ef4444';
+                      }}
+                    >
+                      Delete Forever
+                    </button>
+                  </>
+                ) : (
+                  // Show delete button for normal items
+                  <button
+                    onClick={handleSoftDelete}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      border: '1px solid #6b7280',
+                      background: 'transparent',
+                      color: '#6b7280',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                      fontWeight: '500'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#6b7280';
+                      e.currentTarget.style.color = '#fff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                      e.currentTarget.style.color = '#6b7280';
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
 
-            {normalizedMessages.map(chat => {
-              const isActive = chat.id === activeMessageId;
+            {/* Messages container - Now scrollable */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              paddingTop: '16px'
+            }}>
+              {normalizedMessages.map(chat => {
+                const isActive = chat.id === activeMessageId;
 
-              return (
-                                 <div
-                   key={`${chat.id}-${chat.timestamp}`}
-                   onClick={() => {
-                     setActiveMessageId(chat.id);
-                   }}
-                   style={{
-                     boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
-                     width: '100%',
-                     maxWidth: '100%',
-                     margin: '0 auto 16px auto',
-                     padding: 12,
-                     borderRadius: 8,
-                     background: '#FFFBFA',
-                     overflow: 'hidden',
-                     cursor: 'pointer',
-                     border: '1px solid #f0f0f0',
-                     wordWrap: 'break-word',
-                     overflowWrap: 'break-word',
-                     
-                     maxHeight: isActive ? 'none' : '80px',
-                     transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
-                   }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
-                  }}
-                >
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    marginBottom: '8px'
-                  }}>
-                    <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
-                      <strong style={{ color: chat.direction === 'incoming' ? '#DE1785' : '#2563eb' }}>
-                        {chat.senderName}
-                      </strong> ·{' '}
-                      <span style={{ color: '#888' }}>
-                        {formatDisplayDate(chat.timestamp)}
-                      </span>
-                    </p>
-                    <div style={{
-                      fontSize: '12px',
-                      background: chat.direction === 'incoming' ? '#f3f4f6' : '#e0f2fe',
-                      color: chat.direction === 'incoming' ? '#374151' : '#0369a1',
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      textTransform: 'uppercase',
-                      fontWeight: 'bold'
-                    }}>
-                      {chat.direction}
-                    </div>
-                  </div>
-                  
-                  {chat.subject && (
-                    <p style={{ 
-                      fontStyle: 'italic', 
-                      margin: '4px 0', 
-                      fontSize: '0.95em',
-                      color: '#666',
-                      fontWeight: '500'
-                    }}>
-                      Subject: {chat.subject}
-                    </p>
-                  )}
-                  
-                                     <div style={{
-                     margin: '8px 0 0',
-                     whiteSpace: 'pre-wrap',
-                     lineHeight: '1.5',
-                     overflow: isActive ? 'visible' : 'hidden',
-                     fontSize: '14px',
-                     wordWrap: 'break-word',
-                     wordBreak: 'break-word',
-                     overflowWrap: 'break-word',
-                     maxWidth: '100%'
-                   }}>
-                     {linkifyWithImages(chat.body)}
-                   </div>
-                  
-                  {isActive && selectedThreadId && (
+                return (
+                  <div
+                    key={`${chat.id}-${chat.timestamp}`}
+                    onClick={() => {
+                      setActiveMessageId(chat.id);
+                    }}
+                    style={{
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+                      width: '100%',
+                      maxWidth: '100%',
+                      margin: '0 auto 16px auto',
+                      padding: 12,
+                      borderRadius: 8,
+                      background: '#FFFBFA',
+                      overflow: 'hidden',
+                      cursor: 'pointer',
+                      border: '1px solid #f0f0f0',
+                      wordWrap: 'break-word',
+                      overflowWrap: 'break-word',
+                      
+                      maxHeight: isActive ? 'none' : '80px',
+                      transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
+                    }}
+                  >
                     <div style={{ 
-                      textAlign: 'left', 
-                      marginTop: 20, 
-                      borderTop: '1px solid #e5e7eb',
-                      paddingTop: '12px',
-                      display: 'flex',
-                      gap: '12px'
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      marginBottom: '8px'
                     }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const email = prompt('Enter email to add:');
-                          if (email) addParticipant(selectedThreadId, email);
-                        }}
-                        style={{
-                          background: '#6366f1',
-                          color: '#fff',
-                          padding: '8px 16px',
-                          border: 'none',
-                          borderRadius: 6,
-                          fontSize: '14px',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                          transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#4f46e5';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#6366f1';
-                        }}
-                      >
-                        Share
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setIsReplying(!isReplying);
-                        }}
-                        style={{
-                          background: '#DE1785',
-                          color: '#fff',
-                          padding: '8px 16px',
-                          border: 'none',
-                          borderRadius: 6,
-                          fontSize: '14px',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                          transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#c1166a';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#DE1785';
-                        }}
-                      >
-                        Reply to Customer
-                      </button>
+                      <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
+                        <strong style={{ color: chat.direction === 'incoming' ? '#DE1785' : '#2563eb' }}>
+                          {chat.senderName}
+                        </strong> ·{' '}
+                        <span style={{ color: '#888' }}>
+                          {formatDisplayDate(chat.timestamp)}
+                        </span>
+                      </p>
+                      <div style={{
+                        fontSize: '12px',
+                        background: chat.direction === 'incoming' ? '#f3f4f6' : '#e0f2fe',
+                        color: chat.direction === 'incoming' ? '#374151' : '#0369a1',
+                        padding: '2px 8px',
+                        borderRadius: '12px',
+                        textTransform: 'uppercase',
+                        fontWeight: 'bold'
+                      }}>
+                        {chat.direction}
+                      </div>
                     </div>
-                  )}
-                </div>
-              );
-            })}
+                    
+                    {chat.subject && (
+                      <p style={{ 
+                        fontStyle: 'italic', 
+                        margin: '4px 0', 
+                        fontSize: '0.95em',
+                        color: '#666',
+                        fontWeight: '500'
+                      }}>
+                        Subject: {chat.subject}
+                      </p>
+                    )}
+                    
+                    <div style={{
+                      margin: '8px 0 0',
+                      whiteSpace: 'pre-wrap',
+                      lineHeight: '1.5',
+                      overflow: isActive ? 'visible' : 'hidden',
+                      fontSize: '14px',
+                      wordWrap: 'break-word',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                      maxWidth: '100%'
+                    }}>
+                      {linkifyWithImages(chat.body)}
+                    </div>
+                    
+                    {isActive && selectedThreadId && (
+                      <div style={{ 
+                        textAlign: 'left', 
+                        marginTop: 20, 
+                        borderTop: '1px solid #e5e7eb',
+                        paddingTop: '12px',
+                        display: 'flex',
+                        gap: '12px'
+                      }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const email = prompt('Enter email to add:');
+                            if (email) addParticipant(selectedThreadId, email);
+                          }}
+                          style={{
+                            background: '#6366f1',
+                            color: '#fff',
+                            padding: '8px 16px',
+                            border: 'none',
+                            borderRadius: 6,
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#4f46e5';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#6366f1';
+                          }}
+                        >
+                          Share
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsReplying(!isReplying);
+                          }}
+                          style={{
+                            background: '#DE1785',
+                            color: '#fff',
+                            padding: '8px 16px',
+                            border: 'none',
+                            borderRadius: 6,
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#c1166a';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#DE1785';
+                          }}
+                        >
+                          Reply to Customer
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
@@ -1168,7 +1318,6 @@ const MessageView: React.FC<MessageViewProps> = ({
       <div style={{ 
         padding: 16, 
         backgroundColor: '#FBF7F7', // Match the thread list background
-        borderTop: '1px solid #e5e7eb',
         minHeight: '250px'
       }}>
         {/* Team Discussion Header */}

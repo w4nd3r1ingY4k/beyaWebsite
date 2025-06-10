@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 
 type Status = 'open' | 'waiting' | 'resolved' | 'overdue';
-type ViewFilter = "owned" | "sharedWithMe" | "sharedByMe";
+type ViewFilter = "owned" | "sharedWithMe" | "sharedByMe" | "deleted";
 
 interface Props {
   threads: string[];
@@ -27,7 +27,7 @@ const ThreadList: React.FC<Props> = ({
   onCompose
 }) => {
   // State
-  const [viewFilter, setViewFilter] = useState<ViewFilter>("owned");
+  const [viewFilter, setViewFilter] = useState<'owned' | 'sharedWithMe' | 'sharedByMe' | 'deleted'>('owned');
   // Use external filters instead of internal state
   const categoryFilter = externalCategoryFilter;
   const statusFilter = externalStatusFilter;
@@ -41,8 +41,9 @@ const ThreadList: React.FC<Props> = ({
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState({
     inbox: true,
-    sharedWithMe: true,
-    sharedByMe: true
+    shared: false,
+    sharedByMe: false,
+    deleted: false
   });
 
   // Refs
@@ -104,11 +105,18 @@ const ThreadList: React.FC<Props> = ({
   const filteredThreads = useMemo(() => {
     let baseFlows: any[] = [];
     if (viewFilter === "owned") {
-      baseFlows = ownedFlows;
+      baseFlows = ownedFlows.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
     } else if (viewFilter === "sharedWithMe") {
-      baseFlows = sharedWithMe;
+      baseFlows = sharedWithMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
+    } else if (viewFilter === "sharedByMe") {
+      baseFlows = sharedByMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
+    } else if (viewFilter === "deleted") {
+      // Show only items with 'deleted' tag from all flows the user has access to
+      baseFlows = [...ownedFlows, ...sharedWithMe, ...sharedByMe].filter(f => 
+        Array.isArray(f.secondaryTags) && f.secondaryTags.includes('deleted')
+      );
     } else {
-      baseFlows = sharedByMe;
+      baseFlows = [];
     }
   
     const baseFlowIds = new Set(baseFlows.map(f => f.flowId));
@@ -189,11 +197,17 @@ const ThreadList: React.FC<Props> = ({
   const selectedFlow = useMemo(() => {
     let setToUse: any[] = [];
     if (viewFilter === "owned") {
-      setToUse = ownedFlows;
+      setToUse = ownedFlows.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
     } else if (viewFilter === "sharedWithMe") {
-      setToUse = sharedWithMe;
+      setToUse = sharedWithMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
+    } else if (viewFilter === "sharedByMe") {
+      setToUse = sharedByMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
+    } else if (viewFilter === "deleted") {
+      setToUse = [...ownedFlows, ...sharedWithMe, ...sharedByMe].filter(f => 
+        Array.isArray(f.secondaryTags) && f.secondaryTags.includes('deleted')
+      );
     } else {
-      setToUse = sharedByMe;
+      setToUse = [];
     }
     return setToUse.find(f => f.flowId === selectedId);
   }, [ownedFlows, sharedWithMe, sharedByMe, selectedId, viewFilter]);
@@ -240,6 +254,110 @@ const ThreadList: React.FC<Props> = ({
     }));
   };
 
+  // Soft delete function - adds 'deleted' to secondary tags
+  const handleSoftDelete = async (threadId: string) => {
+    try {
+      const flow = flows.find(f => f.flowId === threadId);
+      if (!flow) {
+        console.error('Flow not found:', threadId);
+        return;
+      }
+
+      const existingSecondaryTags = Array.isArray(flow.secondaryTags) ? flow.secondaryTags : [];
+      
+      // Add 'deleted' tag if not already present
+      if (!existingSecondaryTags.includes('deleted')) {
+        const updatedSecondaryTags = [...existingSecondaryTags, 'deleted'];
+        
+        // Use the same updateFlow pattern as the tag system
+        const FUNCTION_URL = 'https://spizyylamz3oavcuay5a3hrmsi0eairh.lambda-url.us-east-1.on.aws';
+        
+        const payload = {
+          primaryTag: flow.primaryTag,
+          secondaryTags: updatedSecondaryTags,
+          userId: userId
+        };
+
+        const res = await fetch(`${FUNCTION_URL}/flows/${encodeURIComponent(threadId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error || `HTTP ${res.status}`);
+        }
+
+        console.log('Successfully soft deleted thread:', threadId);
+        // The UI will update when flows are refetched
+      }
+          } catch (error: any) {
+        console.error('Failed to delete thread:', error);
+        alert('Failed to delete conversation: ' + error.message);
+    }
+  };
+
+  // Restore function - removes 'deleted' from secondary tags
+  const handleRestore = async (threadId: string) => {
+    try {
+      const flow = flows.find(f => f.flowId === threadId);
+      if (!flow) {
+        console.error('Flow not found:', threadId);
+        return;
+      }
+
+      const existingSecondaryTags = Array.isArray(flow.secondaryTags) ? flow.secondaryTags : [];
+      
+      // Remove 'deleted' tag if present
+      if (existingSecondaryTags.includes('deleted')) {
+                 const updatedSecondaryTags = existingSecondaryTags.filter((tag: string) => tag !== 'deleted');
+        
+        // Use the same updateFlow pattern as the tag system
+        const FUNCTION_URL = 'https://spizyylamz3oavcuay5a3hrmsi0eairh.lambda-url.us-east-1.on.aws';
+        
+        const payload = {
+          primaryTag: flow.primaryTag,
+          secondaryTags: updatedSecondaryTags,
+          userId: userId
+        };
+
+        const res = await fetch(`${FUNCTION_URL}/flows/${encodeURIComponent(threadId)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.error || `HTTP ${res.status}`);
+        }
+
+        console.log('Successfully restored thread:', threadId);
+        // The UI will update when flows are refetched
+      }
+          } catch (error: any) {
+        console.error('Failed to restore thread:', error);
+        alert('Failed to restore conversation: ' + error.message);
+      }
+  };
+
+  // Hard delete function (permanent) - actually deletes the flow
+  const handleHardDelete = async (threadId: string) => {
+    const confirmed = window.confirm('Are you sure you want to permanently delete this conversation? This action cannot be undone.');
+    if (!confirmed) return;
+    
+    try {
+      // TODO: Implement actual hard delete endpoint
+      // This would need a DELETE endpoint instead of just updating tags
+      console.log('Hard delete not yet implemented for:', threadId);
+      alert('Hard delete feature needs to be implemented with a DELETE API endpoint');
+    } catch (error: any) {
+      console.error('Failed to permanently delete thread:', error);
+      alert('Failed to permanently delete conversation: ' + error.message);
+    }
+  };
+
   return (
     <div style={{
       width: '460px', // Increased width to accommodate both columns
@@ -248,7 +366,6 @@ const ThreadList: React.FC<Props> = ({
       flexShrink: 0, // Prevent flex compression
       height: '100vh',
       background: '#fff',
-      borderRight: '1px solid #e5e7eb',
       display: 'flex',
       flexDirection: 'row', // Changed to row for side-by-side layout
       overflow: 'hidden',
@@ -360,7 +477,7 @@ const ThreadList: React.FC<Props> = ({
             {/* Shared With Me Section */}
             <div>
               <button
-                onClick={() => toggleSection('sharedWithMe')}
+                onClick={() => toggleSection('shared')}
                 style={{
                   width: "100%",
                   padding: "8px 12px",
@@ -385,14 +502,14 @@ const ThreadList: React.FC<Props> = ({
                 </div>
                 <span style={{ 
                   fontSize: '12px',
-                  transform: expandedSections.sharedWithMe ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transform: expandedSections.shared ? 'rotate(90deg)' : 'rotate(0deg)',
                   transition: 'transform 0.2s'
                 }}>
                   ▶
                 </span>
               </button>
               
-              {expandedSections.sharedWithMe && (
+              {expandedSections.shared && (
                 <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
                   <button
                     onClick={() => setViewFilter("sharedWithMe")}
@@ -470,6 +587,65 @@ const ThreadList: React.FC<Props> = ({
                     }}
                   >
                     My Shared Items
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Deleted Section */}
+            <div>
+              <button
+                onClick={() => toggleSection('deleted')}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  background: "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#6b7280",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "background 0.18s",
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
+                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  🗑️ Deleted
+                </div>
+                <span style={{ 
+                  fontSize: '12px',
+                  transform: expandedSections.deleted ? 'rotate(90deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s'
+                }}>
+                  ▶
+                </span>
+              </button>
+              
+              {expandedSections.deleted && (
+                <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
+                  <button
+                    onClick={() => setViewFilter("deleted")}
+                    style={{
+                      width: "100%",
+                      padding: "8px 12px",
+                      background: viewFilter === "deleted" ? "#EAE5E5" : "transparent",
+                      border: "1px solid transparent",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "13px",
+                      fontWeight: "500",
+                      color: "#374151",
+                      textAlign: "left",
+                      transition: "background 0.18s",
+                    }}
+                  >
+                    Deleted Items
                   </button>
                 </div>
               )}
@@ -884,11 +1060,12 @@ const ThreadList: React.FC<Props> = ({
                     {!flow?.primaryTag && flow?.category && (
                       <div style={{
                         fontSize: '10px',
-                        color: '#8b5cf6',
-                        background: '#f3f0ff',
+                        color: '#2563eb',
+                        background: '#dbeafe',
                         padding: '2px 6px',
                         borderRadius: '10px',
-                        display: 'inline-block'
+                        display: 'inline-block',
+                        fontWeight: '500'
                       }}>
                         {flow.category}
                       </div>
