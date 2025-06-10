@@ -44,6 +44,7 @@ const InboxContainer: React.FC<Props> = () => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'waiting' | 'resolved' | 'overdue'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
 
   // API Base URL
   const apiBase = 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod';
@@ -362,6 +363,289 @@ const InboxContainer: React.FC<Props> = () => {
     });
   };
 
+  // Reminder modal functions
+  const handleSetReminder = async (reminderData: {
+    type: 'follow_up' | 'deadline' | 'callback';
+    datetime: string;
+    note?: string;
+  }) => {
+    try {
+      if (!selectedThreadId || !currentFlow) {
+        alert('No conversation selected');
+        return;
+      }
+
+      // Convert datetime to ISO timestamp for scheduling
+      const scheduledTime = new Date(reminderData.datetime).toISOString();
+      
+      const payload = {
+        threadId: selectedThreadId,
+        userId: user!.userId,
+        userEmail: user!.email, // User's email for sending reminder to themselves
+        reminderType: reminderData.type,
+        scheduledTime: scheduledTime,
+        note: reminderData.note || '',
+        threadTitle: getThreadTitle(selectedThreadId),
+        contactEmail: currentFlow.fromEmail || currentFlow.fromPhone || 'Unknown Contact'
+      };
+
+      console.log('Setting reminder with payload:', payload);
+      
+      // Call API to store reminder and schedule it
+      const response = await fetch('https://8zsaycb149.execute-api.us-east-1.amazonaws.com/reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Reminder created:', result);
+      
+      alert('Reminder set successfully! You will receive an email at the scheduled time.');
+      setShowReminderModal(false);
+    } catch (error: any) {
+      console.error('Failed to set reminder:', error);
+      alert(`Failed to set reminder: ${error.message}`);
+    }
+  };
+
+  // Helper function to get thread title (same as in other components)
+  const getThreadTitle = (threadId: string): string => {
+    const flow = flows.find(f => f.flowId === threadId);
+    if (!flow) return 'Unknown Conversation';
+    
+    // Try to get a meaningful title from the flow
+    if (flow.subject) return flow.subject;
+    if (flow.fromEmail) return `Conversation with ${flow.fromEmail}`;
+    if (flow.fromPhone) return `WhatsApp with ${flow.fromPhone}`;
+    return `Conversation ${threadId.slice(-8)}`;
+  };
+
+  // Reminder Modal Component
+  const ReminderModal = () => {
+    const [reminderType, setReminderType] = useState<'follow_up' | 'deadline' | 'callback'>('follow_up');
+    const [reminderDateTime, setReminderDateTime] = useState('');
+    const [reminderNote, setReminderNote] = useState('');
+
+    // Set default datetime to 1 hour from now
+    useEffect(() => {
+      const now = new Date();
+      now.setHours(now.getHours() + 1);
+      const isoString = now.toISOString();
+      setReminderDateTime(isoString.slice(0, 16)); // Format for datetime-local input
+    }, []);
+
+    if (!showReminderModal) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2000
+      }}>
+        <div style={{
+          background: '#fff',
+          borderRadius: '12px',
+          padding: '24px',
+          minWidth: '400px',
+          maxWidth: '500px',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        }}>
+          {/* Header */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px'
+          }}>
+            <h3 style={{
+              margin: 0,
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#111827'
+            }}>
+              Set Reminder
+            </h3>
+            <button
+              onClick={() => setShowReminderModal(false)}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                color: '#6b7280',
+                padding: '0',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#f3f4f6'}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Form */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Reminder Type */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '8px'
+              }}>
+                Reminder Type
+              </label>
+              <select
+                value={reminderType}
+                onChange={(e) => setReminderType(e.target.value as any)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  color: '#374151',
+                  background: '#fff'
+                }}
+              >
+                <option value="follow_up">Follow Up</option>
+                <option value="deadline">Deadline</option>
+                <option value="callback">Callback</option>
+              </select>
+            </div>
+
+            {/* Date & Time */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '8px'
+              }}>
+                Remind me on
+              </label>
+              <input
+                type="datetime-local"
+                value={reminderDateTime}
+                onChange={(e) => setReminderDateTime(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  color: '#374151'
+                }}
+              />
+            </div>
+
+            {/* Note */}
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '14px',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '8px'
+              }}>
+                Note (optional)
+              </label>
+              <textarea
+                value={reminderNote}
+                onChange={(e) => setReminderNote(e.target.value)}
+                placeholder="Add a note for this reminder..."
+                rows={3}
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  color: '#374151',
+                  resize: 'vertical',
+                  fontFamily: 'inherit'
+                }}
+              />
+            </div>
+
+            {/* Buttons */}
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end',
+              marginTop: '8px'
+            }}>
+              <button
+                onClick={() => setShowReminderModal(false)}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  background: '#fff',
+                  color: '#374151',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                onMouseLeave={e => e.currentTarget.style.background = '#fff'}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (!reminderDateTime) {
+                    alert('Please select a date and time for the reminder.');
+                    return;
+                  }
+                  handleSetReminder({
+                    type: reminderType,
+                    datetime: reminderDateTime,
+                    note: reminderNote
+                  });
+                }}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  background: '#DE1785',
+                  color: '#fff',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = '#BE185D'}
+                onMouseLeave={e => e.currentTarget.style.background = '#DE1785'}
+              >
+                Set Reminder
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div style={{
@@ -458,7 +742,7 @@ const InboxContainer: React.FC<Props> = () => {
           alignItems: 'center',
           borderBottom: '1px solid #e5e7eb',
           background: '#FFFBFA',
-          zIndex: 10,
+          zIndex: 1002,
           height: '60px', // Fixed height for the status bar
           boxSizing: 'border-box'
         }}>
@@ -555,7 +839,7 @@ const InboxContainer: React.FC<Props> = () => {
                     borderRadius: '6px',
                     boxShadow: '0 4px 8px rgba(0,0,0,0.08)',
                     minWidth: '140px',
-                    zIndex: 1000,
+                    zIndex: 1001,
                     overflow: 'hidden',
                   }}
                 >
@@ -600,21 +884,24 @@ const InboxContainer: React.FC<Props> = () => {
               )}
             </div>
 
-            {/* Refresh button */}
-            <button style={{
-              background: 'transparent',
-              border: '1px solid #d1d5db',
-              padding: '8px',
-              cursor: 'pointer',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
+            {/* Set Reminder button */}
+            <button 
+              onClick={() => setShowReminderModal(true)}
+              style={{
+                background: 'transparent',
+                border: '1px solid #d1d5db',
+                padding: '8px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              title="Set Reminder"
+            >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-                <path d="M8 8l4 4 4-4" />
+                <circle cx="12" cy="12" r="10" />
+                <polyline points="12,6 12,12 16,14" />
               </svg>
             </button>
           </div>
@@ -663,8 +950,6 @@ const InboxContainer: React.FC<Props> = () => {
         </div>
       </div>
 
-
-
       {/* Compose Modal */}
       <ComposeModal
         isOpen={isComposeOpen}
@@ -674,6 +959,8 @@ const InboxContainer: React.FC<Props> = () => {
         replyToId={selectedThreadId ?? undefined}
       />
 
+      {/* Reminder Modal */}
+      <ReminderModal />
 
     </div>
   );

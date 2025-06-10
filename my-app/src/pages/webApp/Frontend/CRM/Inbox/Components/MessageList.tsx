@@ -144,16 +144,16 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
   
 
   const selectedFlow = useMemo(() => {
-  let setToUse: any[] = [];
-  if (viewFilter === "owned") {
-    setToUse = ownedFlows;
-  } else if (viewFilter === "sharedWithMe") {
-    setToUse = sharedWithMe;
-  } else {
-    setToUse = sharedByMe;
-  }
-  return setToUse.find(f => f.flowId === selectedId);
-}, [ownedFlows, sharedWithMe, sharedByMe, selectedId, viewFilter]);
+    let setToUse: any[] = [];
+    if (viewFilter === "owned") {
+      setToUse = ownedFlows;
+    } else if (viewFilter === "sharedWithMe") {
+      setToUse = sharedWithMe;
+    } else {
+      setToUse = sharedByMe;
+    }
+    return setToUse.find(f => f.flowId === selectedId);
+  }, [ownedFlows, sharedWithMe, sharedByMe, selectedId, viewFilter]);
 
   // Filtered threads displayed in the sidebar based on category and status filters
   const filteredThreads = useMemo(() => {
@@ -869,6 +869,10 @@ setTeamChatInput("");
               alignItems: 'center',
               marginTop: 30,
               marginBottom: 5,
+              backgroundColor: '#FFFBFA',
+              position: 'sticky',
+              top: 0,
+              zIndex: 10,
             }}
           >
             {/* Status filter buttons */}
@@ -1087,10 +1091,14 @@ setTeamChatInput("");
             style={{
               padding: '12px 16px',
               display: 'flex',
-              justifyContent: 'flex-start', // Center the container
+              justifyContent: 'flex-start',
               alignItems: 'center',
               width: '100%',
-              backgroundColor: '#FBF7F7'
+              backgroundColor: '#FBF7F7',
+              position: 'sticky',
+              top: '60px',
+              zIndex: 10,
+              boxSizing: 'border-box',
             }}
           >
             {/* Category (Tag) filter buttons */}
@@ -1307,17 +1315,16 @@ setTeamChatInput("");
           </div>
 
           {/* Thread list and chat area */}
-          <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flex: 1, overflow: 'hidden', marginTop: '10px' }}>
             {/* ─── Sidebar: Your Flow/Thread List (now adjacent to Inbox button) ─── */}
             <div
               style={{
-                width: '20%', // This remains the width of the thread list column
-                borderRight: '1px solid #eee',
+                width: '20%',
                 backgroundColor: '#FBF7F7',
-                overflowY: 'auto', // Allows scrolling for threads
+                overflowY: 'auto',
                 paddingLeft: 4,
                 paddingRight: 4,
-                                          }}
+              }}
             >
               {/* Map of Message Boxes (Thread Previews) */}
               {filteredThreads.length === 0 && !loading && !error ? (
@@ -1353,17 +1360,23 @@ setTeamChatInput("");
             {/* ─── Main Chat Pane ─── */}
             <div
               style={{
-                flex: 1, // This will take up all remaining space
+                flex: 1,
                 position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
                 backgroundColor: '#FBF7F7',
                 width: 0,
-                overflow: 'hidden'
+                overflow: 'hidden',
               }}
             >
               {/* Chat messages display area */}
-              <div style={{ flex: 1, padding: 16, overflowY: 'auto', overflowX: 'hidden' }}>
+              <div style={{ 
+                flex: 1, 
+                padding: 16, 
+                overflowY: 'auto', 
+                overflowX: 'hidden',
+                height: 'calc(100vh - 200px)', // Adjust this value based on your header height
+              }}>
                 {error && (
                   <div
                     style={{
@@ -1851,7 +1864,7 @@ setTeamChatInput("");
           </div>
         </div>
       </div>
-    </div>
+            </div>
   )
 }
 

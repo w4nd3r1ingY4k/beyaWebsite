@@ -1,0 +1,49 @@
+{
+  "TableName": "beya-reminders",
+  "KeySchema": [
+    {
+      "AttributeName": "reminderID",
+      "KeyType": "HASH"
+    }
+  ],
+  "AttributeDefinitions": [
+    {
+      "AttributeName": "reminderID",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "userID",
+      "AttributeType": "S"
+    },
+    {
+      "AttributeName": "scheduledTime",
+      "AttributeType": "S"
+    }
+  ],
+  "GlobalSecondaryIndexes": [
+    {
+      "IndexName": "userID-scheduledTime-index",
+      "KeySchema": [
+        {
+          "AttributeName": "userID",
+          "KeyType": "HASH"
+        },
+        {
+          "AttributeName": "scheduledTime",
+          "KeyType": "RANGE"
+        }
+      ],
+      "Projection": {
+        "ProjectionType": "ALL"
+      },
+      "ProvisionedThroughput": {
+        "ReadCapacityUnits": 5,
+        "WriteCapacityUnits": 5
+      }
+    }
+  ],
+  "ProvisionedThroughput": {
+    "ReadCapacityUnits": 5,
+    "WriteCapacityUnits": 5
+  }
+} 
