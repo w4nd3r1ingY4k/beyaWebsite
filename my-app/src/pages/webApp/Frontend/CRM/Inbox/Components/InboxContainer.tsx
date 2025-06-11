@@ -4,6 +4,8 @@ import ThreadList from './ThreadList';
 import MessageView from './MessageView';
 import ComposeModal from './ComposeModal';
 import TeamChat from './TeamChat';
+import IntegrationsPanel from './IntegrationsPanel';
+import CommandBChat from './CommandBChat';
 
 interface Message {
   MessageId?: string;
@@ -45,6 +47,10 @@ const InboxContainer: React.FC<Props> = () => {
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
+  
+  // Command-B Chat state
+  const [isCommandBChatOpen, setIsCommandBChatOpen] = useState(false);
+  const [aiChatInitialMessage, setAiChatInitialMessage] = useState<string | null>(null);
 
   // API Base URL
   const apiBase = 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod';
@@ -58,6 +64,19 @@ const InboxContainer: React.FC<Props> = () => {
   useEffect(() => {
     loadInboxData();
   }, [user]);
+
+  // Command-B keyboard listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+        e.preventDefault();
+        setIsCommandBChatOpen(prev => !prev);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Load messages when thread changes
   useEffect(() => {
@@ -363,6 +382,12 @@ const InboxContainer: React.FC<Props> = () => {
     });
   };
 
+  // Handle opening AI chat with a specific message
+  const handleOpenAIChat = (message: string) => {
+    setAiChatInitialMessage(message);
+    setIsCommandBChatOpen(true);
+  };
+
   // Reminder modal functions
   const handleSetReminder = async (reminderData: {
     type: 'follow_up' | 'deadline' | 'callback';
@@ -414,16 +439,46 @@ const InboxContainer: React.FC<Props> = () => {
     }
   };
 
+  // Helper function to format email addresses with truncation
+  const formatEmailAddress = (email: string): string => {
+    if (!email) return email;
+    
+    // If email is 20 characters or less, show it as-is
+    if (email.length <= 20) {
+      return email;
+    }
+    
+    // If longer than 20 chars, truncate and add "..."
+    return email.substring(0, 17) + '...';
+  };
+
   // Helper function to get thread title (same as in other components)
   const getThreadTitle = (threadId: string): string => {
     const flow = flows.find(f => f.flowId === threadId);
     if (!flow) return 'Unknown Conversation';
     
-    // Try to get a meaningful title from the flow
-    if (flow.subject) return flow.subject;
-    if (flow.fromEmail) return `Conversation with ${flow.fromEmail}`;
-    if (flow.fromPhone) return `WhatsApp with ${flow.fromPhone}`;
-    return `Conversation ${threadId.slice(-8)}`;
+    // Prioritize showing email addresses (formatted) - same priority as ThreadList
+    if (flow.contactEmail) {
+      const formatted = formatEmailAddress(flow.contactEmail);
+      console.log('InboxContainer - Formatting contactEmail:', flow.contactEmail, '→', formatted);
+      return formatted;
+    }
+    if (flow.fromEmail) {
+      const formatted = formatEmailAddress(flow.fromEmail);
+      console.log('InboxContainer - Formatting fromEmail:', flow.fromEmail, '→', formatted);
+      return formatted;
+    }
+    
+    // Fallback to phone number for WhatsApp
+    if (flow.contactPhone) {
+      return flow.contactPhone;
+    }
+    if (flow.fromPhone) {
+      return flow.fromPhone;
+    }
+    
+    // Final fallbacks
+    return flow.contactName || flow.subject || `${threadId.slice(0, 8)}`;
   };
 
   // Reminder Modal Component
@@ -724,10 +779,11 @@ const InboxContainer: React.FC<Props> = () => {
     <div style={{
       display: 'flex',
       flexDirection: 'column',
-      height: 'calc(100vh - 65px)', // Match the header space adjustment
+      height: '100%',
       background: '#f9fafb',
       width: '100%',
-      position: 'relative'
+      position: 'relative',
+      overflow: 'hidden'
     }}>
       {/* Status Filter Bar positioned absolutely to span ThreadList's right column + MessageView */}
       {selectedThreadId && (
@@ -912,7 +968,8 @@ const InboxContainer: React.FC<Props> = () => {
       <div style={{
         display: 'flex',
         flex: 1,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        height: '100%'
       }}>
         {/* Complete ThreadList component (includes left sidebar + thread list) */}
         <ThreadList
@@ -946,8 +1003,22 @@ const InboxContainer: React.FC<Props> = () => {
             categoryFilter={categoryFilter}
             onCategoryFilterChange={handleCategoryFilterChange}
             onFlowUpdate={handleFlowUpdate}
+            onOpenAIChat={handleOpenAIChat}
           />
         </div>
+
+        {/* Right Sidebar - Conditional Rendering */}
+        {isCommandBChatOpen ? (
+          <CommandBChat 
+            onClose={() => {
+              setIsCommandBChatOpen(false);
+              setAiChatInitialMessage(null); // Clear the initial message when closing
+            }} 
+            initialMessage={aiChatInitialMessage}
+          />
+        ) : (
+          <IntegrationsPanel />
+        )}
       </div>
 
       {/* Compose Modal */}
@@ -961,6 +1032,8 @@ const InboxContainer: React.FC<Props> = () => {
 
       {/* Reminder Modal */}
       <ReminderModal />
+
+
 
     </div>
   );

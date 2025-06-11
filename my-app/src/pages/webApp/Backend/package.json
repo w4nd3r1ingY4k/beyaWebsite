@@ -4,6 +4,8 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -11,9 +13,11 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@pipedream/sdk": "^1.6.7",
+    "@pipedream/sdk": "^1.6.9",
+    "aws-sdk": "^2.1692.0",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "express": "^5.1.0",
     "node-fetch": "^3.3.2",
     "openai": "^5.1.1",
     "square": "^42.3.0"

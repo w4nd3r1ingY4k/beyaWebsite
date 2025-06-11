@@ -229,12 +229,46 @@ const ThreadList: React.FC<Props> = ({
   // Helper functions
   const getPreviewText = (threadId: string): string => {
     const flow = flows.find(f => f.flowId === threadId);
-    return flow?.lastMessage || flow?.subject || 'No messages yet';
+    return flow?.lastMessage || flow?.subject || '';
+  };
+
+  const formatEmailAddress = (email: string): string => {
+    if (!email) return email;
+    
+    // If email is 20 characters or less, show it as-is
+    if (email.length <= 20) {
+      return email;
+    }
+    
+    // If longer than 20 chars, truncate and add "..."
+    return email.substring(0, 17) + '...';
   };
 
   const getThreadTitle = (threadId: string): string => {
     const flow = flows.find(f => f.flowId === threadId);
-    return flow?.subject || flow?.contactName || `Thread ${threadId.slice(0, 8)}`;
+    
+    // Prioritize showing email addresses (formatted)
+    if (flow?.contactEmail) {
+      const formatted = formatEmailAddress(flow.contactEmail);
+      console.log('ThreadList - Formatting contactEmail:', flow.contactEmail, '→', formatted);
+      return formatted;
+    }
+    if (flow?.fromEmail) {
+      const formatted = formatEmailAddress(flow.fromEmail);
+      console.log('ThreadList - Formatting fromEmail:', flow.fromEmail, '→', formatted);
+      return formatted;
+    }
+    
+    // Fallback to phone number for WhatsApp
+    if (flow?.contactPhone) {
+      return flow.contactPhone;
+    }
+    if (flow?.fromPhone) {
+      return flow.fromPhone;
+    }
+    
+    // Final fallbacks
+    return flow?.contactName || flow?.subject || `${threadId.slice(0, 30)}`;
   };
 
   const getStatusColor = (status: string) => {
@@ -982,7 +1016,11 @@ const ThreadList: React.FC<Props> = ({
                       fontSize: '14px',
                       fontWeight: '600',
                       color: '#111827',
-                      lineHeight: '1.2'
+                      lineHeight: '1.2',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      maxWidth: '200px' // Ensure there's space for the status dot
                     }}>
                       {getThreadTitle(threadId)}
                     </h4>
@@ -1017,8 +1055,8 @@ const ThreadList: React.FC<Props> = ({
                     {flow?.primaryTag && (
                       <div style={{
                         fontSize: '10px',
-                        color: '#2563eb',
-                        background: '#dbeafe',
+                        color: '#DE1785',
+                        background: '#FDE7F1',
                         padding: '2px 6px',
                         borderRadius: '10px',
                         display: 'inline-block',
@@ -1060,8 +1098,8 @@ const ThreadList: React.FC<Props> = ({
                     {!flow?.primaryTag && flow?.category && (
                       <div style={{
                         fontSize: '10px',
-                        color: '#2563eb',
-                        background: '#dbeafe',
+                        color: '#DE1785',
+                        background: '#FDE7F1',
                         padding: '2px 6px',
                         borderRadius: '10px',
                         display: 'inline-block',

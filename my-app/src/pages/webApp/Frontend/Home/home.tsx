@@ -40,20 +40,43 @@ const Homer: React.FC = () => {
       id: 1,
       type: 'assistant',
       content:
-        "You'd love to be greeted by B telling you that business is doing 20% better. As a matter of fact, you'd probably even want a graph:",
-      hasChart: true,
+        "",
+      hasChart: false,
     },
     {
       id: 2,
       type: 'assistant',
       content:
-        "We'd explain the graph, and perhaps even give you a few reasons why we think the graph looks the way it does. From there, we'd suggest a next step, for example: do you want me to show you today's performance against last Sunday's performance?",
+        "Hey there! I'm B, your AI assistant. How can I help you today?",
+      hasChart: false,
     },
+    
   ]);
   const [isTyping, setIsTyping] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [typewriterText, setTypewriterText] = useState('');
+  const [isTypewriting, setIsTypewriting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Typewriter effect for welcome message
+  useEffect(() => {
+    const welcomeMessage = "Hey there! I'm B, your AI assistant. How can I help you today?";
+    let currentIndex = 0;
+    setIsTypewriting(true);
+    
+    const typewriterInterval = setInterval(() => {
+      if (currentIndex <= welcomeMessage.length) {
+        setTypewriterText(welcomeMessage.substring(0, currentIndex));
+        currentIndex++;
+      } else {
+        clearInterval(typewriterInterval);
+        setIsTypewriting(false);
+      }
+    }, 30); // 30ms delay between characters
+
+    return () => clearInterval(typewriterInterval);
+  }, []);
 
   // Sample data for the chart
   const chartData = [
@@ -173,15 +196,24 @@ const Homer: React.FC = () => {
   };
 
   return (
-    <div
-      style={{
-        marginTop: '1vh',
-        height: '96vh',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
+    <>
+      <style>
+        {`
+          @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0; }
+          }
+        `}
+      </style>
+      <div
+        style={{
+          marginTop: '1vh',
+          height: '96vh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
       {/* Error Banner */}
       {error && (
         <div
@@ -269,7 +301,20 @@ const Homer: React.FC = () => {
                 >
                   <div style={isUser ? userBubbleStyle : assistantBubbleStyle}>
                     <div style={{ fontSize: '1.125rem', lineHeight: '1.75rem', margin: 0 }}>
-                      {renderTaggedContent(msg.content)}
+                      {msg.id === 2 ? (
+                        <span>
+                          {typewriterText}
+                          {isTypewriting && (
+                            <span style={{ 
+                              animation: 'blink 1s infinite',
+                              fontSize: '1.125rem',
+                              marginLeft: '1px'
+                            }}>|</span>
+                          )}
+                        </span>
+                      ) : (
+                        renderTaggedContent(msg.content)
+                      )}
                     </div>
 
                     {msg.hasChart && (
@@ -451,6 +496,7 @@ const Homer: React.FC = () => {
         </div>
       </div>
     </div>
+    </>
   );
 };
 
