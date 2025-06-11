@@ -34,6 +34,7 @@ interface MessageViewProps {
   categoryFilter?: string[];
   onCategoryFilterChange?: (categories: string[]) => void;
   onFlowUpdate?: (updatedFlow: any) => void;
+  onOpenAIChat?: (message: string) => void; // New prop for opening AI chat with a message
 }
 
 interface Message {
@@ -79,7 +80,8 @@ const MessageView: React.FC<MessageViewProps> = ({
   onStatusFilterChange,
   categoryFilter: externalCategoryFilter = 'all',
   onCategoryFilterChange,
-  onFlowUpdate
+  onFlowUpdate,
+  onOpenAIChat
 }) => {
   const { user } = useAuth();
   
@@ -92,6 +94,9 @@ const MessageView: React.FC<MessageViewProps> = ({
   const [emailEditorState, setEmailEditorState] = useState<EditorState>(
     () => EditorState.createEmpty()
   );
+  
+  // Mock tonality analysis feature
+  const [showTonalityWarning, setShowTonalityWarning] = useState(false);
 
   // Header controls state - use external filters if provided
   const statusFilter = externalStatusFilter;
@@ -216,6 +221,7 @@ const MessageView: React.FC<MessageViewProps> = ({
     });
   }
 
+  // COMMENTED OUT - Original send reply functionality
   const handleReplySend = async () => {
     if (!selectedThreadId) return;
 
@@ -280,6 +286,36 @@ const MessageView: React.FC<MessageViewProps> = ({
       console.error('Error sending reply:', err);
     }
   };
+
+  // Mock tonality analysis feature for customer replies
+  // const handleTonalityCheck = () => {
+  //   if (!selectedThreadId) return;
+
+  //   const channel = getChannel(selectedThreadId);
+  //   let messageContent = '';
+    
+  //   if (channel === 'email') {
+  //     messageContent = emailEditorState.getCurrentContent().getPlainText();
+  //   } else {
+  //     messageContent = replyText;
+  //   }
+
+  //   if (!messageContent.trim()) return;
+    
+  //   // Mock analysis - trigger warning for messages that seem too casual for Danny from Pipedream
+  //   const casualIndicators = ['hey', 'sup', 'what\'s up', 'yo', 'dude', 'lol', 'haha', 'thanks!', 'cool', 'awesome'];
+  //   const isCasual = casualIndicators.some(indicator => 
+  //     messageContent.toLowerCase().includes(indicator)
+  //   );
+    
+  //   if (isCasual) {
+  //     setShowTonalityWarning(true);
+  //   } else {
+  //     // If tonality is fine, proceed with normal sending (commented out for now)
+  //     // handleReplySend();
+  //     alert('Message would be sent normally (feature mocked)');
+  //   }
+  // };
 
   const handleTeamChatSend = async () => {
     if (!teamChatInput.trim() || !selectedThreadId) return;
@@ -1173,7 +1209,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                       width: '100%',
                       maxWidth: '100%',
                       margin: '0 auto 16px auto',
-                      padding: 12,
+                      padding: 16,
+                      paddingBottom: 20,
                       borderRadius: 8,
                       background: '#FFFBFA',
                       overflow: 'hidden',
@@ -1182,7 +1219,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                       wordWrap: 'break-word',
                       overflowWrap: 'break-word',
                       
-                      maxHeight: isActive ? 'none' : '80px',
+                      maxHeight: isActive ? 'none' : '110px',
                       transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
@@ -1224,8 +1261,10 @@ const MessageView: React.FC<MessageViewProps> = ({
                         fontStyle: 'italic', 
                         margin: '4px 0', 
                         fontSize: '0.95em',
-                        color: '#666',
-                        fontWeight: '500'
+                        color: isActive ? '#666' : '#888',
+                        fontWeight: '500',
+                        opacity: isActive ? 1 : 0.8,
+                        transition: 'opacity 0.3s ease, color 0.3s ease'
                       }}>
                         Subject: {chat.subject}
                       </p>
@@ -1240,7 +1279,10 @@ const MessageView: React.FC<MessageViewProps> = ({
                       wordWrap: 'break-word',
                       wordBreak: 'break-word',
                       overflowWrap: 'break-word',
-                      maxWidth: '100%'
+                      maxWidth: '100%',
+                      opacity: isActive ? 1 : 0.7,
+                      transition: 'opacity 0.3s ease',
+                      color: isActive ? '#333' : '#666'
                     }}>
                       {linkifyWithImages(chat.body)}
                     </div>
@@ -1314,6 +1356,239 @@ const MessageView: React.FC<MessageViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Inline Reply Interface */}
+      {isReplying && (
+        <div style={{
+          padding: '16px',
+          background: '#fff',
+          borderTop: '1px solid #e5e7eb',
+          borderBottom: '1px solid #e5e7eb'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            marginBottom: 16 
+          }}>
+            <h3 style={{ margin: 0, color: '#374151', fontSize: '16px', fontWeight: '600' }}>Reply to Customer</h3>
+            <button
+              onClick={() => {
+                setIsReplying(false);
+                setShowTonalityWarning(false); // Reset warning when closing
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: 20,
+                cursor: 'pointer',
+                color: '#6b7280',
+                padding: 4
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Tonality Warning Speech Bubble */}
+          {showTonalityWarning && (
+            <div 
+              onClick={() => {
+                if (onOpenAIChat) {
+                  // Get the message content for context
+                  const channel = getChannel(selectedThreadId!);
+                  let messageContent = '';
+                  
+                  if (channel === 'email') {
+                    messageContent = emailEditorState.getCurrentContent().getPlainText();
+                  } else {
+                    messageContent = replyText;
+                  }
+                  
+                  // Prepare the AI thought message
+                  const thoughtMessage = `Analyzing message: "${messageContent}"\n\nThe tone of this message would be better phrased as a question for a demo rather than stating the demo as a fact. This approach feels more consultative and gives the prospect control over the decision.`;
+                  
+                  onOpenAIChat(thoughtMessage);
+                  setShowTonalityWarning(false);
+                }
+              }}
+              style={{
+                position: 'relative',
+                background: '#fbbf24',
+                border: '1px solid #f59e0b',
+                borderRadius: '12px',
+                padding: '12px 16px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#f59e0b';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#fbbf24';
+                e.currentTarget.style.transform = 'translateY(0px)';
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <span style={{ fontSize: '16px' }}>🤖</span>
+                <div>
+                  <div style={{
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    color: '#92400e'
+                  }}>
+                    Attention: Moderate
+                  </div>
+                  <div style={{
+                    fontSize: '11px',
+                    color: '#92400e',
+                    marginTop: '2px'
+                  }}>
+                    B has some input! Click to view chat.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation(); // Prevent triggering the main click
+                  setShowTonalityWarning(false);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: '#92400e',
+                  fontSize: '16px',
+                  padding: '4px',
+                  borderRadius: '4px',
+                  fontWeight: 'bold'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(146, 64, 14, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'none';
+                }}
+              >
+                ×
+              </button>
+              
+              {/* Speech bubble tail */}
+              <div style={{
+                position: 'absolute',
+                bottom: '-8px',
+                left: '24px',
+                width: 0,
+                height: 0,
+                borderLeft: '8px solid transparent',
+                borderRight: '8px solid transparent',
+                borderTop: '8px solid #fbbf24'
+              }} />
+            </div>
+          )}
+
+          {selectedThreadId && getChannel(selectedThreadId) === 'email' && (
+            <>
+              <input
+                type="text"
+                value={replySubject}
+                onChange={e => setReplySubject(e.target.value)}
+                placeholder="Subject"
+                style={{
+                  width: '100%',
+                  marginBottom: 16,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  boxSizing: 'border-box',
+                  fontSize: '14px'
+                }}
+              />
+              <EmailReplyEditor
+                ref={emailEditorRef}
+                editorState={emailEditorState}
+                onChange={setEmailEditorState}
+                onSend={handleReplySend}
+              />
+            </>
+          )}
+
+          {selectedThreadId && getChannel(selectedThreadId) === 'whatsapp' && (
+            <textarea
+              value={replyText}
+              onChange={e => setReplyText(e.target.value)}
+              placeholder="Type your WhatsApp reply…"
+              style={{
+                width: '100%',
+                minHeight: 120,
+                padding: 16,
+                border: '1px solid #d1d5db',
+                borderRadius: 8,
+                marginBottom: 16,
+                background: '#fff',
+                fontSize: '14px',
+                resize: 'vertical',
+                boxSizing: 'border-box',
+                fontFamily: 'Arial, sans-serif'
+              }}
+            />
+          )}
+
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => {
+                setIsReplying(false);
+                setShowTonalityWarning(false); // Reset warning when canceling
+              }}
+              style={{
+                background: '#f3f4f6',
+                color: '#374151',
+                padding: '12px 24px',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: '14px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleReplySend}
+              style={{
+                background: '#DE1785',
+                color: '#fff',
+                padding: '12px 24px',
+                border: 'none',
+                borderRadius: 8,
+                fontSize: '14px',
+                cursor: 'pointer',
+                boxShadow: '0 2px 5px rgba(222,23,133,0.3)',
+                fontWeight: '600',
+                transition: 'background 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#c1166a';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#DE1785';
+              }}
+            >
+              Send Reply
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ 
         padding: 16, 
@@ -1514,141 +1789,7 @@ const MessageView: React.FC<MessageViewProps> = ({
         )}
       </div>
 
-      {isReplying && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: 12,
-            padding: 24,
-            maxWidth: '600px',
-            width: '90%',
-            maxHeight: '80vh',
-            overflowY: 'auto',
-            boxShadow: '0 20px 40px rgba(0,0,0,0.3)'
-          }}>
-            <div style={{ 
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              marginBottom: 20 
-            }}>
-              <h3 style={{ margin: 0, color: '#374151' }}>Reply to Customer</h3>
-              <button
-                onClick={() => setIsReplying(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: 24,
-                  cursor: 'pointer',
-                  color: '#6b7280',
-                  padding: 4
-                }}
-              >
-                ×
-              </button>
-            </div>
 
-            {selectedThreadId && getChannel(selectedThreadId) === 'email' && (
-              <>
-                <input
-                  type="text"
-                  value={replySubject}
-                  onChange={e => setReplySubject(e.target.value)}
-                  placeholder="Subject"
-                  style={{
-                    width: '100%',
-                    marginBottom: 16,
-                    padding: '12px 16px',
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    boxSizing: 'border-box',
-                    fontSize: '14px'
-                  }}
-                />
-                <EmailReplyEditor
-                  ref={emailEditorRef}
-                  editorState={emailEditorState}
-                  onChange={setEmailEditorState}
-                  onSend={handleReplySend}
-                />
-              </>
-            )}
-
-            {selectedThreadId && getChannel(selectedThreadId) === 'whatsapp' && (
-              <textarea
-                value={replyText}
-                onChange={e => setReplyText(e.target.value)}
-                placeholder="Type your WhatsApp reply…"
-                style={{
-                  width: '100%',
-                  minHeight: 120,
-                  padding: 16,
-                  border: '1px solid #d1d5db',
-                  borderRadius: 8,
-                  marginBottom: 16,
-                  background: '#fff',
-                  fontSize: '14px',
-                  resize: 'vertical',
-                  boxSizing: 'border-box',
-                  fontFamily: 'Arial, sans-serif'
-                }}
-              />
-            )}
-
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setIsReplying(false)}
-                style={{
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  padding: '12px 24px',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReplySend}
-                style={{
-                  background: '#DE1785',
-                  color: '#fff',
-                  padding: '12px 24px',
-                  border: 'none',
-                  borderRadius: 8,
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 5px rgba(222,23,133,0.3)',
-                  fontWeight: '600',
-                  transition: 'background 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#c1166a';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#DE1785';
-                }}
-              >
-                Send Reply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

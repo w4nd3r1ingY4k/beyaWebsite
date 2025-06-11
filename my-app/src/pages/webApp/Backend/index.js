@@ -1,11 +1,11 @@
-// Load environment variables from .env file
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
 
 import express from "express";
-import OpenAI from "openai";
 import { createBackendClient } from "@pipedream/sdk/server";
+import OpenAI from "openai";
 import cors from "cors";
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect } from './connect.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -820,6 +820,24 @@ app.post("/debug/check-connection", async (req, res) => {
   }
 });
 
+// Shopify Connect endpoints
+app.post("/shopify/connect", async (req, res) => {
+  await handleShopifyConnect(req, res);
+});
+
+// Business Central Connect endpoints
+app.post("/business-central/connect", async (req, res) => {
+  await handleBusinessCentralConnect(req, res);
+});
+
+app.post("/klaviyo/connect", async (req, res) => {
+  await handleKlaviyoConnect(req, res);
+});
+
+app.post("/square/connect", async (req, res) => {
+  await handleKlaviyoConnect(req, res);
+});
+
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.json({ 
@@ -829,8 +847,19 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Add error handling for unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('🔥 Uncaught Exception:', error);
+  process.exit(1);
+});
+
 const PORT = process.env.PORT || 2074;
-app.listen(PORT, () => {
+
+const server = app.listen(PORT, () => {
   console.log("\n" + "=".repeat(60));
   console.log("🚀 MCP WORKFLOW SERVER STARTED");
   console.log("=".repeat(60));
@@ -842,6 +871,21 @@ app.listen(PORT, () => {
   console.log("\nEndpoints:");
   console.log("  POST /workflow - Execute a workflow");
   console.log("  POST /debug/list-tools - List available tools for an app");
+  console.log("  POST /shopify/connect - Shopify Connect integration");
   console.log("  GET /health - Health check");
   console.log("=".repeat(60) + "\n");
+  console.log("✨ Server is running and waiting for requests...");
 });
+
+server.on('error', (error) => {
+  console.error('🔥 Server error:', error);
+});
+
+server.on('close', () => {
+  console.log('🔴 Server closed');
+});
+
+// Keep the process alive
+setInterval(() => {
+  // Do nothing, just keep the event loop alive
+}, 10000);
