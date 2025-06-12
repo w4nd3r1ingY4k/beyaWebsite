@@ -5,7 +5,7 @@ import express from "express";
 import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
-import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect } from './connect.js';
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect } from './Connect/connect.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
