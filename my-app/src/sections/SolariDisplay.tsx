@@ -1,4 +1,4 @@
-// SolariDisplay.tsx
+// src/components/SolariDisplay.tsx
 import React, { useEffect, useState } from "react";
 import SplitFlap from "../components/SplitFlap";
 
@@ -8,63 +8,40 @@ type SolariDisplayProps = {
   phraseDelay?: number;
 };
 
-const containerStyle: React.CSSProperties = {
-  position: "relative",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  height: "100vh",
-  background: "linear-gradient(to bottom, #ea580c, #ec4899)",
-  color: "white",
-  overflow: "hidden",
-};
-
-const solariWordStyle: React.CSSProperties = {
-  display: "flex",
-  margin: "8px 0",
-};
-
-const SolariDisplay: React.FC<SolariDisplayProps> = ({
+export const SolariDisplay: React.FC<SolariDisplayProps> = ({
   phrases,
   speed = 80,
   phraseDelay = 3000,
 }) => {
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
-  const [maxWordCount, setMaxWordCount] = useState(0);
-  const [currentPhrase, setCurrentPhrase] = useState("");
-
-  useEffect(() => {
-    const max = Math.max(...phrases.map((phrase) => phrase.split(" ").length));
-    setMaxWordCount(max);
-    setCurrentPhrase(phrases[0]);
-  }, [phrases]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentPhraseIndex((prevIndex) =>
-        prevIndex === phrases.length - 1 ? 0 : prevIndex + 1
-      );
-    }, phraseDelay);
-
-    return () => clearInterval(interval);
-  }, [phrases.length, phraseDelay]);
+  const [currentPhrase, setCurrentPhrase] = useState(phrases[0] ?? "");
 
   useEffect(() => {
     setCurrentPhrase(phrases[currentPhraseIndex]);
   }, [currentPhraseIndex, phrases]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentPhraseIndex((prev) => (prev + 1) % phrases.length);
+    }, phraseDelay);
+    return () => clearInterval(interval);
+  }, [phrases.length, phraseDelay]);
+
   return (
-    <div style={containerStyle}>
-      {currentPhrase.split(" ").map((word, index) => (
-        <div key={index} style={solariWordStyle}>
-          {word.split("").map((char, idx) => (
-            <SplitFlap key={idx} targetChar={char} speed={speed} />
-          ))}
-        </div>
-      ))}
+    <div className="relative flex flex-col items-center justify-center h-screen overflow-hidden bg-gradient-to-b from-orange-500 to-pink-500 text-white">
+      <div className="space-y-2">
+        {currentPhrase.split(" ").map((word, wi) => (
+          <div key={wi} className="flex space-x-1 justify-center">
+            {word.split("").map((char, ci) => (
+              <SplitFlap
+                key={ci}
+                targetChar={char}
+                speed={speed}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
-
-export default SolariDisplay;

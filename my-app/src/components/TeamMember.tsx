@@ -1,5 +1,5 @@
 import React from "react";
-import { SocialLink } from "../SocialLink";
+import { SocialLink } from "./SocialLink";
 
 export const TeamMember: React.FC<{
   image: string;

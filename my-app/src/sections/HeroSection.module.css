@@ -1,0 +1,223 @@
+.heroSection {
+    position: relative;
+    width: 100%;
+    min-height: 98vh;
+    margin-top: -30px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    background: linear-gradient(to bottom, #F9FAFB, #FFFFFF);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+.container {
+    position: relative;
+    z-index: 20;
+    max-width: 80rem;
+    width: 100%;
+    margin: 0 auto;
+    padding: 6rem 2rem;
+}
+
+.gridTwo {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8rem;
+    align-items: center;
+}
+
+.textColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.preamble {
+    font-size: 1.05rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.075em;
+    color: #DE1785;
+    margin: 0;
+}
+
+.title {
+    font-size: 4.25rem;
+    font-weight: 700;
+    color: #1F2937;
+    line-height: 1.1;
+    margin: 0;
+    letter-spacing: -0.03em;
+    display: flex;
+    flex-direction: column;
+}
+
+.titleGradient {
+    background: linear-gradient(to right, #DE1785, #F472B6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+    font-size: 1.375rem;
+    color: #4B5563;
+    font-weight: 400;
+    max-width: 38rem;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-top: 1rem;
+}
+
+.tag {
+    padding: 0.65rem 1.3rem;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 9999px;
+    font-size: 0.95rem;
+    color: #374151;
+    border: 1px solid rgba(229, 231, 235, 0.6);
+    font-weight: 500;
+    backdrop-filter: blur(10px);
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    margin-top: 1.5rem;
+}
+
+.buttonPrimary {
+    align-self: flex-start;
+    padding: 1.2rem 2.6rem;
+    color: #fff;
+    font-weight: 600;
+    border-radius: 9999px;
+    background: linear-gradient(135deg, #DE1785, #F472B6);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 10px 25px rgba(222, 23, 133, 0.25), 0 4px 12px rgba(0, 0, 0, 0.05);
+    font-size: 1.1rem;
+}
+
+.buttonPrimary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 15px 35px rgba(222, 23, 133, 0.35), 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.labelSmall {
+    font-size: 0.95rem;
+    color: #6B7280;
+    margin: 0;
+}
+
+.visualContainer {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 750px;
+    perspective: 1500px;
+}
+
+.desktopImage,
+.mobileImage {
+    object-fit: fill;
+    background: #fff;
+}
+
+.desktopImage {
+    width: 800px;
+    height: 500px;
+    border-radius: 18px;
+    box-shadow: 0 35px 70px rgba(0, 0, 0, 0.18), 0 14px 35px rgba(0, 0, 0, 0.12);
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    transform: rotateY(-5deg) rotateX(2deg);
+    z-index: 10;
+}
+
+.mobileImage {
+    position: absolute;
+    right: -100px;
+    bottom: 40px;
+    width: 250px;
+    height: 500px;
+    border-radius: 32px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22), 0 10px 24px rgba(0, 0, 0, 0.12);
+    border: 4px solid #fff;
+    transform: rotateY(-15deg) rotateX(5deg) translateZ(50px);
+    z-index: 15;
+}
+
+.shapeBlur1 {
+    position: absolute;
+    top: -20px;
+    right: 30px;
+    width: 120px;
+    height: 120px;
+    background: linear-gradient(135deg, rgba(222, 23, 133, 0.1), rgba(244, 114, 182, 0.1));
+    border-radius: 50%;
+    filter: blur(40px);
+    z-index: 1;
+}
+
+.shapeBlur2 {
+    position: absolute;
+    bottom: -40px;
+    left: -30px;
+    width: 160px;
+    height: 160px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(147, 197, 253, 0.08));
+    border-radius: 50%;
+    filter: blur(50px);
+    z-index: 1;
+}
+
+.shapeBlur3 {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) translateZ(-100px);
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(222, 23, 133, 0.03) 0%, transparent 70%);
+    border-radius: 50%;
+    z-index: 0;
+}
+
+.trustContainer {
+    margin-top: 9rem;
+    padding-top: 5rem;
+    border-top: 1px solid rgba(229, 231, 235, 0.6);
+}
+
+.trustTitle {
+    text-align: center;
+    font-size: 0.95rem;
+    color: #6B7280;
+    margin: 0 0 3.5rem;
+    font-weight: 500;
+}
+
+.trustLogos {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 4.5rem;
+    opacity: 0.5;
+    flex-wrap: wrap;
+}
+
+.logoPlaceholder {
+    width: 9.5rem;
+    height: 3.75rem;
+    background: linear-gradient(135deg, #E5E7EB, #D1D5DB);
+    border-radius: 0.65rem;
+    border: 1px solid rgba(229, 231, 235, 0.3);
+}
