@@ -1,0 +1,9 @@
+{
+  "name": "beya-inbox-login",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "aws-sdk": "^2.0.0",
+    "openid-client": "^5.7.0"
+  }
+}
