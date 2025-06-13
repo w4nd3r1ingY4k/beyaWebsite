@@ -6,6 +6,7 @@ import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect } from './connect.js';
+import { semanticSearch, queryWithAI, getCustomerContext } from './semantic-search.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -820,6 +821,111 @@ app.post("/debug/check-connection", async (req, res) => {
   }
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Debug endpoint to check Pinecone index stats
+app.get("/debug/pinecone-stats", async (req, res) => {
+  try {
+    const { Pinecone } = await import('@pinecone-database/pinecone');
+    const pineconeClient = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY,
+    });
+    
+    const indexName = process.env.PINECONE_INDEX_NAME || 'beya-context';
+    console.log(`🔍 Checking Pinecone index: ${indexName}`);
+    
+    const pineconeIndex = pineconeClient.index(indexName);
+    const stats = await pineconeIndex.describeIndexStats();
+    
+    res.json({
+      indexName,
+      stats,
+      envVars: {
+        PINECONE_API_KEY: process.env.PINECONE_API_KEY ? '✓ Set' : '✗ Missing',
+        PINECONE_INDEX_NAME: process.env.PINECONE_INDEX_NAME || 'Using default: beya-context',
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Pinecone debug error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      indexName: process.env.PINECONE_INDEX_NAME || 'beya-context',
+      envVars: {
+        PINECONE_API_KEY: process.env.PINECONE_API_KEY ? '✓ Set' : '✗ Missing',
+        PINECONE_INDEX_NAME: process.env.PINECONE_INDEX_NAME || 'Using default: beya-context',
+        OPENAI_API_KEY: process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'
+      }
+    });
+  }
+});
+
+// Debug endpoint to fetch specific vectors and see their metadata
+app.get("/debug/vector-metadata", async (req, res) => {
+  try {
+    const { Pinecone } = await import('@pinecone-database/pinecone');
+    const pineconeClient = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY,
+    });
+    
+    const indexName = process.env.PINECONE_INDEX_NAME || 'beya-context';
+    const pineconeIndex = pineconeClient.index(indexName);
+    
+    // First, do a query to get actual vectors with metadata
+    const queryResult = await pineconeIndex.query({
+      vector: new Array(1536).fill(0), // dummy vector
+      topK: 10,
+      includeMetadata: true,
+      includeValues: false
+    });
+    
+    console.log('Query result:', JSON.stringify(queryResult, null, 2));
+    
+    // Also try to fetch specific vectors
+    const vectorIds = [
+      "32d9a9f4-d179-4386-8bd0-b2eda9f06bd6-0",
+      "ab911b29-b5bc-4260-a1e6-3b26660db37d-0"
+    ];
+    
+    let fetchResult = null;
+    try {
+      fetchResult = await pineconeIndex.fetch(vectorIds);
+    } catch (fetchError) {
+      console.log('Fetch error:', fetchError.message);
+    }
+    
+    res.json({
+      indexName,
+      queryResults: queryResult.matches.map(match => ({
+        id: match.id,
+        score: match.score,
+        metadata: match.metadata,
+        metadataKeys: Object.keys(match.metadata || {})
+      })),
+      fetchAttempt: {
+        vectorIds,
+        success: !!fetchResult,
+        vectors: fetchResult?.vectors || null,
+        error: fetchResult ? null : 'Fetch failed'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Vector metadata debug error:', error);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack,
+      indexName: process.env.PINECONE_INDEX_NAME || 'beya-context'
+    });
+  }
+});
+
 // Shopify Connect endpoints
 app.post("/shopify/connect", async (req, res) => {
   await handleShopifyConnect(req, res);
@@ -838,13 +944,176 @@ app.post("/square/connect", async (req, res) => {
   await handleKlaviyoConnect(req, res);
 });
 
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
-    timestamp: new Date().toISOString()
-  });
+// ===== SEMANTIC SEARCH & CONTEXT ENGINE ROUTES =====
+
+// Semantic search endpoint
+app.post("/api/v1/search-context", async (req, res) => {
+  const { query, filters = {}, topK = 5, userId = null } = req.body;
+  
+  if (!query) {
+    return res.status(400).json({ error: "query is required" });
+  }
+
+  try {
+    const results = await semanticSearch(query, filters, topK, userId);
+    return res.status(200).json(results);
+  } catch (error) {
+    console.error("🔥 Semantic search error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Semantic search failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// AI-powered context query endpoint
+app.post("/api/v1/query-with-ai", async (req, res) => {
+  const { 
+    query, 
+    filters = {}, 
+    topK = 5, 
+    userId = null, 
+    responseType = 'summary',
+    conversationHistory = []
+  } = req.body;
+  
+  if (!query) {
+    return res.status(400).json({ error: "query is required" });
+  }
+
+  try {
+    const result = await queryWithAI(query, { filters, topK, userId, responseType, conversationHistory });
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("🔥 AI query error:", error);
+    return res.status(500).json({ 
+      error: error.message || "AI query failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Customer context summary endpoint
+app.get("/api/v1/customer-context/:threadId", async (req, res) => {
+  const { threadId } = req.params;
+  const { userId = null } = req.query;
+  
+  if (!threadId) {
+    return res.status(400).json({ error: "threadId is required" });
+  }
+
+  try {
+    const context = await getCustomerContext(threadId, userId);
+    return res.status(200).json(context);
+  } catch (error) {
+    console.error("🔥 Customer context error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Customer context retrieval failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Draft coaching endpoint - analyze draft messages before sending
+app.post("/api/v1/analyze-draft", async (req, res) => {
+  const { 
+    draftText, 
+    threadId = null, 
+    userId = null,
+    context = null 
+  } = req.body;
+  
+  if (!draftText) {
+    return res.status(400).json({ error: "draftText is required" });
+  }
+
+  try {
+    // Build search query based on available context
+    let searchQuery = `draft message analysis: ${draftText}`;
+    let filters = {};
+    
+    if (threadId) {
+      searchQuery = `conversation context for thread ${threadId}: ${draftText}`;
+      filters.threadId = threadId;
+    }
+    
+    if (userId) {
+      filters.userId = userId;
+    }
+
+    const result = await queryWithAI(searchQuery, { 
+      filters, 
+      topK: 3, 
+      userId, 
+      responseType: 'coaching' 
+    });
+    
+    // Add draft-specific analysis
+    const response = {
+      ...result,
+      draftText,
+      threadId,
+      recommendations: {
+        toneAssessment: "Based on conversation history",
+        suggestedImprovements: "See AI response for details",
+        riskLevel: "low", // Could be calculated based on sentiment patterns
+      }
+    };
+    
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("🔥 Draft analysis error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Draft analysis failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Reply suggestions endpoint
+app.post("/api/v1/suggest-reply", async (req, res) => {
+  const { 
+    incomingMessage, 
+    threadId, 
+    userId = null,
+    tone = 'professional' 
+  } = req.body;
+  
+  if (!incomingMessage || !threadId) {
+    return res.status(400).json({ error: "incomingMessage and threadId are required" });
+  }
+
+  try {
+    const searchQuery = `reply suggestion for: ${incomingMessage}`;
+    const filters = { threadId };
+    if (userId) filters.userId = userId;
+
+    const result = await queryWithAI(searchQuery, { 
+      filters, 
+      topK: 5, 
+      userId, 
+      responseType: 'draft' 
+    });
+    
+    const response = {
+      ...result,
+      incomingMessage,
+      threadId,
+      suggestedTone: tone,
+      alternatives: [
+        // Could generate multiple response options
+        result.aiResponse
+      ]
+    };
+    
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error("🔥 Reply suggestion error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Reply suggestion failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
 });
 
 // Add error handling for unhandled rejections
@@ -873,6 +1142,12 @@ const server = app.listen(PORT, () => {
   console.log("  POST /debug/list-tools - List available tools for an app");
   console.log("  POST /shopify/connect - Shopify Connect integration");
   console.log("  GET /health - Health check");
+  console.log("\nContext Engine API:");
+  console.log("  POST /api/v1/search-context - Semantic search");
+  console.log("  POST /api/v1/query-with-ai - AI-powered context queries");
+  console.log("  GET /api/v1/customer-context/:threadId - Customer 360 view");
+  console.log("  POST /api/v1/analyze-draft - Draft message coaching");
+  console.log("  POST /api/v1/suggest-reply - AI reply suggestions");
   console.log("=".repeat(60) + "\n");
   console.log("✨ Server is running and waiting for requests...");
 });

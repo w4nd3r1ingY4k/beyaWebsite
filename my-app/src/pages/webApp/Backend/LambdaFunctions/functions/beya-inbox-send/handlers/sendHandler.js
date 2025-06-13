@@ -280,7 +280,7 @@ export async function handler(event) {
         bodyText: text,
         bodyHtml: html,
         to: Array.isArray(to) ? to : [to],
-        // NOTE: if you capture sender address, include here as `from`
+        from: "akbar@usebeya.com", // Sender address for sent emails
       }
     };
 
