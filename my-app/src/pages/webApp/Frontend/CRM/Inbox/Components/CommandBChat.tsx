@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../../../../../AuthContext';
 
 interface Message {
   id: string;
@@ -14,6 +15,7 @@ interface CommandBChatProps {
 }
 
 const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) => {
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -25,6 +27,9 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
   
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // API Base URL - matches your backend server
+  const API_BASE = 'http://localhost:2074';
 
   // Typewriter effect for agent messages
   const startTypewriter = (messageId: string, fullText: string) => {
@@ -87,9 +92,9 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
         const organizingMessages = [
           { content: 'organizing myself...', delay: 1300 },
           { content: 'checking for important information...', delay: 1500 },
-          { content: 'remembering SAFIYAA meeting...', delay: 1400, isGhost: true },
+          { content: 'searching through your email history...', delay: 1400, isGhost: true },
           { 
-            content: 'Welcome back! You have a meeting with Line from SAFIYAA tomorrow at 1pm GMT.', 
+            content: 'Welcome back! I can now search through your email history and provide contextual insights. Try asking me about customer patterns, recent conversations, or business trends.', 
             delay: 800,
             isFinal: true
           }
@@ -170,39 +175,86 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // COMMENTED OUT - Original send message functionality
-  // const handleSendMessage = async () => {
-  //   if (!inputValue.trim()) return;
+  // NEW: Real API integration with semantic search
+  const handleSendMessage = async () => {
+    if (!inputValue.trim()) return;
 
-  //   const userMessage: Message = {
-  //     id: Date.now().toString(),
-  //     content: inputValue,
-  //     sender: 'user',
-  //     timestamp: new Date()
-  //   };
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      content: inputValue,
+      sender: 'user',
+      timestamp: new Date()
+    };
 
-  //   setMessages(prev => [...prev, userMessage]);
-  //   setInputValue('');
-  //   setIsTyping(true);
+    setMessages(prev => [...prev, userMessage]);
+    const currentQuery = inputValue;
+    setInputValue('');
+    setIsTyping(true);
 
-  //   // Simulate AI response (replace with actual API call later)
-  //   setTimeout(() => {
-  //     const responseText = generateMockResponse(inputValue);
-  //     const assistantMessage: Message = {
-  //       id: (Date.now() + 1).toString(),
-  //       content: '', // Keep empty for typewriter effect
-  //       sender: 'assistant',
-  //       timestamp: new Date()
-  //     };
-  //     setMessages(prev => [...prev, assistantMessage]);
-  //     setIsTyping(false);
+    try {
+      // Call your semantic search API
+      const response = await fetch(`${API_BASE}/api/v1/query-with-ai`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: currentQuery,
+          userId: user?.userId || null,
+          responseType: 'auto',
+          topK: 5,
+          conversationHistory: messages.slice(-6).map(msg => ({
+            role: msg.sender === 'user' ? 'user' : 'assistant',
+            content: msg.content,
+            timestamp: msg.timestamp
+          }))
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
       
-  //     // Start typewriter effect
-  //     setTimeout(() => {
-  //       startTypewriter(assistantMessage.id, responseText);
-  //     }, 100);
-  //   }, 1500);
-  // };
+      // Create assistant message with API response
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: '', // Keep empty for typewriter effect
+        sender: 'assistant',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, assistantMessage]);
+      setIsTyping(false);
+      
+      // Start typewriter effect with the AI response
+      setTimeout(() => {
+        const responseText = data.aiResponse || 'I found some relevant information, but couldn\'t generate a response. Please try rephrasing your question.';
+        startTypewriter(assistantMessage.id, responseText);
+      }, 100);
+
+    } catch (error) {
+      console.error('❌ API call failed:', error);
+      
+      // Show error message to user
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        content: '', // Keep empty for typewriter effect
+        sender: 'assistant',
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, errorMessage]);
+      setIsTyping(false);
+      
+      // Start typewriter effect with error message
+      setTimeout(() => {
+        const errorText = 'Sorry, I\'m having trouble connecting to the context engine right now. Please make sure the backend server is running on port 2074 and try again.';
+        startTypewriter(errorMessage.id, errorText);
+      }, 100);
+    }
+  };
 
   // Mock tonality analysis feature
   const handleTonalityCheck = () => {
@@ -217,33 +269,15 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
     if (isCasual) {
       setShowTonalityModal(true);
     } else {
-      // If tonality is fine, proceed with normal sending (commented out for now)
-      // handleSendMessage();
-      alert('Message would be sent normally (feature mocked)');
-    }
-  };
-
-  const generateMockResponse = (userInput: string): string => {
-    const input = userInput.toLowerCase();
-    
-    if (input.includes('sales') || input.includes('revenue')) {
-      return "I can see your sales performance has been trending upward this quarter. Your top-performing product category is generating 23% more revenue than last month. Would you like me to identify which specific products are driving this growth?";
-    } else if (input.includes('customer') || input.includes('client')) {
-      return "Based on your recent customer interactions, I notice 3 high-value clients haven't been contacted in over 2 weeks. Customer engagement in the enterprise segment has increased by 15%. Shall I help you prioritize follow-ups?";
-    } else if (input.includes('pipeline') || input.includes('deals')) {
-      return "Your sales pipeline shows 5 deals that have been stalled for more than 10 days. The average deal cycle has increased by 18% this month. I can help you identify bottlenecks and suggest next actions for each deal.";
-    } else if (input.includes('team') || input.includes('performance')) {
-      return "Team productivity metrics show strong performance in customer response times (avg 2.3 hours). However, I've identified 3 potential workflow improvements that could save 4+ hours per week. Want to see the details?";
-    } else {
-      return "I understand you're looking for insights about your business. I can analyze your sales data, customer interactions, pipeline status, and team performance. Try asking me about sales trends, customer patterns, or deal pipeline status.";
+      // If tonality is fine, proceed with normal sending
+      handleSendMessage();
     }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      // handleSendMessage(); // COMMENTED OUT
-      handleTonalityCheck(); // NEW: Tonality analysis
+      handleSendMessage(); // UPDATED: Now calls real API
     }
   };
 
@@ -290,7 +324,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
         flexShrink: 0
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}></span>
+          <span style={{ fontSize: '18px' }}>🤖</span>
           <div>
             <h3 style={{
               margin: 0,
@@ -305,7 +339,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
               fontSize: '12px',
               color: '#6b7280'
             }}>
-              CMD + B activated
+              Context-aware AI assistant
             </p>
           </div>
         </div>
@@ -424,7 +458,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
               color: '#6b7280',
               fontSize: '12px'
             }}>
-              AI is typing...
+              Searching your email history...
             </div>
           </div>
         )}
@@ -450,7 +484,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyPress={handleKeyPress}
-            placeholder={isOrganizing ? "AI is organizing..." : "Ask about your business..."}
+            placeholder={isOrganizing ? "AI is organizing..." : "Ask about your emails, customers, patterns..."}
             disabled={isOrganizing}
             style={{
               width: '100%',
@@ -476,7 +510,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
             }}
           />
           <button
-            onClick={handleTonalityCheck} // CHANGED: Was handleSendMessage
+            onClick={handleSendMessage} // UPDATED: Now calls real API
             disabled={!inputValue.trim() || isOrganizing}
             style={{
               width: '100%',
@@ -577,7 +611,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
                 color: '#9a3412',
                 lineHeight: '1.4'
               }}>
-                This message to <strong>Danny from Pipedream</strong> appears much more casual than your previous correspondence. Consider adjusting the tone to maintain professional consistency.
+                This message appears much more casual than your previous correspondence. Consider adjusting the tone to maintain professional consistency.
               </p>
             </div>
 
@@ -604,8 +638,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
               <button
                 onClick={() => {
                   setShowTonalityModal(false);
-                  // Here you could add logic to view chat or proceed anyway
-                  alert('View chat feature would open here');
+                  handleSendMessage(); // Proceed with sending the message
                 }}
                 style={{
                   padding: '8px 16px',
@@ -618,7 +651,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
                   fontWeight: '500'
                 }}
               >
-                View Chat
+                Send Anyway
               </button>
             </div>
           </div>
