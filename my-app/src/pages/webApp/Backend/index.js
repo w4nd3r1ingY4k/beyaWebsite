@@ -6,7 +6,7 @@ import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect } from './connect.js';
-import { semanticSearch, queryWithAI, getCustomerContext } from './semantic-search.js';
+import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -1014,6 +1014,48 @@ app.get("/api/v1/customer-context/:threadId", async (req, res) => {
   }
 });
 
+// Search all emails in a specific thread
+app.get("/api/v1/thread/:threadId", async (req, res) => {
+  const { threadId } = req.params;
+  const { topK = 20 } = req.query;
+  
+  if (!threadId) {
+    return res.status(400).json({ error: "threadId is required" });
+  }
+
+  try {
+    const results = await searchByThreadId(threadId, parseInt(topK));
+    return res.status(200).json(results);
+  } catch (error) {
+    console.error("🔥 Thread search error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Thread search failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Semantic search within a specific thread
+app.post("/api/v1/thread/:threadId/search", async (req, res) => {
+  const { threadId } = req.params;
+  const { query, topK = 10 } = req.body;
+  
+  if (!threadId || !query) {
+    return res.status(400).json({ error: "threadId and query are required" });
+  }
+
+  try {
+    const results = await searchWithinThread(query, threadId, topK);
+    return res.status(200).json(results);
+  } catch (error) {
+    console.error("🔥 Thread semantic search error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Thread semantic search failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
 // Draft coaching endpoint - analyze draft messages before sending
 app.post("/api/v1/analyze-draft", async (req, res) => {
   const { 
@@ -1146,6 +1188,8 @@ const server = app.listen(PORT, () => {
   console.log("  POST /api/v1/search-context - Semantic search");
   console.log("  POST /api/v1/query-with-ai - AI-powered context queries");
   console.log("  GET /api/v1/customer-context/:threadId - Customer 360 view");
+  console.log("  GET /api/v1/thread/:threadId - Get all emails in thread");
+  console.log("  POST /api/v1/thread/:threadId/search - Semantic search within thread");
   console.log("  POST /api/v1/analyze-draft - Draft message coaching");
   console.log("  POST /api/v1/suggest-reply - AI reply suggestions");
   console.log("=".repeat(60) + "\n");

@@ -74,6 +74,14 @@ exports.handler = async (event) => {
         comprehendSentiment,
       } = enhancedEvent;
 
+      // Log threadId extraction for debugging
+      console.log(`Processing event ${eventId || rootId}:`, {
+        threadId: threadId,
+        eventType: eventType,
+        hasThreadId: !!threadId,
+        detailKeys: Object.keys(enhancedEvent.detail || {}),
+      });
+
       const baseText = `${nld}\n\n${bodyText}`.trim();
       if (!baseText) {
         console.warn("No text to embed, skipping", { rootId });
@@ -96,7 +104,7 @@ exports.handler = async (event) => {
         id: `${eventId || rootId}-${idx}`,
         values: embRes.data[0].embedding,
         metadata: {
-          threadId,
+          threadId: threadId || enhancedEvent.detail?.data?.threadId || enhancedEvent.threadId || '',
           eventId: eventId || rootId,
           eventType,
           timestamp,

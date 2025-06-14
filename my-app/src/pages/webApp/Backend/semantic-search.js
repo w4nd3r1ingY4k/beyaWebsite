@@ -169,14 +169,14 @@ async function shouldUseEmailContext(userQuery) {
     
     const prompt = `Analyze this user query and determine if it would benefit from searching email/business context.
 
-User Query: "${userQuery}"
+    User Query: "${userQuery}"
 
-Consider:
-- Is this asking about business information, emails, customers, or work-related topics?
-- Would searching email history help answer this question?
-- Or is this just casual conversation that doesn't need business context?
+    Consider:
+    - Is this asking about business information, emails, customers, or work-related topics?
+    - Would searching email history help answer this question?
+    - Or is this just casual conversation that doesn't need business context?
 
-Respond with only "YES" if it needs email context, or "NO" if it's casual/doesn't need business data.`;
+    Respond with only "YES" if it needs email context, or "NO" if it's casual/doesn't need business data.`;
 
     const response = await openaiClient.chat.completions.create({
       model: 'gpt-3.5-turbo',
@@ -294,16 +294,27 @@ export async function generateContextualResponse(userQuery, searchResults, respo
           .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
           .join('\n');
         
-        let systemPrompt = `You are B, a direct and efficient business assistant. Be concise and accurate. Only reference information that was actually mentioned in the conversation. Don't make up details or assume information that wasn't provided.`;
+        let systemPrompt = `You are B, an expert business analyst assistant. Your primary job is to analyze a list of recent events and synthesize a concise, actionable summary for the user. Do not just list the events.
+
+Your analysis process is as follows:
+1.  **Review the timeline:** Look at the timestamps of all provided context events.
+2.  **Identify the User's last action:** Find the most recent event where the user acted (e.g., eventType: 'email.sent').
+3.  **Search for a reaction:** Look for any subsequent events from other parties (e.g., eventType: 'email.received', eventType: 'payment.received').
+4.  **Form a conclusion:**
+    - If you find a reaction, summarize it (e.g., "They replied on...")
+    - If you find NO reaction after the user's last action, explicitly state that there has been no response. This is a critical insight.
+5.  **Suggest a next step:** Based on your conclusion, suggest a logical next step. Since you don't have access to an org chart, suggest actions the user can take themselves, like "sending a follow-up" or "marking it for review." Frame it as a question.
+
+CRITICAL: The user is busy. Give them the bottom line first. Be direct and proactive.`;
         
         let userPrompt = `RECENT CONVERSATION:
-${conversationContext}
+          ${conversationContext}
 
-CURRENT USER QUERY: ${userQuery}
+          CURRENT USER QUERY: ${userQuery}
 
-Based on what was actually discussed above, provide a direct response. Only reference information that was explicitly mentioned.
+          Based on what was actually discussed above, provide a direct response. Only reference information that was explicitly mentioned.
 
-RESPONSE:`;
+          RESPONSE:`;
         
         console.log(`🤖 Generating conversation-aware response for: ${userQuery}`);
         const completion = await openaiClient.chat.completions.create({
@@ -609,5 +620,139 @@ export async function getCustomerContext(threadId, userId = null) {
   } catch (error) {
     console.error('❌ Customer context retrieval failed:', error);
     throw error;
+  }
+}
+
+/**
+ * Search for all emails in a specific thread
+ * @param {string} threadId - The thread ID to search for
+ * @param {number} topK - Maximum number of results to return
+ * @returns {Object} - Search results for the thread
+ */
+export async function searchByThreadId(threadId, topK = 20) {
+  try {
+    initializeClients();
+    
+    console.log(`🧵 Searching for all emails in thread: ${threadId}`);
+    
+    // Use a dummy vector for metadata-only search
+    const dummyVector = new Array(1536).fill(0);
+    
+    const searchRequest = {
+      vector: dummyVector,
+      topK,
+      includeMetadata: true,
+      includeValues: false,
+      filter: {
+        threadId: threadId
+      }
+    };
+    
+    const searchResults = await pineconeIndex.query(searchRequest);
+    
+    // Format results
+    const formattedResults = searchResults.matches.map(match => ({
+      id: match.id,
+      score: match.score,
+      threadId: match.metadata.threadId,
+      eventId: match.metadata.eventId,
+      eventType: match.metadata.eventType,
+      timestamp: match.metadata.timestamp,
+      sentiment: match.metadata.sentiment,
+      sentimentConfidence: match.metadata.sentimentConfidence,
+      chunkIndex: match.metadata.chunkIndex,
+      chunkCount: match.metadata.chunkCount,
+      content: match.metadata.content || match.metadata.chunkableContent || match.metadata.naturalLanguageDescription,
+      originalText: match.metadata.originalText || match.metadata.bodyText,
+      subject: match.metadata.subject,
+      messageId: match.metadata.messageId,
+      emailDirection: match.metadata.emailDirection,
+      emailParticipant: match.metadata.emailParticipant,
+    }));
+    
+    // Sort by timestamp (newest first)
+    formattedResults.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    console.log(`📧 Found ${formattedResults.length} emails in thread ${threadId}`);
+    
+    return {
+      threadId,
+      results: formattedResults,
+      totalResults: searchResults.matches.length,
+      filters: { threadId }
+    };
+    
+  } catch (error) {
+    console.error('❌ Thread search failed:', error);
+    throw new Error(`Thread search failed: ${error.message}`);
+  }
+}
+
+/**
+ * Search within a specific thread with semantic query
+ * @param {string} query - The search query
+ * @param {string} threadId - The thread ID to search within
+ * @param {number} topK - Maximum number of results to return
+ * @returns {Object} - Semantic search results within the thread
+ */
+export async function searchWithinThread(query, threadId, topK = 10) {
+  try {
+    initializeClients();
+    
+    console.log(`🔍 Semantic search within thread ${threadId}: "${query}"`);
+    
+    // Convert query to embedding
+    const embeddingResponse = await openaiClient.embeddings.create({
+      model: 'text-embedding-3-small',
+      input: query,
+    });
+    
+    const queryEmbedding = embeddingResponse.data[0].embedding;
+    
+    const searchRequest = {
+      vector: queryEmbedding,
+      topK,
+      includeMetadata: true,
+      includeValues: false,
+      filter: {
+        threadId: threadId
+      }
+    };
+    
+    const searchResults = await pineconeIndex.query(searchRequest);
+    
+    // Format results
+    const formattedResults = searchResults.matches.map(match => ({
+      id: match.id,
+      score: match.score,
+      threadId: match.metadata.threadId,
+      eventId: match.metadata.eventId,
+      eventType: match.metadata.eventType,
+      timestamp: match.metadata.timestamp,
+      sentiment: match.metadata.sentiment,
+      sentimentConfidence: match.metadata.sentimentConfidence,
+      chunkIndex: match.metadata.chunkIndex,
+      chunkCount: match.metadata.chunkCount,
+      content: match.metadata.content || match.metadata.chunkableContent || match.metadata.naturalLanguageDescription,
+      originalText: match.metadata.originalText || match.metadata.bodyText,
+      subject: match.metadata.subject,
+      messageId: match.metadata.messageId,
+      emailDirection: match.metadata.emailDirection,
+      emailParticipant: match.metadata.emailParticipant,
+    }));
+    
+    console.log(`🎯 Found ${formattedResults.length} relevant results in thread`);
+    
+    return {
+      query,
+      threadId,
+      results: formattedResults,
+      totalResults: searchResults.matches.length,
+      filters: { threadId }
+    };
+    
+  } catch (error) {
+    console.error('❌ Thread semantic search failed:', error);
+    throw new Error(`Thread semantic search failed: ${error.message}`);
   }
 } 

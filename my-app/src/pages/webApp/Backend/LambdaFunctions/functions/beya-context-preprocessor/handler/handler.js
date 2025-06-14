@@ -73,6 +73,9 @@ async function enhanceEventWithNL(rawEvent) {
     // Extract text content for sentiment analysis
     const textContent = extractTextContent(rawEvent);
     
+    // Extract threadId from various possible locations in the event
+    const threadId = extractThreadId(rawEvent);
+    
     // Run both analyses in parallel for efficiency
     const [naturalLanguageDescription, comprehendSentiment] = await Promise.all([
         generateNaturalLanguageDescription(rawEvent),
@@ -84,8 +87,19 @@ async function enhanceEventWithNL(rawEvent) {
         processedAt: new Date().toISOString(),
         naturalLanguageDescription: naturalLanguageDescription,
         comprehendSentiment: comprehendSentiment,
-        chunkableContent: naturalLanguageDescription // Use the AI-generated description as chunkable content
+        chunkableContent: naturalLanguageDescription, // Use the AI-generated description as chunkable content
+        // Ensure threadId is included in the enhanced event
+        detail: {
+            ...rawEvent.detail,
+            threadId: threadId
+        }
     };
+
+    console.log('📧 ThreadId extraction:', {
+        extractedThreadId: threadId,
+        hasThreadId: !!threadId,
+        eventId: rawEvent.detail?.eventId || rawEvent.id
+    });
 
     return enhancedEvent;
 }
@@ -190,6 +204,33 @@ async function sendToChunkerQueue(enhancedEvent) {
         console.error('Error sending to chunker queue:', error);
         throw error;
     }
+}
+
+/**
+ * Extract threadId from various possible locations in the event
+ */
+function extractThreadId(rawEvent) {
+    // Try multiple possible locations for threadId
+    const threadId = 
+        rawEvent.detail?.threadId ||           // Direct in detail
+        rawEvent.detail?.data?.threadId ||     // In data section
+        rawEvent.threadId ||                   // Direct in root
+        rawEvent.detail?.data?.messageId ||    // Use messageId as threadId fallback
+        rawEvent.detail?.data?.conversationId || // Alternative field name
+        rawEvent.detail?.data?.thread ||       // Alternative field name
+        null;
+    
+    console.log('🔍 ThreadId search in event:', {
+        'detail.threadId': rawEvent.detail?.threadId,
+        'detail.data.threadId': rawEvent.detail?.data?.threadId,
+        'root.threadId': rawEvent.threadId,
+        'detail.data.messageId': rawEvent.detail?.data?.messageId,
+        'detail.data.conversationId': rawEvent.detail?.data?.conversationId,
+        'detail.data.thread': rawEvent.detail?.data?.thread,
+        'finalThreadId': threadId
+    });
+    
+    return threadId;
 }
 
 /**
