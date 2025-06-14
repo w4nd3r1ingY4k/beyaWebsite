@@ -7,6 +7,7 @@ import {
   ScanCommand
 } from "@aws-sdk/lib-dynamodb";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { simpleParser } from "mailparser";
 import { v4 as uuidv4 } from "uuid";
 
@@ -16,6 +17,7 @@ const FLOWS_TABLE = process.env.FLOWS_TABLE;
 const USERS_TABLE = process.env.USERS_TABLE;
 const BUCKET      = process.env.S3_BUCKET;
 const PREFIX      = process.env.S3_KEY_PREFIX || "";
+const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME || 'beya-platform-bus';
 
 if (!REGION || !MSG_TABLE || !FLOWS_TABLE || !USERS_TABLE || !BUCKET) {
   throw new Error("Missing required env vars");
@@ -24,6 +26,7 @@ if (!REGION || !MSG_TABLE || !FLOWS_TABLE || !USERS_TABLE || !BUCKET) {
 const ddbClient = new DynamoDBClient({ region: REGION });
 const docClient = DynamoDBDocumentClient.from(ddbClient);
 const s3Client  = new S3Client({ region: REGION });
+const eventBridgeClient = new EventBridgeClient({ region: REGION });
 
 const CORS = {
   "Access-Control-Allow-Origin":  "*",
@@ -153,6 +156,42 @@ export async function handler(event) {
       return { statusCode: 500 };
     }
 
+    // 1e) Build rawEvent envelope for context engine
+    const rawEvent = {
+      eventId: uuidv4(),
+      timestamp: new Date(ts).toISOString(),
+      source: "inbox-service",
+      userId: ownerUserId,
+      eventType: "email.received",
+      data: {
+        messageId: headers['Message-ID'] || id,
+        threadId: fromAddress,
+        subject: subject,
+        bodyText: textBody,
+        bodyHtml: parsed.html || "",
+        from: fromAddress,
+        to: toAddress,
+        headers: headers
+      }
+    };
+
+    // 1f) Emit rawEvent to EventBridge
+    try {
+      await eventBridgeClient.send(new PutEventsCommand({
+        Entries: [{
+          EventBusName: EVENT_BUS_NAME,
+          Source: rawEvent.source,
+          DetailType: rawEvent.eventType,
+          Time: new Date(rawEvent.timestamp),
+          Detail: JSON.stringify(rawEvent)
+        }]
+      }));
+      console.log('✅ RawEvent emitted to EventBridge:', rawEvent.eventId);
+    } catch (eventErr) {
+      console.error('❌ Failed to emit rawEvent:', eventErr);
+      // Don't fail the entire request if event emission fails
+    }
+
     return { statusCode: 200 };
   }
 
@@ -175,7 +214,7 @@ export async function handler(event) {
       return { statusCode: 400, headers: CORS, body: "Missing from/text" };
     }
 
-    // find owner by destination in body (you’ll need to pass it in client-side)
+    // find owner by destination in body (you'll need to pass it in client-side)
     const toAddress = body.to;  
     if (!toAddress) {
       return { statusCode: 400, headers: CORS, body: "Missing to" };
@@ -244,6 +283,42 @@ export async function handler(event) {
     } catch (err) {
       console.error("Dynamo error", err);
       return { statusCode: 500, headers: CORS, body: "Server error" };
+    }
+
+    // Build rawEvent envelope for context engine (HTTP POST path)
+    const rawEventLegacy = {
+      eventId: uuidv4(),
+      timestamp: new Date(ts).toISOString(),
+      source: "inbox-service",
+      userId: ownerUserId,
+      eventType: "email.received",
+      data: {
+        messageId: legacyHeaders['Message-ID'] || id,
+        threadId: from,
+        subject: subject,
+        bodyText: text,
+        bodyHtml: body.html || "",
+        from: from,
+        to: toAddress,
+        headers: legacyHeaders
+      }
+    };
+
+    // Emit rawEvent to EventBridge (HTTP POST path)
+    try {
+      await eventBridgeClient.send(new PutEventsCommand({
+        Entries: [{
+          EventBusName: EVENT_BUS_NAME,
+          Source: rawEventLegacy.source,
+          DetailType: rawEventLegacy.eventType,
+          Time: new Date(rawEventLegacy.timestamp),
+          Detail: JSON.stringify(rawEventLegacy)
+        }]
+      }));
+      console.log('✅ RawEvent emitted to EventBridge (legacy):', rawEventLegacy.eventId);
+    } catch (eventErr) {
+      console.error('❌ Failed to emit rawEvent (legacy):', eventErr);
+      // Don't fail the entire request if event emission fails
     }
 
     return { statusCode: 200, headers: CORS, body: "" };
