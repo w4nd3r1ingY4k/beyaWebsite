@@ -6,6 +6,8 @@ import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect } from './Connect/connect.js';
+import { handleGmailConnect } from './Connect/gmail-connect.js';
+import { handleWhatsAppConnect } from './Connect/whatsapp-connect.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -836,6 +838,16 @@ app.post("/klaviyo/connect", async (req, res) => {
 
 app.post("/square/connect", async (req, res) => {
   await handleKlaviyoConnect(req, res);
+});
+
+// Gmail Connect endpoint
+app.post("/gmail/connect", async (req, res) => {
+  await handleGmailConnect(req, res);
+});
+
+// WhatsApp Connect endpoint
+app.post("/whatsapp/connect", async (req, res) => {
+  await handleWhatsAppConnect(req, res);
 });
 
 // Health check endpoint

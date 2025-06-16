@@ -7,7 +7,8 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   UpdateCommand,
-  QueryCommand
+  QueryCommand,
+  GetCommand
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -136,143 +137,233 @@ export async function handler(event) {
     };
   }
 
-  // 3c) Extract path‐parameter and JSON payload
-  const channel = event.pathParameters?.channel; // "whatsapp" or "email"
-  let payload;
+  // Parse request body
+  let body;
   try {
-    payload = JSON.parse(event.body || '{}');
+    body = JSON.parse(event.body || '{}');
   } catch {
     return {
       statusCode: 400,
-      headers:    CORS,
-      body:       'Invalid JSON'
+      headers: CORS,
+      body: JSON.stringify({ error: 'Invalid JSON' })
     };
   }
 
-  // pull out the usual fields + optional originalMessageId
+  // Extract required parameters
   const {
-    to,
-    subject,
-    text,
-    html,
-    userId,
-    originalMessageId
-  } = payload;
+    to,           // recipient's email or phone number
+    text,         // message text
+    subject,      // email subject (optional for email)
+    html,         // HTML version (optional for email)
+    userId,       // ID of the user sending the message
+    channel,      // 'email' or 'whatsapp'
+    originalMessageId // optional, for replies
+  } = body;
 
-  // 3d) Validate required fields
-  if (!channel || !to || !text || !userId) {
+  // Validate required parameters
+  if (!to || !text || !userId || !channel) {
     return {
       statusCode: 400,
-      headers:    CORS,
-      body:       JSON.stringify({
-        error: 'Missing required fields: channel, to, text or userId'
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'Missing required parameters',
+        required: ['to', 'text', 'userId', 'channel'],
+        received: { to, text, userId, channel }
+      })
+    };
+  }
+
+  // Validate channel
+  if (!['email', 'whatsapp'].includes(channel)) {
+    return {
+      statusCode: 400,
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'Invalid channel',
+        message: 'Channel must be either "email" or "whatsapp"'
+      })
+    };
+  }
+
+  // For email, validate additional parameters
+  if (channel === 'email' && !subject) {
+    return {
+      statusCode: 400,
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'Missing required parameter for email',
+        message: 'Subject is required for email messages'
+      })
+    };
+  }
+
+  // Get user's connected accounts from database
+  let userData;
+  try {
+    const result = await docClient.send(new GetCommand({
+      TableName: process.env.USERS_TABLE,
+      Key: { userId }
+    }));
+    userData = result.Item;
+  } catch (err) {
+    console.error('Failed to fetch user data:', err);
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'Failed to fetch user data',
+        message: 'Internal server error'
+      })
+    };
+  }
+
+  if (!userData) {
+    return {
+      statusCode: 404,
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'User not found',
+        message: `No user found with ID: ${userId}`
+      })
+    };
+  }
+
+  // Verify user has the required integration for the channel
+  const connectedAccounts = userData.connectedAccounts || {};
+  if (channel === 'email' && !connectedAccounts.email) {
+    return {
+      statusCode: 403,
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'Email not connected',
+        message: 'User has not connected their email account'
+      })
+    };
+  }
+  if (channel === 'whatsapp' && !connectedAccounts.whatsappBusiness) {
+    return {
+      statusCode: 403,
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'WhatsApp not connected',
+        message: 'User has not connected their WhatsApp Business account'
       })
     };
   }
 
   try {
     let resp;
-
     let replyId = originalMessageId || null;
-    console.log("Fetched replyId:", replyId)
+
     if (channel === "whatsapp") {
-      // ─── WhatsApp send ─────────────────────────────────────────────────
-      resp = await sendWhatsApp(to, text);
-
+      // Send WhatsApp message using user's connected account
+      resp = await sendWhatsApp(
+        to,
+        text,
+        connectedAccounts.whatsappBusiness
+      );
     } else if (channel === "email") {
-      // ─── Email branch: decide between fresh send vs. reply ─────────────
-
-      // ➋ If no originalMessageId passed, try to find the best message to reply to
+      // Get reply ID if needed
       if (!replyId) {
-        // First try the most recent incoming message for better threading
         replyId = await getLastIncomingMessageId(to);
-        
-        // If no recent message, try the first incoming message
         if (!replyId) {
           replyId = await getFirstIncomingMessageId(to);
         }
       }
 
-      console.log('📧 Email send decision:', {
-        to,
-        hasReplyId: !!replyId,
-        replyId: replyId,
-        isReply: !!replyId
-      });
-
-      // ➌ If we have replyId, use replyEmail; otherwise, sendEmail
+      // Send email using user's connected account
       if (replyId) {
-        resp = await replyEmail(to, subject, text, html, replyId);
+        resp = await replyEmail(
+          to,
+          subject,
+          text,
+          html,
+          replyId,
+          connectedAccounts.email
+        );
       } else {
-        resp = await sendEmail(to, subject, text, html);
+        resp = await sendEmail(
+          to,
+          subject,
+          text,
+          html,
+          connectedAccounts.email
+        );
       }
-
-    } else {
-      return {
-        statusCode: 400,
-        headers:    CORS,
-        body:       JSON.stringify({ error: `Unknown channel: ${channel}` })
-      };
     }
 
-    // ─── 5) Persist outgoing message in Messages table ───────────────────────
+    // Persist outgoing message
     const timestamp = Date.now();
     const messageId = uuidv4();
     const messageItem = {
-      ThreadId:   to,
-      Timestamp:  timestamp,
-      MessageId:  messageId,
-      Channel:    channel,
-      Direction:  'outgoing',
-      Body:       text,
-      Result:     {}
+      ThreadId: to,
+      Timestamp: timestamp,
+      MessageId: messageId,
+      Channel: channel,
+      Direction: 'outgoing',
+      Body: text,
+      Result: resp,
+      UserId: userId,  // Add userId to track who sent the message
+      From: channel === 'email' ? connectedAccounts.email : connectedAccounts.whatsappBusiness
     };
 
-    if (channel === "whatsapp") {
-      messageItem.Result = { MessageId: resp.MessageId || resp.messageId };
-    } else {
-      messageItem.Result = { MessageId: resp?.MessageId || resp };
+    // Add email-specific fields
+    if (channel === 'email') {
+      messageItem.Subject = subject;
+      if (html) messageItem.Html = html;
       if (replyId) {
-        messageItem.InReplyTo = replyId;
+        messageItem.ReplyTo = replyId;
+        messageItem.Headers = {
+          'In-Reply-To': replyId,
+          'References': replyId
+        };
       }
     }
 
     await docClient.send(new PutCommand({
       TableName: MSG_TABLE,
-      Item:      messageItem
+      Item: messageItem
     }));
 
-    // ─── 6) Update per-user Flow in Flows table ───────────────────────────────
+    // Update flow
     await docClient.send(new UpdateCommand({
       TableName: FLOWS_TABLE,
       Key: {
         contactId: userId,
-        flowId:    to
+        flowId: to
       },
-      UpdateExpression: [
-        "SET createdAt     = if_not_exists(createdAt, :ts)",
-        "   , lastMessageAt = :ts",
-        "ADD messageCount  :inc"
-      ].join(' '),
+      UpdateExpression: `
+        SET createdAt = if_not_exists(createdAt, :ts),
+            lastMessageAt = :ts,
+            tags = if_not_exists(tags, :tags)
+        ADD messageCount :inc
+      `,
       ExpressionAttributeValues: {
-        ":ts":  timestamp,
-        ":inc": 1
+        ':ts': timestamp,
+        ':inc': 1,
+        ':tags': ['all']
       }
     }));
 
-    // ─── 7) Return success + provider’s messageId ──────────────────────────
     return {
       statusCode: 200,
-      headers:    CORS,
-      body:       JSON.stringify(messageItem.Result)
+      headers: CORS,
+      body: JSON.stringify({
+        success: true,
+        messageId: resp.MessageId || messageId,
+        timestamp
+      })
     };
 
-  } catch (err) {
-    console.error('❌ sendHandler error:', err);
+  } catch (error) {
+    console.error('Failed to send message:', error);
     return {
       statusCode: 500,
-      headers:    CORS,
-      body:       JSON.stringify({ error: err.message })
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'Failed to send message',
+        message: error.message
+      })
     };
   }
 }
