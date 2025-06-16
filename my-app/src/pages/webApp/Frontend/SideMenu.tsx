@@ -5,6 +5,7 @@ import { ReactComponent as DataIcon } from './Assets/Icons/DataIcon.svg';
 import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.svg';
 import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from './Assets/Icons/CommerceIcon.svg';
+import { ReactComponent as SettingsIcon } from './Assets/Icons/SettingsIcon.svg';
 
 interface IconItem {
   id: string;
@@ -402,6 +403,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
           alignItems: 'center',
           justifyContent: 'center',
         }}>
+          <SettingsIcon style={{ width: ICON_SIZE * 0.4, height: ICON_SIZE * 0.4, color: activeIcon === 'settings' ? '#DE1785' : '#8C8C8C', transition: 'color 0.3s' }} />
         </div>
         <span style={{
           marginTop: 8,

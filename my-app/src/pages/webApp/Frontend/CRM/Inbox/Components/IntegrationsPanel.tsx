@@ -51,35 +51,113 @@ const IntegrationsPanel: React.FC = () => {
     try {
       const userId = getCurrentUserId();
       let result;
-      if (integrationId === 'shopify') {
+
+      if (integrationId === 'gmail') {
+        // Step 1: Get OAuth URL
+        result = await safeFetch('http://localhost:2074/gmail/connect', { 
+          userId, 
+          action: 'create_token' 
+        });
+
+        // Step 2: Open OAuth window
+        const authWindow = window.open(
+          result.authUrl,
+          'Gmail Authorization',
+          'width=600,height=600'
+        );
+
+        // Step 3: Poll for completion
+        const checkConnection = async () => {
+          try {
+            const status = await safeFetch('http://localhost:2074/gmail/connect', {
+              userId,
+              action: 'get_accounts'
+            });
+            
+            if (status.accounts && status.accounts.length > 0) {
+              updateIntegration('gmail', true, 'just now');
+              if (authWindow) authWindow.close();
+              return;
+            }
+            
+            // Keep checking every 2 seconds
+            setTimeout(checkConnection, 2000);
+          } catch (error) {
+            console.error('Error checking Gmail connection:', error);
+            if (authWindow) authWindow.close();
+          }
+        };
+
+        checkConnection();
+      }
+      else if (integrationId === 'whatsapp') {
+        // Step 1: Prompt for phone number
+        const phoneNumber = prompt(
+          'Please enter your WhatsApp phone number (with country code):\n' +
+          'Example: +1234567890'
+        );
+
+        if (!phoneNumber) return;
+
+        // Step 2: Request verification code
+        result = await safeFetch('http://localhost:2074/whatsapp/connect', {
+          userId,
+          action: 'create_token',
+          phoneNumber
+        });
+
+        // Step 3: Prompt for verification code
+        const verificationCode = prompt(
+          `Please enter the verification code sent to ${result.phoneNumber}:\n` +
+          `(For demo: ${result.verificationCode})`
+        );
+
+        if (!verificationCode) return;
+
+        // Step 4: Verify code
+        const verifyResult = await safeFetch('http://localhost:2074/whatsapp/connect', {
+          userId,
+          action: 'verify_code',
+          code: verificationCode
+        });
+
+        if (verifyResult.success) {
+          updateIntegration('whatsapp', true, 'just now');
+        }
+      }
+      else if (integrationId === 'shopify') {
         result = await safeFetch('http://localhost:2074/shopify/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'shopify', token: result.token,
           onSuccess: () => updateIntegration('shopify', true, 'just now'),
           onError: err => alert('Shopify connect error: ' + err.message),
         });
-      } else if (integrationId === 'business-central') {
+      }
+      else if (integrationId === 'business-central') {
         result = await safeFetch('http://localhost:2074/business-central/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'dynamics_365_business_central_api', token: result.token,
           onSuccess: () => updateIntegration('business-central', true, 'just now'),
           onError: err => alert('Business Central connect error: ' + err.message),
         });
-      } else if (integrationId === 'klaviyo') {
+      }
+      else if (integrationId === 'klaviyo') {
         result = await safeFetch('http://localhost:2074/klaviyo/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'klaviyo', token: result.token,
           onSuccess: () => updateIntegration('klaviyo', true, 'just now'),
           onError: err => alert('Klaviyo connect error: ' + err.message),
         });
-      } else if (integrationId === 'square') {
+      }
+      else if (integrationId === 'square') {
         result = await safeFetch('http://localhost:2074/square/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'square', token: result.token,
           onSuccess: () => updateIntegration('square', true, 'just now'),
           onError: err => alert('Square connect error: ' + err.message),
         });
-      }else {
+      }
+      else {
         console.log('Integration handler not implemented');
       }
     } catch (error: any) {
