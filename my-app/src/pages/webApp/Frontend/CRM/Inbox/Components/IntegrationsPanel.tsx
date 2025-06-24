@@ -10,7 +10,11 @@ interface Integration {
   lastSync?: string;
 }
 
-const IntegrationsPanel: React.FC = () => {
+interface IntegrationsPanelProps {
+  width?: number;
+}
+
+const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) => {
   const [integrations, setIntegrations] = useState<Integration[]>([
     { id: 'shopify',           name: 'Shopify',            icon: '🛍️', description: 'E-commerce platform',           connected: false },
     { id: 'business-central',  name: 'Business Central BI', icon: '📊', description: 'Microsoft business intelligence', connected: false },
@@ -99,7 +103,7 @@ const IntegrationsPanel: React.FC = () => {
   const connectedCount = integrations.filter(i => i.connected).length;
 
   return (
-    <div style={{ width: 280, display: 'flex', flexDirection: 'column', background: '#FFFBFA', borderLeft: '1px solid #e5e7eb' }}>
+    <div style={{ width, display: 'flex', flexDirection: 'column', background: '#FFFBFA', borderLeft: '1px solid #e5e7eb' }}>
       {/* Header */}
       <div style={{ padding: 16, borderBottom: '1px solid #f0f0f0', background: '#FBF7F7' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>

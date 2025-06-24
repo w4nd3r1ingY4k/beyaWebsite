@@ -1,0 +1,25 @@
+{
+  "files": {
+    "main.css": "/static/css/main.fbf11248.css",
+    "main.js": "/static/js/main.119eda0c.js",
+    "static/media/desktop.png": "/static/media/desktop.4a049f8c41b0fab11233.png",
+    "static/media/mobile.png": "/static/media/mobile.9fb21b5a760d3ca45196.png",
+    "static/media/DataIcon.svg": "/static/media/DataIcon.5cfb31f708bd4cec5c9c1c447bae8fec.svg",
+    "static/media/LogisticsIcon.svg": "/static/media/LogisticsIcon.f08240ad6f40835d5372a90a69631f80.svg",
+    "static/media/slick.svg": "/static/media/slick.2630a3e3eab21c607e21.svg",
+    "static/media/slick.eot": "/static/media/slick.a4e97f5a2a64f0ab1323.eot",
+    "static/media/HomeIcon.svg": "/static/media/HomeIcon.abe33cc8e5089fc1eaebcbd82912c740.svg",
+    "static/media/slick.ttf": "/static/media/slick.c94f7671dcc99dce43e2.ttf",
+    "static/media/MarketingIcon.svg": "/static/media/MarketingIcon.422d95c5ea3fb7008ca93b86711e5e1e.svg",
+    "static/media/CRMIcon.svg": "/static/media/CRMIcon.be9b2c934d278969b7062f6b044d5633.svg",
+    "static/media/slick.woff": "/static/media/slick.295183786cd8a1389865.woff",
+    "static/media/CommerceIcon.svg": "/static/media/CommerceIcon.2347df5e77bc53f4e5d50968ef492d39.svg",
+    "index.html": "/index.html",
+    "main.fbf11248.css.map": "/static/css/main.fbf11248.css.map",
+    "main.119eda0c.js.map": "/static/js/main.119eda0c.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.fbf11248.css",
+    "static/js/main.119eda0c.js"
+  ]
+}

@@ -6,7 +6,7 @@
   justify-content: center; /* Centers content vertically */
   align-items: center;     /* Centers content horizontally */
   height: 100vh;           /* Full viewport height */
-  width: 100vh;
+  width: 100vw;            /* Full viewport width */
   background-color: #222;
   color: #ffffff;
 }
