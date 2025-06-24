@@ -2,12 +2,16 @@ import React from 'react';
 import './Inbox.css';
 import InboxContainer from './Components/InboxContainer';
 
-const InboxHome: React.FC = () => {
+interface InboxHomeProps {
+  onOpenAIChat?: (message?: string) => void;
+}
+
+const InboxHome: React.FC<InboxHomeProps> = ({ onOpenAIChat }) => {
   return (
     <div className="inbox-container">
       <main className="main">
         <div className="content">
-          <InboxContainer />
+          <InboxContainer onOpenAIChat={onOpenAIChat} />
         </div>
       </main>
     </div>

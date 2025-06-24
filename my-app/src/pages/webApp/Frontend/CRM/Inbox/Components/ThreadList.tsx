@@ -235,13 +235,18 @@ const ThreadList: React.FC<Props> = ({
   const formatEmailAddress = (email: string): string => {
     if (!email) return email;
     
+    // Log full email for debugging
+    if (email.length > 20) {
+      console.log('🔍 Full email being truncated:', email);
+    }
+    
     // If email is 20 characters or less, show it as-is
     if (email.length <= 20) {
       return email;
     }
     
     // If longer than 20 chars, truncate and add "..."
-    return email.substring(0, 17) + '...';
+    return email;
   };
 
   const getThreadTitle = (threadId: string): string => {

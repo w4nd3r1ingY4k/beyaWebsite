@@ -4,8 +4,6 @@ import ThreadList from './ThreadList';
 import MessageView from './MessageView';
 import ComposeModal from './ComposeModal';
 import TeamChat from './TeamChat';
-import IntegrationsPanel from './IntegrationsPanel';
-import CommandBChat from './CommandBChat';
 
 interface Message {
   MessageId?: string;
@@ -24,9 +22,11 @@ interface TeamMessage {
   type: 'internal';
 }
 
-interface Props {}
+interface Props {
+  onOpenAIChat?: (message?: string) => void;
+}
 
-const InboxContainer: React.FC<Props> = () => {
+const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   const { user } = useAuth();
   // State management
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -48,9 +48,7 @@ const InboxContainer: React.FC<Props> = () => {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [showReminderModal, setShowReminderModal] = useState(false);
   
-  // Command-B Chat state
-  const [isCommandBChatOpen, setIsCommandBChatOpen] = useState(false);
-  const [aiChatInitialMessage, setAiChatInitialMessage] = useState<string | null>(null);
+
 
   // API Base URL
   const apiBase = 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod';
@@ -65,18 +63,7 @@ const InboxContainer: React.FC<Props> = () => {
     loadInboxData();
   }, [user]);
 
-  // Command-B keyboard listener
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-        e.preventDefault();
-        setIsCommandBChatOpen(prev => !prev);
-      }
-    };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   // Load messages when thread changes
   useEffect(() => {
@@ -382,10 +369,11 @@ const InboxContainer: React.FC<Props> = () => {
     });
   };
 
-  // Handle opening AI chat with a specific message
-  const handleOpenAIChat = (message: string) => {
-    setAiChatInitialMessage(message);
-    setIsCommandBChatOpen(true);
+  // Handle opening AI chat with a specific message - delegate to global handler
+  const handleOpenAIChatLocal = (message: string) => {
+    if (onOpenAIChat) {
+      onOpenAIChat(message);
+    }
   };
 
   // Reminder modal functions
@@ -1003,22 +991,11 @@ const InboxContainer: React.FC<Props> = () => {
             categoryFilter={categoryFilter}
             onCategoryFilterChange={handleCategoryFilterChange}
             onFlowUpdate={handleFlowUpdate}
-            onOpenAIChat={handleOpenAIChat}
+            onOpenAIChat={handleOpenAIChatLocal}
           />
         </div>
 
-        {/* Right Sidebar - Conditional Rendering */}
-        {isCommandBChatOpen ? (
-          <CommandBChat 
-            onClose={() => {
-              setIsCommandBChatOpen(false);
-              setAiChatInitialMessage(null); // Clear the initial message when closing
-            }} 
-            initialMessage={aiChatInitialMessage}
-          />
-        ) : (
-          <IntegrationsPanel />
-        )}
+
       </div>
 
       {/* Compose Modal */}

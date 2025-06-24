@@ -12,9 +12,10 @@ interface Message {
 interface CommandBChatProps {
   onClose: () => void;
   initialMessage?: string | null;
+  width?: number;
 }
 
-const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) => {
+const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, width = 280 }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -303,7 +304,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
         }
       `}</style>
       <div style={{
-        width: '280px',
+        width: `${width}px`,
         height: '100%',
         background: '#FFFBFA',
         borderLeft: '1px solid #e5e7eb',
@@ -557,7 +558,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage }) 
             background: '#fff',
             borderRadius: '12px',
             padding: '24px',
-            maxWidth: '400px',
+            maxWidth: `${Math.min(400, width - 40)}px`,
             width: '90%',
             boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
             border: '1px solid #e5e7eb'
