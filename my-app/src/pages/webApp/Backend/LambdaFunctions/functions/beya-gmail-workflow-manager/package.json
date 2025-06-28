@@ -1,0 +1,26 @@
+{
+  "name": "beya-gmail-workflow-manager",
+  "version": "1.0.0",
+  "description": "Beya Gmail Workflow Manager - Automated creation and management of Pipedream workflows for Gmail receiving",
+  "main": "handlers/workflowHandler.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.682.0",
+    "@aws-sdk/lib-dynamodb": "^3.682.0",
+    "@pipedream/sdk": "^1.6.9",
+    "node-fetch": "^3.3.2",
+    "uuid": "^9.0.0"
+  },
+  "keywords": [
+    "beya",
+    "gmail",
+    "pipedream",
+    "workflow",
+    "automation"
+  ],
+  "author": "Beya Team",
+  "license": "ISC"
+} 

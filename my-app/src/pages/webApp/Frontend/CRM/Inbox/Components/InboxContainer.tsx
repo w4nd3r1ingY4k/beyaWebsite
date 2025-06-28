@@ -4,6 +4,7 @@ import ThreadList from './ThreadList';
 import MessageView from './MessageView';
 import ComposeModal from './ComposeModal';
 import TeamChat from './TeamChat';
+import LoadingScreen from '../../../components/LoadingScreen';
 
 interface Message {
   MessageId?: string;
@@ -477,6 +478,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
 
     // Set default datetime to 1 hour from now
     useEffect(() => {
+      
       const now = new Date();
       now.setHours(now.getHours() + 1);
       const isoString = now.toISOString();
@@ -691,35 +693,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
 
   if (loading) {
     return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 'calc(100vh - 65px)', // Match the header space adjustment
-        background: '#f9fafb'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '32px',
-            height: '32px',
-            border: '3px solid #e5e7eb',
-            borderTop: '3px solid #de1785',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <div style={{ color: '#6b7280' }}>Loading inbox...</div>
-        </div>
-        
-        <style>
-          {`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}
-        </style>
-      </div>
+      <LoadingScreen 
+        message="Loading inbox..." 
+        submessage="Fetching your latest conversations and messages"
+      />
     );
   }
 

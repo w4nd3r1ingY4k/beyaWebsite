@@ -17,6 +17,7 @@ import { useAuth } from '../../AuthContext';
 import HomeDashboard from './Home/home';
 import IntegrationsPanel from './CRM/Inbox/Components/IntegrationsPanel';
 import CommandBChat from './CRM/Inbox/Components/CommandBChat';
+import LoadingScreen from './components/LoadingScreen';
 
 const ICON_SIZE = 60;
 const GAP = 24;
@@ -47,7 +48,7 @@ const Homes: React.FC = () => {
   const [rightSidebarWidth, setRightSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
   
-  const navigate = useNavigate();
+const navigate = useNavigate();
   // 1) Redirect to /login if auth is done but no user
   useEffect(() => {
     if (!authLoading && !user) {
@@ -121,7 +122,7 @@ const Homes: React.FC = () => {
 
   // 2) Show loading spinner until auth resolves
   if (authLoading) {
-    return <div style={{ padding: PADDING, textAlign: 'center' }}>Loading…</div>;
+    return <LoadingScreen message="Authenticating..." submessage="Verifying your credentials and setting up your workspace" />;
   }
 
   // 3) Now user is guaranteed to exist
@@ -201,8 +202,8 @@ const Homes: React.FC = () => {
       <div style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
         {/* Page Content */}
         <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
-          {/* <AIChatCircle /> */}
-          {renderContent()}
+        {/* <AIChatCircle /> */}
+        {renderContent()}
         </div>
 
         {/* Resize Handle */}

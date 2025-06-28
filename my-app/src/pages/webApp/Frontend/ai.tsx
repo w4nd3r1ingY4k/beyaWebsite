@@ -362,6 +362,11 @@ const AIChatCircle: React.FC = () => {
                 onKeyPress={handleKeyPress}
                 placeholder="Type your message..."
                 style={inputStyle}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                data-form-type="other"
               />
               <button
                 onClick={handleSendMessage}

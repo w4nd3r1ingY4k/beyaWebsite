@@ -3,6 +3,7 @@ import { ShopifyConnectService } from './shopify-connect.js';
 import { BusinessCentralConnectService } from './business-central-connect.js';
 import { KlaviyoConnectService } from './klaviyo-connect.js';
 import { SquareConnectService } from './square-connect.js';
+import { GmailConnectService } from './gmail-connect.js';
 
 // Load environment variables
 dotenv.config({ path: "./.env" });
@@ -157,5 +158,44 @@ export async function handleSquareConnect(req, res) {
     return res
       .status(500)
       .json({ error: 'Internal server error', message: error.message });
+  }
+}
+
+// === Gmail handler ===
+export async function handleGmailConnect(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { userId, action } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+
+  try {
+    if (!process.env.PIPEDREAM_CLIENT_ID || !process.env.PIPEDREAM_CLIENT_SECRET || !process.env.PIPEDREAM_PROJECT_ID) {
+      return res.status(500).json({ 
+        error: 'Server configuration error',
+        message: 'Pipedream credentials not configured. Please set PIPEDREAM_CLIENT_ID, PIPEDREAM_CLIENT_SECRET, and PIPEDREAM_PROJECT_ID environment variables.'
+      });
+    }
+
+    const gmailService = new GmailConnectService();
+
+    if (action === 'create_token') {
+      const result = await gmailService.getConnectUrl(userId);
+      return res.status(200).json(result);
+    } else if (action === 'get_accounts') {
+      const isConnected = await gmailService.isConnected(userId);
+      const accounts = isConnected
+        ? await gmailService.getAccountInfo(userId)
+        : [];
+      return res.status(200).json({ success: true, accounts });
+    } else {
+      return res.status(400).json({ error: 'Invalid action. Use "create_token" or "get_accounts"' });
+    }
+  } catch (error) {
+    console.error('Gmail Connect API error:', error);
+    return res.status(500).json({ error: 'Internal server error', message: error.message });
   }
 }
