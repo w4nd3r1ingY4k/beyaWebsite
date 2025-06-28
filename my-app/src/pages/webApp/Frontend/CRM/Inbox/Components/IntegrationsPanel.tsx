@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { createFrontendClient } from "@pipedream/sdk/browser";
+import { useAuth } from '../../../../../AuthContext';
 
 interface Integration {
   id: string;
@@ -15,10 +16,11 @@ interface IntegrationsPanelProps {
 }
 
 const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) => {
+  const { user } = useAuth();
   const [integrations, setIntegrations] = useState<Integration[]>([
     { id: 'shopify',           name: 'Shopify',            icon: '🛍️', description: 'E-commerce platform',           connected: false },
     { id: 'business-central',  name: 'Business Central BI', icon: '📊', description: 'Microsoft business intelligence', connected: false },
-    { id: 'gmail',             name: 'Gmail',              icon: '📧', description: 'Email integration',            connected: true,  lastSync: '2 minutes ago' },
+    { id: 'gmail',             name: 'Gmail',              icon: '📧', description: 'Email integration',            connected: false },
     { id: 'whatsapp',          name: 'WhatsApp Business',  icon: '📱', description: 'Messaging platform',          connected: true,  lastSync: '5 minutes ago' },
     { id: 'slack',             name: 'Slack',              icon: '💬', description: 'Team communication',          connected: false },
     { id: 'square',            name: 'Square',             icon: '💳', description: 'Payment processing and POS',   connected: false,  lastSync: '3 minutes ago' },
@@ -53,37 +55,64 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
   const handleConnect = async (integrationId: string) => {
     console.log('Connecting to:', integrationId);
     try {
-      const userId = getCurrentUserId();
+      const userId = user?.userId;
+      if (!userId) {
+        alert('Please log in to connect integrations');
+        return;
+      }
       let result;
       if (integrationId === 'shopify') {
-        result = await safeFetch('http://localhost:2074/shopify/connect', { userId, action: 'create_token' });
+        result = await safeFetch('http://3.234.215.178:2074/shopify/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'shopify', token: result.token,
           onSuccess: () => updateIntegration('shopify', true, 'just now'),
           onError: err => alert('Shopify connect error: ' + err.message),
         });
       } else if (integrationId === 'business-central') {
-        result = await safeFetch('http://localhost:2074/business-central/connect', { userId, action: 'create_token' });
+        result = await safeFetch('http://3.234.215.178:2074/business-central/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'dynamics_365_business_central_api', token: result.token,
           onSuccess: () => updateIntegration('business-central', true, 'just now'),
           onError: err => alert('Business Central connect error: ' + err.message),
         });
       } else if (integrationId === 'klaviyo') {
-        result = await safeFetch('http://localhost:2074/klaviyo/connect', { userId, action: 'create_token' });
+        result = await safeFetch('http://3.234.215.178:2074/klaviyo/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'klaviyo', token: result.token,
           onSuccess: () => updateIntegration('klaviyo', true, 'just now'),
           onError: err => alert('Klaviyo connect error: ' + err.message),
         });
       } else if (integrationId === 'square') {
-        result = await safeFetch('http://localhost:2074/square/connect', { userId, action: 'create_token' });
+        result = await safeFetch('http://3.234.215.178:2074/square/connect', { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'square', token: result.token,
           onSuccess: () => updateIntegration('square', true, 'just now'),
           onError: err => alert('Square connect error: ' + err.message),
         });
-      }else {
+      } else if (integrationId === 'gmail') {
+        result = await safeFetch('http://3.234.215.178:2074/gmail/connect', { userId, action: 'create_token' });
+        await createFrontendClient().connectAccount({
+          app: 'gmail', token: result.token,
+          onSuccess: async () => {
+            updateIntegration('gmail', true, 'just now');
+            
+            // Auto-setup Gmail polling after successful connection
+            try {
+              console.log('🔄 Setting up Gmail polling via Fargate service...');
+              const pollingResult = await safeFetch('http://3.234.215.178:2074/api/integrations/setup-polling', { 
+                userId, 
+                serviceType: 'gmail',
+                webhookUrl: 'https://eo2g5g5i8w7vtvc.m.pipedream.net'
+              });
+              console.log('✅ Gmail polling setup successful:', pollingResult);
+            } catch (pollingError) {
+              console.error('⚠️ Failed to setup Gmail polling:', pollingError);
+              alert('Gmail connected, but failed to start email monitoring. Please try reconnecting.');
+            }
+          },
+          onError: err => alert('Gmail connect error: ' + err.message),
+        });
+      } else {
         console.log('Integration handler not implemented');
       }
     } catch (error: any) {
@@ -92,13 +121,30 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
     }
   };
 
-  const handleDisconnect = (integrationId: string) => {
+  const handleDisconnect = async (integrationId: string) => {
     console.log('Disconnecting from:', integrationId);
-    // TODO: call disconnect endpoint
+    
+    if (integrationId === 'gmail') {
+      // Stop Gmail polling via Fargate service
+      try {
+        const userId = user?.userId;
+        if (userId) {
+          console.log('🛑 Stopping Gmail polling...');
+          await safeFetch('http://3.234.215.178:2074/api/integrations/stop-polling', { 
+            userId, 
+            serviceType: 'gmail' 
+          });
+          console.log('✅ Gmail polling stopped');
+        }
+      } catch (pollingError) {
+        console.error('⚠️ Failed to stop Gmail polling:', pollingError);
+        // Continue with disconnection even if polling stop fails
+      }
+    }
+    
+    // TODO: call disconnect endpoint for other integrations
     updateIntegration(integrationId, false);
   };
-
-  const getCurrentUserId = () => 'user_' + Math.random().toString(36).substr(2, 9);
 
   const connectedCount = integrations.filter(i => i.connected).length;
 

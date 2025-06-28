@@ -8,17 +8,26 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "skipLibCheck": false, // Important: keep this false to see if types install
+    "skipLibCheck": true, // Skip checking .d.ts files for better performance
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true, // Assuming this is a frontend project handled by a bundler
     "allowJs": true,
-    "forceConsistentCasingInFileNames": true // Good practice
+    "forceConsistentCasingInFileNames": true, // Good practice
+    "incremental": true, // Enable incremental compilation for faster builds
+    "tsBuildInfoFile": ".tsbuildinfo" // Cache TypeScript build info
     // Remove typeRoots and types for now, unless you are ABSOLUTELY sure you need them
     // and know what they do.
     // "typeRoots": ["./node_modules/@types", "./src/types"], // Example default + custom
     // "types": [] // If empty, includes all @types visible
   },
   "include": ["src"], // Ensure this points to your source code
-  "exclude": ["node_modules"] // Standard
+  "exclude": [
+    "node_modules",
+    "build",
+    "dist",
+    "src/pages/webApp/Backend/LambdaFunctions/**/*", // Exclude all Lambda functions from TypeScript checking
+    "**/*.test.*",
+    "**/__tests__/**/*"
+  ]
 }

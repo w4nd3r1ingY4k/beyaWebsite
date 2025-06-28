@@ -2,6 +2,7 @@
 
 import { sendWhatsApp } from '../lib/whatsapp.js';
 import { sendEmail, replyEmail } from '../lib/email.js';
+import { GmailMCPSender } from '../lib/gmail-mcp.js';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -161,7 +162,7 @@ export async function handler(event) {
     subject,
     text,
     html,
-    userId,
+    userId,      // NOW REQUIRED for Gmail MCP
     originalMessageId
   } = payload;
 
@@ -178,6 +179,7 @@ export async function handler(event) {
 
   try {
     let resp;
+    let gmailAccount = null; // Track Gmail account info for event data
 
     let replyId = originalMessageId || null;
     console.log("Fetched replyId:", replyId)
@@ -186,7 +188,23 @@ export async function handler(event) {
       resp = await sendWhatsApp(to, text);
 
     } else if (channel === "email") {
-      // ─── Email branch: decide between fresh send vs. reply ─────────────
+      // ─── Email branch: Try Gmail MCP first, fallback to SES ─────────────
+
+      // Initialize Gmail sender
+      const gmailSender = new GmailMCPSender();
+      let useGmail = false;
+      
+      try {
+        // Check if user has connected Gmail account
+        useGmail = await gmailSender.isGmailConnected(userId);
+        if (useGmail) {
+          gmailAccount = await gmailSender.getGmailAccount(userId);
+        }
+        console.log(`📧 Gmail connection status for user ${userId}:`, useGmail);
+      } catch (error) {
+        console.log(`⚠️ Gmail connection check failed, using SES fallback:`, error.message);
+        useGmail = false;
+      }
 
       // ➋ If no originalMessageId passed, try to find the best message to reply to
       if (!replyId) {
@@ -203,14 +221,45 @@ export async function handler(event) {
         to,
         hasReplyId: !!replyId,
         replyId: replyId,
-        isReply: !!replyId
+        isReply: !!replyId,
+        useGmail: useGmail
       });
 
-      // ➌ If we have replyId, use replyEmail; otherwise, sendEmail
+      if (useGmail) {
+        // ➌ Send via Gmail MCP
+        try {
+          if (replyId) {
+            resp = await gmailSender.sendReply(userId, {
+              originalMessageId: replyId,
+              threadId: to,
+              to,
+              subject,
+              body: html || text
+            });
+          } else {
+            resp = await gmailSender.sendEmail(userId, {
+              to,
+              subject,
+              body: html || text
+            });
+          }
+          console.log('✅ Email sent via Gmail MCP');
+        } catch (gmailError) {
+          console.error('❌ Gmail MCP send failed, falling back to SES:', gmailError.message);
+          // Fall back to SES
       if (replyId) {
         resp = await replyEmail(to, subject, text, html, replyId);
       } else {
         resp = await sendEmail(to, subject, text, html);
+          }
+        }
+      } else {
+        // ➌ Send via SES (original logic)
+        if (replyId) {
+          resp = await replyEmail(to, subject, text, html, replyId);
+        } else {
+          resp = await sendEmail(to, subject, text, html);
+        }
       }
 
     } else {
@@ -267,6 +316,15 @@ export async function handler(event) {
     }));
 
     // ─── 7) Build rawEvent envelope for context engine ────────────────────
+    // Determine the sender email based on provider
+    let senderEmail = "akbar@usebeya.com"; // Default SES sender
+    let provider = "ses"; // Default provider
+    
+    if (resp && resp.provider === "gmail-mcp") {
+      senderEmail = resp.from || gmailAccount?.external_id || "gmail-user@connected.com";
+      provider = "gmail";
+    }
+
     const rawEvent = {
       eventId: uuidv4(),
       timestamp: new Date(timestamp).toISOString(),
@@ -280,7 +338,9 @@ export async function handler(event) {
         bodyText: text,
         bodyHtml: html,
         to: Array.isArray(to) ? to : [to],
-        from: "akbar@usebeya.com", // Sender address for sent emails
+        from: senderEmail,
+        provider: provider, // Track which email provider was used
+        ...(resp && resp.provider === "gmail-mcp" && { gmailData: resp.toolResult })
       }
     };
 

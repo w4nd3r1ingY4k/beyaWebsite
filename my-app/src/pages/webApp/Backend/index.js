@@ -5,8 +5,9 @@ import express from "express";
 import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
-import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect } from './connect.js';
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
+import { MultiServicePollingManager } from './multi-user-polling.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -30,14 +31,15 @@ const { Client } = square;
 async function getConnectedAccountCredentials(appSlug, externalUserId) {
   try {
     // Get the connected account for this user
-    const connectedAccounts = await pd.getConnectedAccounts({
-      app_slug: appSlug,
-      external_user_id: externalUserId
+    const accounts = await pd.getAccounts({
+      app: appSlug,
+      external_user_id: externalUserId,
+      include_credentials: 1, // Required to get OAuth credentials
     });
     
-    if (connectedAccounts && connectedAccounts.length > 0) {
+    if (accounts && accounts.data && accounts.data.length > 0) {
       // Return the first connected account's credentials
-      return connectedAccounts[0].credentials;
+      return accounts.data[0].credentials;
     }
     
     return null;
@@ -95,6 +97,16 @@ const toolManifest = {
       "get_values": "GOOGLE-SHEETS-GET-VALUES",
       "update_row": "GOOGLE-SHEETS-UPDATE-ROW",
       "create_spreadsheet": "GOOGLE-SHEETS-CREATE-SPREADSHEET"
+    }
+  },
+  Gmail: {
+    app_slug: "gmail",
+    app_label: "Gmail",
+    actions: {
+      "send_email": "GMAIL-SEND-EMAIL",
+      "send_reply": "GMAIL-SEND-REPLY",
+      "list_messages": "GMAIL-LIST-MESSAGES",
+      "get_message": "GMAIL-GET-MESSAGE"
     }
   },
   HubSpot: {
@@ -756,6 +768,10 @@ const app = express();
 app.use(cors({ origin: "*" })); // Configure appropriately for production
 app.use(express.json());
 
+// Initialize Multi-Service Polling Manager
+const multiServicePollingManager = new MultiServicePollingManager();
+console.log("🔄 Multi-Service Polling Manager initialized - auto-polling will begin shortly...");
+
 // Main workflow endpoint
 app.post("/workflow", async (req, res) => {
   const { userRequest, externalUserId } = req.body;
@@ -941,7 +957,581 @@ app.post("/klaviyo/connect", async (req, res) => {
 });
 
 app.post("/square/connect", async (req, res) => {
-  await handleKlaviyoConnect(req, res);
+  await handleSquareConnect(req, res);
+});
+
+app.post("/gmail/connect", async (req, res) => {
+  await handleGmailConnect(req, res);
+});
+
+// Gmail workflow management endpoint
+app.post("/gmail/workflow", async (req, res) => {
+  const { action, userId, gmailAccountId, userEmail, workflowId } = req.body;
+  
+  if (!action || !userId) {
+    return res.status(400).json({ error: "action and userId are required" });
+  }
+
+  try {
+    // Call the Gmail workflow manager Lambda function
+    const lambdaUrl = process.env.GMAIL_WORKFLOW_LAMBDA_URL || 'https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/';
+    
+    const response = await fetch(lambdaUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, userId, gmailAccountId, userEmail, workflowId })
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Workflow management failed');
+    }
+    
+    return res.status(200).json(result);
+    
+  } catch (error) {
+    console.error("🔥 Gmail workflow management error:", error);
+    return res.status(500).json({ 
+      error: error.message || "Gmail workflow management failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Gmail debug endpoints
+app.post("/debug/gmail-tools", async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  try {
+    const accessToken = await pd.rawAccessToken();
+    const tools = await debugListTools("gmail", accessToken, userId);
+    
+    return res.status(200).json({ 
+      userId,
+      availableTools: tools,
+      totalTools: tools.length
+    });
+  } catch (error) {
+    console.error("🔥 Gmail tools debug error:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/debug/test-gmail-send", async (req, res) => {
+  const { userId, to, subject, body } = req.body;
+  if (!userId || !to || !subject || !body) {
+    return res.status(400).json({ error: "userId, to, subject, and body are required" });
+  }
+
+  try {
+    const { GmailMCPSender } = await import('./LambdaFunctions/functions/beya-inbox-send/lib/gmail-mcp.js');
+    const gmailSender = new GmailMCPSender();
+    
+    const result = await gmailSender.sendEmail(userId, {
+      to,
+      subject,
+      body
+    });
+    
+    return res.status(200).json({ 
+      success: true,
+      result 
+    });
+  } catch (error) {
+    console.error("🔥 Test Gmail send error:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      requiresAuth: error.message.includes('not connected')
+    });
+  }
+});
+
+// Debug endpoint to extract Gmail OAuth credentials
+app.post("/debug/gmail-credentials", async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  try {
+    const { GmailConnectService } = await import('./gmail-connect.js');
+    const gmailService = new GmailConnectService();
+    
+    // Get raw accounts response like the Lambda function does
+    console.log(`🔍 Debug: Checking Gmail accounts for userId: ${userId}`);
+    console.log(`🔍 Using environment: ${process.env.PIPEDREAM_PROJECT_ENVIRONMENT}`);
+    console.log(`🔍 Using project ID: ${process.env.PIPEDREAM_PROJECT_ID}`);
+    console.log(`🔍 Using client ID: ${process.env.PIPEDREAM_CLIENT_ID ? 'SET' : 'NOT SET'}`);
+    
+    const accounts = await gmailService.pd.getAccounts({
+      external_user_id: userId,
+      app: "gmail",
+      include_credentials: 1, // Required to get OAuth credentials
+    });
+    
+    console.log(`🔍 Raw accounts response:`, JSON.stringify(accounts, null, 2));
+    
+    // Get credentials using the service method
+    let credentials = null;
+    try {
+      credentials = await gmailService.getCredentials(userId);
+    } catch (credError) {
+      console.log(`🔍 Credentials error:`, credError.message);
+    }
+    
+    // Return the structure (but mask sensitive data)
+    const credentialStructure = {
+      hasCredentials: !!credentials,
+      keys: credentials ? Object.keys(credentials) : [],
+      // Show structure but mask values for security
+      structure: credentials ? Object.fromEntries(
+        Object.entries(credentials).map(([key, value]) => [
+          key, 
+          typeof value === 'string' ? `${key}_present_${value.length}_chars` : typeof value
+        ])
+      ) : null
+    };
+    
+    return res.status(200).json({ 
+      success: true,
+      userId,
+      rawAccountsResponse: accounts,
+      credentialStructure,
+      // Include raw for debugging (remove in production)
+      rawCredentials: credentials
+    });
+  } catch (error) {
+    console.error("🔥 Gmail credentials debug error:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      requiresAuth: error.message.includes('not connected') || error.message.includes('No Gmail connection')
+    });
+  }
+});
+
+// Debug endpoint to test Connect-specific credentials access
+app.post("/debug/gmail-credentials-connect", async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  try {
+    const { GmailConnectService } = await import('./gmail-connect.js');
+    const gmailService = new GmailConnectService();
+    
+    console.log(`🔍 Testing Connect-specific API for credentials`);
+    
+    // Try multiple approaches for Connect accounts
+    const approaches = [];
+    
+    // Approach 1: Try /v1/accounts endpoint specifically
+    try {
+      const v1Response = await gmailService.pd.makeAuthorizedRequest("/v1/accounts", {
+        method: "GET",
+        params: {
+          external_user_id: userId,
+          app: "gmail",
+          include_credentials: 1
+        }
+      });
+      approaches.push({ name: "v1_accounts", response: v1Response });
+    } catch (err) {
+      approaches.push({ name: "v1_accounts", error: err.message });
+    }
+    
+    // Approach 2: Try without external_user_id (might be for current user)
+    try {
+      const noUserResponse = await gmailService.pd.makeAuthorizedRequest("/accounts", {
+        method: "GET",
+        params: {
+          app: "gmail",
+          include_credentials: 1
+        }
+      });
+      approaches.push({ name: "no_user_id", response: noUserResponse });
+    } catch (err) {
+      approaches.push({ name: "no_user_id", error: err.message });
+    }
+    
+    // Approach 3: Check if there's a specific account ID we can use
+    const firstAccount = "apn_r5hmJDa"; // From our previous response
+    try {
+      const accountResponse = await gmailService.pd.makeAuthorizedRequest(`/accounts/${firstAccount}`, {
+        method: "GET",
+        params: {
+          include_credentials: 1
+        }
+      });
+      approaches.push({ name: "specific_account", response: accountResponse });
+    } catch (err) {
+      approaches.push({ name: "specific_account", error: err.message });
+    }
+    
+    console.log(`🔍 Connect API approaches:`, JSON.stringify(approaches, null, 2));
+    
+    return res.status(200).json({ 
+      success: true,
+      userId,
+      approaches
+    });
+  } catch (error) {
+    console.error("🔥 Connect API credentials error:", error);
+    return res.status(500).json({ 
+      error: error.message
+    });
+  }
+});
+
+// ===== GMAIL PUSH NOTIFICATION ROUTES =====
+
+// Setup Gmail push notifications
+app.post("/api/gmail/setup-watch", async (req, res) => {
+  const { userId, webhookUrl, labelIds } = req.body;
+  
+  if (!userId || !webhookUrl) {
+    return res.status(400).json({ error: "userId and webhookUrl are required" });
+  }
+
+  try {
+    const { GmailPushManager } = await import('./gmail-push-manager.js');
+    const pushManager = new GmailPushManager();
+    
+    const result = await pushManager.setupGmailWatch(userId, webhookUrl, labelIds);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error setting up Gmail watch:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// ===== MULTI-SERVICE INTEGRATION POLLING ENDPOINTS =====
+
+// Setup integration polling for any service (Gmail, WhatsApp, Slack, etc.)
+app.post("/api/integrations/setup-polling", async (req, res) => {
+  const { userId, serviceType, webhookUrl, pollingIntervalMs } = req.body;
+  
+  if (!userId || !serviceType || !webhookUrl) {
+    return res.status(400).json({ error: "userId, serviceType, and webhookUrl are required" });
+  }
+
+  try {
+    const result = await multiServicePollingManager.startPollingForUser(
+      userId, 
+      serviceType, 
+      webhookUrl, 
+      true // saveToDb
+    );
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error(`Error setting up ${serviceType} polling:`, error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Setup Gmail direct polling (backward compatibility)
+app.post("/api/gmail/setup-polling", async (req, res) => {
+  const { userId, webhookUrl, pollingIntervalMs } = req.body;
+  
+  if (!userId || !webhookUrl) {
+    return res.status(400).json({ error: "userId and webhookUrl are required" });
+  }
+
+  try {
+    const result = await multiServicePollingManager.startGmailPollingForUser(userId, webhookUrl, true);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error setting up Gmail polling:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Stop integration polling for any service
+app.post("/api/integrations/stop-polling", async (req, res) => {
+  const { userId, serviceType } = req.body;
+  
+  if (!userId || !serviceType) {
+    return res.status(400).json({ error: "userId and serviceType are required" });
+  }
+
+  try {
+    const result = await multiServicePollingManager.stopPollingForUser(userId, serviceType, true);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error(`Error stopping ${serviceType} polling:`, error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Stop Gmail notifications (backward compatibility)
+app.post("/api/gmail/stop-watch", async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  try {
+    const result = await multiServicePollingManager.stopPollingForUser(userId, 'gmail', true);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error stopping Gmail polling:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Get integration polling status for all services
+app.get("/api/integrations/polling-status", async (req, res) => {
+  try {
+    const result = await multiServicePollingManager.getPollingStatus();
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error getting integration polling status:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Get specific user's integration sessions
+app.get("/api/integrations/sessions/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { serviceType } = req.query;
+
+  try {
+    if (serviceType) {
+      // Get specific service session
+      const session = await multiServicePollingManager.getIntegrationSessionFromDB(userId, serviceType);
+      return res.status(200).json(session || { message: "No session found" });
+    } else {
+      // Get all sessions for user
+      const sessions = await multiServicePollingManager.getActiveIntegrationSessionsFromDB();
+      const userSessions = sessions.filter(s => s.userId === userId);
+      return res.status(200).json(userSessions);
+    }
+  } catch (error) {
+    console.error("Error getting user integration sessions:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Get Gmail watch status (backward compatibility)
+app.get("/api/gmail/watch-status/:userId", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const session = await multiServicePollingManager.getIntegrationSessionFromDB(userId, 'gmail');
+    
+    if (!session) {
+      return res.status(200).json({ isActive: false, message: "No Gmail polling session found" });
+    }
+    
+    const isActiveInMemory = multiServicePollingManager.activePollers.has(`${userId}-gmail`);
+    
+    const result = {
+      isActive: session.isActive && isActiveInMemory,
+      isActiveInDB: session.isActive,
+      isActiveInMemory,
+      lastPollAt: session.lastPollAt,
+      errorCount: session.errorCount,
+      webhookUrl: session.webhookUrl,
+      userId: session.userId,
+      serviceType: session.serviceType
+    };
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error getting Gmail polling status:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Complete Gmail setup: Create Pipedream workflow + Setup Gmail watch
+app.post("/api/gmail/complete-setup", async (req, res) => {
+  const { userId } = req.body;
+  
+  if (!userId) {
+    return res.status(400).json({ error: "userId is required" });
+  }
+
+  try {
+    // Step 1: Create Pipedream workflow
+    console.log(`🔧 Step 1: Creating Pipedream workflow for user ${userId}`);
+    
+    const workflowResponse = await fetch('https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'create_workflow',
+        userId: userId
+      })
+    });
+
+    if (!workflowResponse.ok) {
+      throw new Error(`Failed to create Pipedream workflow: ${workflowResponse.status}`);
+    }
+
+    const workflowData = await workflowResponse.json();
+    const webhookUrl = workflowData.webhook_url;
+    
+    console.log(`✅ Step 1 Complete: Pipedream workflow created with URL ${webhookUrl}`);
+
+    // Step 2: Setup Gmail persistent polling
+    console.log(`🔧 Step 2: Setting up Gmail persistent polling`);
+    
+    // Use new multi-service polling manager for persistent, database-driven polling
+    const watchResult = await multiServicePollingManager.startGmailPollingForUser(userId, webhookUrl, true);
+    
+    console.log(`✅ Step 2 Complete: Gmail persistent polling setup successful`);
+
+    return res.status(200).json({
+      success: true,
+      userId,
+      workflow: workflowData,
+      watch: watchResult,
+      message: "Complete Gmail integration setup successful"
+    });
+
+  } catch (error) {
+    console.error("Error in complete Gmail setup:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// ===== GMAIL THREAD LISTING ROUTES =====
+
+// List Gmail threads
+app.get("/api/gmail/threads/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { maxResults, labelIds, q, pageToken } = req.query;
+
+  try {
+    const { GmailPushManager } = await import('./gmail-push-manager.js');
+    const pushManager = new GmailPushManager();
+    
+    const options = {};
+    if (maxResults) options.maxResults = parseInt(maxResults);
+    if (labelIds) options.labelIds = labelIds.split(',');
+    if (q) options.q = q;
+    if (pageToken) options.pageToken = pageToken;
+    
+    const result = await pushManager.listGmailThreads(userId, options);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error listing Gmail threads:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Get specific Gmail thread
+app.get("/api/gmail/threads/:userId/:threadId", async (req, res) => {
+  const { userId, threadId } = req.params;
+
+  try {
+    const { GmailPushManager } = await import('./gmail-push-manager.js');
+    const pushManager = new GmailPushManager();
+    
+    const result = await pushManager.getGmailThread(userId, threadId);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error getting Gmail thread:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Search Gmail
+app.get("/api/gmail/search/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const { q, maxResults, labelIds, includeSpamTrash } = req.query;
+
+  if (!q) {
+    return res.status(400).json({ error: "Search query 'q' is required" });
+  }
+
+  try {
+    const { GmailPushManager } = await import('./gmail-push-manager.js');
+    const pushManager = new GmailPushManager();
+    
+    const options = {};
+    if (maxResults) options.maxResults = parseInt(maxResults);
+    if (labelIds) options.labelIds = labelIds.split(',');
+    if (includeSpamTrash) options.includeSpamTrash = includeSpamTrash === 'true';
+    
+    const result = await pushManager.searchGmail(userId, q, options);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error searching Gmail:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
+});
+
+// Get Gmail labels
+app.get("/api/gmail/labels/:userId", async (req, res) => {
+  const { userId } = req.params;
+
+  try {
+    const { GmailPushManager } = await import('./gmail-push-manager.js');
+    const pushManager = new GmailPushManager();
+    
+    const result = await pushManager.getGmailLabels(userId);
+    
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Error getting Gmail labels:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      details: error.stack
+    });
+  }
 });
 
 // ===== SEMANTIC SEARCH & CONTEXT ENGINE ROUTES =====
@@ -1179,11 +1769,21 @@ const server = app.listen(PORT, () => {
   console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? '✓ Loaded' : '✗ Missing'}`);
   console.log(`🔑 Pipedream Client ID: ${process.env.PIPEDREAM_CLIENT_ID ? '✓ Loaded' : '✗ Missing'}`);
   console.log(`🔑 Pipedream Project ID: ${process.env.PIPEDREAM_PROJECT_ID ? '✓ Loaded' : '✗ Missing'}`);
-  console.log("\nEndpoints:");
+  console.log("\nCore Endpoints:");
   console.log("  POST /workflow - Execute a workflow");
   console.log("  POST /debug/list-tools - List available tools for an app");
   console.log("  POST /shopify/connect - Shopify Connect integration");
   console.log("  GET /health - Health check");
+  console.log("\nIntegration Polling API:");
+  console.log("  POST /api/integrations/setup-polling - Start polling for any service");
+  console.log("  POST /api/integrations/stop-polling - Stop polling for a service");
+  console.log("  GET /api/integrations/polling-status - Get all polling sessions status");
+  console.log("  GET /api/integrations/sessions/:userId - Get user's integration sessions");
+  console.log("\nGmail API (Legacy + New):");
+  console.log("  POST /api/gmail/complete-setup - Complete Gmail integration");
+  console.log("  POST /api/gmail/setup-polling - Start Gmail polling (backward compatible)");
+  console.log("  POST /api/gmail/stop-watch - Stop Gmail polling (backward compatible)");
+  console.log("  GET /api/gmail/watch-status/:userId - Gmail polling status");
   console.log("\nContext Engine API:");
   console.log("  POST /api/v1/search-context - Semantic search");
   console.log("  POST /api/v1/query-with-ai - AI-powered context queries");
