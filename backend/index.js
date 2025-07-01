@@ -3,7 +3,7 @@ dotenv.config({ path: "./.env" });
 
 import express from "express";
 import { createBackendClient } from "@pipedream/sdk";
-import OpenAI from "openai/index.js";
+import OpenAI from "openai";
 import cors from "cors";
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
@@ -1028,7 +1028,7 @@ app.post("/debug/test-gmail-send", async (req, res) => {
   }
 
   try {
-    const { GmailMCPSender } = await import('./LambdaFunctions/functions/beya-inbox-send/lib/gmail-mcp.js');
+    const { GmailMCPSender } = await import('./lambdas/functions/beya-inbox-send/lib/gmail-mcp.js');
     const gmailSender = new GmailMCPSender();
     
     const result = await gmailSender.sendEmail(userId, {
@@ -1743,6 +1743,33 @@ app.post("/api/v1/suggest-reply", async (req, res) => {
     console.error("🔥 Reply suggestion error:", error);
     return res.status(500).json({ 
       error: error.message || "Reply suggestion failed",
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// Hybrid search endpoint (semantic + metadata filtering)
+app.post("/api/v1/hybrid-search", async (req, res) => {
+  /**
+   * Request body:
+   * {
+   *   query: string, // required
+   *   filters: object, // optional metadata filters (e.g., { emailParticipant, threadId, timestamp, label })
+   *   topK: number, // optional, default 10
+   *   userId: string // optional
+   * }
+   */
+  const { query, filters = {}, topK = 10, userId = null } = req.body;
+  if (!query) {
+    return res.status(400).json({ error: "query is required" });
+  }
+  try {
+    const results = await semanticSearch(query, filters, topK, userId);
+    return res.status(200).json(results);
+  } catch (error) {
+    console.error("🔥 Hybrid search error:", error);
+    return res.status(500).json({
+      error: error.message || "Hybrid search failed",
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }

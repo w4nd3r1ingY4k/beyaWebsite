@@ -1,6 +1,6 @@
 const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
 const { ComprehendClient, DetectSentimentCommand } = require('@aws-sdk/client-comprehend');
-const OpenAI = require('openai/index.js');
+const OpenAI = require('openai');
 
 const sqsClient = new SQSClient({ region: process.env.AWS_REGION || 'us-east-1' });
 const comprehendClient = new ComprehendClient({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -67,41 +67,82 @@ exports.handler = async (event) => {
 };
 
 /**
+ * Utility: Normalize email address (lowercase, trim, remove display name)
+ */
+function normalizeEmailAddress(addr) {
+    if (!addr) return '';
+    // Remove display name if present: "Name <email@domain.com>"
+    const match = addr.match(/<([^>]+)>/);
+    const email = match ? match[1] : addr;
+    return email.toLowerCase().trim();
+}
+
+/**
+ * Utility: Clean email body (remove quoted replies, signatures, excessive whitespace)
+ * (Simple regex-based for now; can be replaced with a library like talon for more accuracy)
+ */
+function cleanEmailBody(body) {
+    if (!body) return '';
+    // Remove common reply separators
+    body = body.replace(/(^|\n)(On .+wrote:|From:.+\nSent:.+\nTo:.+\nSubject:.+|> .+\n|-----Original Message-----|--\s*\n).*/is, '');
+    // Remove signatures (simple heuristic: lines starting with -- or __)
+    body = body.replace(/(--|__)[\s\S]*$/, '');
+    // Collapse multiple newlines
+    body = body.replace(/\n{3,}/g, '\n\n');
+    return body.trim();
+}
+
+/**
  * Enhance rawEvent with natural language description and sentiment analysis
  */
 async function enhanceEventWithNL(rawEvent) {
-    // Extract text content for sentiment analysis
-    const textContent = extractTextContent(rawEvent);
-    
-    // Extract threadId from various possible locations in the event
+    // Extract and normalize metadata
+    const data = rawEvent.detail?.data || {};
+    const headers = data.headers || {};
+    const from = normalizeEmailAddress(headers['From'] || data.from);
+    const to = normalizeEmailAddress(headers['To'] || data.to);
+    const cc = normalizeEmailAddress(headers['Cc'] || data.cc);
+    const bcc = normalizeEmailAddress(headers['Bcc'] || data.bcc);
+    const subject = (data.subject || headers['Subject'] || '').trim();
+    const messageId = (headers['Message-ID'] || data.messageId || '').trim();
     const threadId = extractThreadId(rawEvent);
-    
-    // Run both analyses in parallel for efficiency
+    const date = (headers['Date'] || data.date || '').trim();
+    const inReplyTo = (headers['In-Reply-To'] || '').trim();
+    const references = (headers['References'] || '').trim();
+
+    // Clean body text
+    let bodyText = data.bodyText || '';
+    bodyText = cleanEmailBody(bodyText);
+
+    // Sentiment and NL description
     const [naturalLanguageDescription, comprehendSentiment] = await Promise.all([
         generateNaturalLanguageDescription(rawEvent),
-        analyzeSentimentWithComprehend(textContent)
+        analyzeSentimentWithComprehend(bodyText)
     ]);
-    
-    const enhancedEvent = {
+
+    // Build chunkable content
+    const chunkableContent = `From: ${from}\nTo: ${to}\nSubject: ${subject}\nDate: ${date}\n\n${bodyText}`;
+
+    return {
         ...rawEvent,
         processedAt: new Date().toISOString(),
-        naturalLanguageDescription: naturalLanguageDescription,
-        comprehendSentiment: comprehendSentiment,
-        chunkableContent: naturalLanguageDescription, // Use the AI-generated description as chunkable content
-        // Ensure threadId is included in the enhanced event
+        naturalLanguageDescription,
+        comprehendSentiment,
+        chunkableContent,
         detail: {
             ...rawEvent.detail,
-            threadId: threadId
+            threadId,
+            messageId,
+            from,
+            to,
+            cc,
+            bcc,
+            subject,
+            date,
+            inReplyTo,
+            references,
         }
     };
-
-    console.log('📧 ThreadId extraction:', {
-        extractedThreadId: threadId,
-        hasThreadId: !!threadId,
-        eventId: rawEvent.detail?.eventId || rawEvent.id
-    });
-
-    return enhancedEvent;
 }
 
 /**
