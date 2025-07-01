@@ -5,6 +5,7 @@ import { ReactComponent as DataIcon } from './assets/icons/DataIcon.svg';
 import { ReactComponent as LogisticsIcon } from './assets/icons/LogisticsIcon.svg';
 import { ReactComponent as MarketingIcon } from './assets/icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from './assets/icons/CommerceIcon.svg';
+import { ReactComponent as SettingsIcon } from './assets/icons/SettingsIcon.svg';
 
 interface IconItem {
   id: string;
@@ -27,7 +28,7 @@ interface SideMenuProps {
 
 const ICON_SIZE = 40;
 const OFFSET_X = 20;
-const BULGE = 63;
+const BULGE = 80;
 const DOT_SIZE = 5;
 const PADDING = 30;
 
@@ -48,6 +49,7 @@ const icons: IconItem[] = [
     { id: 'logistics', Component: LogisticsIcon, label: 'Logistics' },
     { id: 'commerce', Component: CommerceIcon, label: 'Commerce' },
     { id: 'data', Component: DataIcon, label: 'Data' },
+    { id: 'settings', Component: SettingsIcon, label: 'Settings' },
 ];
 
 export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, onSelect }) => {
@@ -102,7 +104,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
         activeIndex * (ICON_SIZE + GAP + activeIndex * getIndexMultiplier(activeIndex)) +
         ICON_SIZE / 2;
     
-    const spineX = 15 + ICON_SIZE + OFFSET_X;
+    const spineX = 30 + ICON_SIZE + OFFSET_X;
     
     const bulgeYSpan = ICON_SIZE * 2; // adjust 1.1-1.4 for tightness
     const bulgeStartY = centerY - bulgeYSpan / 1.6;
@@ -151,9 +153,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
     ].join(' ');
 
   return (
-    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative'}}>
-      {/* Background */}
-      {/* Spine line */}
+    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative', marginRight: 48 }}>
     <div style={{ zIndex: 1, position: 'absolute', top: 0, left: spineX }}>
         <svg
             width={svgWidth}
@@ -379,38 +379,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
             </div>
           );
         })}
-      </div>
-      <div
-        onClick={() => {
-          window.location.href = '/settings';
-        }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          cursor: 'pointer',
-          padding: 8,
-        }}
-      >
-        <div style={{
-          width: ICON_SIZE,
-          height: ICON_SIZE,
-          borderRadius: '50%',
-          background: '#FFFBFA',
-          border: `1px solid ${activeIcon === 'settings' ? '#DE1785' : '#D9D9D9'}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-        </div>
-        <span style={{
-          marginTop: 8,
-          fontSize: 12,
-          color: activeIcon === 'settings' ? '#DE1785' : '#595959',
-          fontWeight: activeIcon === 'settings' ? 500 : 400
-        }}>
-          Settings
-        </span>
       </div>
     </div>
   );
