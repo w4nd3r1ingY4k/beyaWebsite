@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from '../../../../../AuthContext';
+import { useAuth } from "@/pages/AuthContext";
 import ThreadList from './ThreadList';
 import MessageView from './MessageView';
 import ComposeModal from './ComposeModal';

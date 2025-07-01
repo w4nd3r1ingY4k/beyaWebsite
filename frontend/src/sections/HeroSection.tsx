@@ -1,8 +1,8 @@
 import React from "react";
 import { HeroSectionProps } from "../ComponentTypes";
 
-const desktop = require("../pages/webApp/Frontend/Assets/Media/desktop.png");
-const mobile = require("../pages/webApp/Frontend/Assets/Media/mobile.png");
+const desktop = require("../pages/webApp/Assets/Media/desktop.png");
+const mobile = require("../pages/webApp/Assets/Media/mobile.png");
 
 export const HeroSection: React.FC<HeroSectionProps> = () => {
   const systemFontStack =

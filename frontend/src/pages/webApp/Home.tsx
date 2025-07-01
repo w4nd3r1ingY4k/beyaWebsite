@@ -13,7 +13,7 @@ import InboxHome from './CRM/Inbox/Home';
 import ContactsCRM from './CRM/Contacts/Home';
 import CalendarPage from './CRM/Schedule/ScheduleHome';
 import AIChatCircle from './ai';
-import { useAuth } from '../../AuthContext';
+import { useAuth } from "@/pages/AuthContext";
 import HomeDashboard from './Home/home';
 import IntegrationsPanel from './CRM/Inbox/Components/IntegrationsPanel';
 import CommandBChat from './CRM/Inbox/Components/CommandBChat';

@@ -15,7 +15,11 @@
     "allowJs": true,
     "forceConsistentCasingInFileNames": true, // Good practice
     "incremental": true, // Enable incremental compilation for faster builds
-    "tsBuildInfoFile": ".tsbuildinfo" // Cache TypeScript build info
+    "tsBuildInfoFile": ".tsbuildinfo", // Cache TypeScript build info
+    "baseUrl": "src",
+    "paths": {
+      "@/*": ["./*"]
+    },
     // Remove typeRoots and types for now, unless you are ABSOLUTELY sure you need them
     // and know what they do.
     // "typeRoots": ["./node_modules/@types", "./src/types"], // Example default + custom

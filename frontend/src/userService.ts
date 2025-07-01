@@ -5,9 +5,11 @@ export interface CreateUserPayload {
     sub?: string;
   }
   
+  const LAMBDA_HANDLER = process.env.REACT_APP_LAMBDA_HANDLER;
+  
   export async function createUser(payload: CreateUserPayload) {
     const res = await fetch(
-      "https://qfk6yjyzg6utzok6gpels4cyhy0vhrmg.lambda-url.us-east-1.on.aws/",
+      LAMBDA_HANDLER!,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

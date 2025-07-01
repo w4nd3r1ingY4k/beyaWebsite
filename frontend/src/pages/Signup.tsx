@@ -5,7 +5,7 @@ import {
   CognitoUserAttribute
 } from "amazon-cognito-identity-js";
 import { useNavigate } from "react-router-dom";
-import { createUser } from "./webApp/services/userService";
+import { createUser } from "../userService";
 
 const poolData = {
   UserPoolId: "us-east-1_APKoKTm2c",

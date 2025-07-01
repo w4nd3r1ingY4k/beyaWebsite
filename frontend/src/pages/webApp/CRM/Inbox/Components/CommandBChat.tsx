@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useAuth } from '../../../../../AuthContext';
+import { useAuth } from "@/pages/AuthContext";
 
 interface Message {
   id: string;
