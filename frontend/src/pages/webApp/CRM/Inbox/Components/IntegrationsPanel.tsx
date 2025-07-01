@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createFrontendClient } from "@pipedream/sdk/browser";
-import { useAuth } from '../../../../../AuthContext';
+import { useAuth } from "@/pages/AuthContext";
 
 interface Integration {
   id: string;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../../../../AuthContext';
+import { useAuth } from "@/pages/AuthContext";
 import { EditorState, convertToRaw, Editor } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import EmailReplyEditor from '../SendBox';

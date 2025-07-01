@@ -11,6 +11,9 @@ module.exports = {
       },
     },
     webpack: {
+      alias: {
+        '@': require('path').resolve(__dirname, 'src'),
+      },
       plugins: {
         remove: ['ForkTsCheckerWebpackPlugin'], // Completely remove TypeScript checker to prevent memory issues
       },
