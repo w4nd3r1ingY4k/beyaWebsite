@@ -1,10 +1,10 @@
 import React from 'react';
-import { ReactComponent as HomeIcon } from './Assets/Icons/HomeIcon.svg';
-import { ReactComponent as CRMIcon } from './Assets/Icons/CRMIcon.svg';
-import { ReactComponent as DataIcon } from './Assets/Icons/DataIcon.svg';
-import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.svg';
-import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
-import { ReactComponent as CommerceIcon } from './Assets/Icons/CommerceIcon.svg';
+import { ReactComponent as HomeIcon } from './assets/icons/HomeIcon.svg';
+import { ReactComponent as CRMIcon } from './assets/icons/CRMIcon.svg';
+import { ReactComponent as DataIcon } from './assets/icons/DataIcon.svg';
+import { ReactComponent as LogisticsIcon } from './assets/icons/LogisticsIcon.svg';
+import { ReactComponent as MarketingIcon } from './assets/icons/MarketingIcon.svg';
+import { ReactComponent as CommerceIcon } from './assets/icons/CommerceIcon.svg';
 
 interface IconItem {
   id: string;
@@ -189,7 +189,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
         </svg>
     </div>
 
-      {/* Icons column */}
+      {/* icons column */}
       <div
         style={{
           display: 'flex',
