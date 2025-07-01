@@ -4,7 +4,8 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   UpdateCommand,
-  ScanCommand
+  ScanCommand,
+  GetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
@@ -131,7 +132,8 @@ async function persistEmailMessage(messageData) {
     
     await docClient.send(new PutCommand({
       TableName: MSG_TABLE,
-      Item: messageItem
+      Item: messageItem,
+      ConditionExpression: 'attribute_not_exists(MessageId)' // Idempotency: only insert if MessageId does not exist
     }));
 
     // Update flow
@@ -185,6 +187,39 @@ async function persistEmailMessage(messageData) {
     }));
 
     console.log(`✅ ${provider.toUpperCase()} email persisted and event emitted:`, rawEvent.eventId);
+
+    // Update thread summary for short-term/long-term memory
+    // Fetch the current thread summary (if any)
+    let threadSummary = null;
+    try {
+      const getSummary = await docClient.send(new GetCommand({
+        TableName: MSG_TABLE,
+        Key: { ThreadId: fromAddress, MessageId: 'THREAD_SUMMARY' }
+      }));
+      threadSummary = getSummary.Item || null;
+    } catch (err) {
+      threadSummary = null;
+    }
+
+    // Maintain a list of the last N message IDs for this thread
+    const N = 10; // Number of recent messages to keep for short-term memory
+    let recentMessages = threadSummary?.RecentMessages || [];
+    recentMessages.push(internalId);
+    if (recentMessages.length > N) recentMessages = recentMessages.slice(-N);
+
+    // Update the thread summary item
+    await docClient.send(new PutCommand({
+      TableName: MSG_TABLE,
+      Item: {
+        ThreadId: fromAddress,
+        MessageId: 'THREAD_SUMMARY',
+        LastMessageTimestamp: ts,
+        Participants: [fromAddress, toAddress],
+        RecentMessages: recentMessages,
+        // Summary: to be updated by OpenAI in a later step
+      }
+    }));
+
     return { success: true, messageId: internalId, eventId: rawEvent.eventId };
 
   } catch (err) {

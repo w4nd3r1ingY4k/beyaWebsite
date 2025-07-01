@@ -2,7 +2,7 @@
 // Purpose: Consume enhanced events from SQS, chunk text, embed with OpenAI, and store vectors in Pinecone.
 
 const { SQSClient, DeleteMessageCommand } = require('@aws-sdk/client-sqs');
-const OpenAI = require('openai/index.js');
+const OpenAI = require('openai');
 const { Pinecone } = require('@pinecone-database/pinecone');
 
 const {

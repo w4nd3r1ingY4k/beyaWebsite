@@ -1,5 +1,5 @@
 import { Pinecone } from '@pinecone-database/pinecone';
-import OpenAI from 'openai/index.js';
+import OpenAI from 'openai';
 
 // Initialize clients (will use environment variables from main app)
 let pineconeClient = null;
