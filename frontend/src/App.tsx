@@ -3,7 +3,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import HomePage from "./pages/HomePage";
 import Privacy from "./pages/Privacy";
 import Login from "./pages/Login";
-import Home from "./pages/webApp/Home";
+import Home from "./pages/webApp";
 import SignUp from "./pages/Signup";
 import Confirm from "./pages/Confirm";
 import SettingsPage from "./pages/Settings";

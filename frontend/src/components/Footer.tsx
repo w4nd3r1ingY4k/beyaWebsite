@@ -95,7 +95,7 @@ export const Footer: React.FC<FooterProps> = ({
       color: "#FFFFFF",
       letterSpacing: "-0.01em",
     },
-    socialIcons: {
+    socialicons: {
       display: "flex",
       gap: "1rem",
       fontSize: "1.25rem",
@@ -222,10 +222,10 @@ export const Footer: React.FC<FooterProps> = ({
             </div>
           </div>
 
-          {/* Social Media */}
+          {/* Social media */}
           <div>
             <h2 style={styles.sectionTitle}>Connect With Us</h2>
-            <div style={styles.socialIcons}>
+            <div style={styles.socialicons}>
               <a
                 href="https://www.facebook.com/"
                 target="_blank"
