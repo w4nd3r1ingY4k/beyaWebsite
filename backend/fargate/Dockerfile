@@ -5,13 +5,13 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy package files
-COPY src/package*.json ./
+COPY ../package*.json ./
 
 # Install dependencies
 RUN npm ci --only=production
 
 # Copy source code
-COPY src/ .
+COPY ../ .
 
 # Set environment variables
 ENV NODE_ENV=production
