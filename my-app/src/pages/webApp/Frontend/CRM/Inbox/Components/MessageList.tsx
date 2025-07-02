@@ -257,7 +257,7 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
       .catch(err => console.error('Error loading flows:', err))
 
     // 2) Load the canonical list of thread IDs
-    fetch(`${API_BASE}/webhook/threads`)
+    fetch(`${API_BASE}/webhook/threads?userId=${encodeURIComponent(user!.userId)}`)
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -318,7 +318,7 @@ const [composeSubject, setComposeSubject] = useState(""); // only used if compos
     setLoading(true)
     setError(null)
 
-    fetch(`${API_BASE}/webhook/threads/${encodeURIComponent(selectedId)}`)
+    fetch(`${API_BASE}/webhook/threads/${encodeURIComponent(selectedId)}?userId=${encodeURIComponent(user!.userId)}`)
       .then(res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json()

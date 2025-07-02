@@ -1,12 +1,17 @@
 // lib/whatsapp.js
 import fetch from 'node-fetch';
 
-export async function sendWhatsApp(to, text) {
-  const url = `https://graph.facebook.com/v17.0/${process.env.WABA_PHONE_NUMBER_ID}/messages`;
+export async function sendWhatsApp(to, text, token, phoneNumberId) {
+  // Require credentials to be passed explicitly
+  if (!token || !phoneNumberId) {
+    throw new Error('WhatsApp credentials (token and phoneNumberId) are required');
+  }
+  
+  const url = `https://graph.facebook.com/v17.0/${phoneNumberId}/messages`;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.WABA_TOKEN}`,
+      Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({

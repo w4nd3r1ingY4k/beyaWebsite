@@ -846,7 +846,43 @@ app.get("/health", (req, res) => {
   });
 });
 
-// Debug endpoint to check Pinecone index stats
+  // Debug endpoint to check WhatsApp Business accounts directly via Pipedream API
+  app.post("/debug/whatsapp-accounts", async (req, res) => {
+    const { externalUserId } = req.body;
+    if (!externalUserId) {
+      return res.status(400).json({ error: "externalUserId is required" });
+    }
+
+    try {
+      console.log(`🔍 Checking WhatsApp Business accounts for user: ${externalUserId}`);
+      
+      // Use the same method as getConnectedAccountCredentials
+      const accounts = await pd.getAccounts({
+        app: 'whatsapp_business',
+        external_user_id: externalUserId,
+        include_credentials: 1, // Required to get credentials
+      });
+      
+      console.log(`📊 WhatsApp accounts response:`, JSON.stringify(accounts, null, 2));
+      
+      return res.status(200).json({
+        externalUserId,
+        accounts: accounts,
+        totalAccounts: accounts && accounts.data ? accounts.data.length : 0,
+        hasCredentials: accounts && accounts.data ? accounts.data.some(acc => acc.credentials) : false,
+        credentials: accounts && accounts.data && accounts.data.length > 0 ? accounts.data[0].credentials : null
+      });
+      
+    } catch (error) {
+      console.error("🔥 WhatsApp accounts debug error:", error);
+      return res.status(500).json({ 
+        error: error.message,
+        externalUserId
+      });
+    }
+  });
+
+  // Debug endpoint to check Pinecone index stats
 app.get("/debug/pinecone-stats", async (req, res) => {
   try {
     const { Pinecone } = await import('@pinecone-database/pinecone');
