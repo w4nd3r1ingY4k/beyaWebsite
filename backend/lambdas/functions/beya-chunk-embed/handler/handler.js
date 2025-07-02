@@ -34,9 +34,9 @@ async function getPineconeIndex() {
 }
 
 /**
- * Splits a longer string into roughly equal‐sized chunks on sentence boundaries
+ * Improved chunking: splits text into overlapping chunks on sentence boundaries
  */
-function chunkText(text, max = Number(MAX_CHUNK_CHARS)) {
+function chunkTextWithOverlap(text, max = Number(MAX_CHUNK_CHARS), overlap = 200) {
   if (text.length <= max) return [text];
   const sentences = text.match(/[^.!?]+[.!?\n]+/g) || [text];
   const chunks = [];
@@ -44,7 +44,8 @@ function chunkText(text, max = Number(MAX_CHUNK_CHARS)) {
   for (const s of sentences) {
     if ((current + s).length > max) {
       if (current) chunks.push(current.trim());
-      current = s;
+      // Start new chunk with overlap from previous
+      current = current.slice(-overlap) + s;
     } else {
       current += s;
     }
@@ -55,7 +56,6 @@ function chunkText(text, max = Number(MAX_CHUNK_CHARS)) {
 
 exports.handler = async (event) => {
   const index = await getPineconeIndex();
-  // SQS batch event
   for (const record of event.Records || []) {
     const receiptHandle = record.receiptHandle;
     try {
@@ -68,7 +68,10 @@ exports.handler = async (event) => {
           threadId,
           timestamp,
           eventType,
-          data: { bodyText = "" } = {},
+          data: { bodyText = "", from, to, subject, messageId } = {},
+          inReplyTo = '',
+          references = '',
+          userId = '',
         } = {},
         naturalLanguageDescription: nld = "",
         comprehendSentiment,
@@ -87,51 +90,58 @@ exports.handler = async (event) => {
         console.warn("No text to embed, skipping", { rootId });
         continue;
       }
-      const chunks = chunkText(baseText);
+      // Improved chunking
+      const chunks = chunkTextWithOverlap(baseText);
+      // Deduplicate and filter short/empty chunks
+      const uniqueChunks = Array.from(new Set(chunks)).filter(c => c && c.length > 20);
 
-      // Generate embeddings in parallel (OpenAI allows batches up to 2048 tokens; we're safe)
-      const embeddingsRes = await Promise.all(
-        chunks.map((chunk) =>
-          openai.embeddings.create({
-            model: "text-embedding-3-small",
-            input: chunk,
-          })
-        )
-      );
+      // Batch embedding (OpenAI allows batching)
+      const batchSize = 10;
+      let embeddingsRes = [];
+      for (let i = 0; i < uniqueChunks.length; i += batchSize) {
+        const batch = uniqueChunks.slice(i, i + batchSize);
+        const res = await openai.embeddings.create({
+          model: "text-embedding-3-small",
+          input: batch,
+        });
+        embeddingsRes.push(...res.data.map(d => d.embedding));
+      }
 
-      // Upsert into Pinecone (flatten comprehendSentiment for Pinecone compatibility)
-      const vectors = embeddingsRes.map((embRes, idx) => ({
+      // Build participants array
+      const participants = [from]
+        .concat(Array.isArray(to) ? to : [to])
+        .filter(Boolean);
+
+      // Upsert into Pinecone with enriched metadata
+      const vectors = uniqueChunks.map((chunk, idx) => ({
         id: `${eventId || rootId}-${idx}`,
-        values: embRes.data[0].embedding,
+        values: embeddingsRes[idx],
         metadata: {
           threadId: threadId || enhancedEvent.detail?.data?.threadId || enhancedEvent.threadId || '',
           eventId: eventId || rootId,
           eventType,
           timestamp,
           chunkIndex: idx,
-          chunkCount: chunks.length,
-          // Store the actual content
-          content: chunks[idx], // The actual chunked text content
-          naturalLanguageDescription: nld, // AI-generated description
-          bodyText: bodyText, // Original email body
-          subject: enhancedEvent.detail?.data?.subject || '',
-          userId: enhancedEvent.detail?.userId || '',
-          messageId: enhancedEvent.detail?.data?.messageId || '',
-          // Store sender/recipient information for proper email direction
-          // If there's a from field (received email), store it; otherwise store to field (sent email)
-          emailDirection: enhancedEvent.detail?.data?.from ? 'received' : 'sent',
-          emailParticipant: enhancedEvent.detail?.data?.from || 
-            (enhancedEvent.detail?.data?.to ? 
-              (Array.isArray(enhancedEvent.detail.data.to) ? 
-                enhancedEvent.detail.data.to.join(', ') : 
-                enhancedEvent.detail.data.to) : ''),
-          // Flatten comprehendSentiment object for Pinecone compatibility
+          chunkCount: uniqueChunks.length,
+          content: chunk,
+          naturalLanguageDescription: nld,
+          bodyText: bodyText,
+          subject: subject || '',
+          userId: userId || '',
+          messageId: messageId || '',
+          emailDirection: from ? 'received' : 'sent',
+          emailParticipant: from || (Array.isArray(to) ? to.join(', ') : to) || '',
           sentiment: comprehendSentiment?.sentiment || 'UNKNOWN',
           sentimentConfidence: comprehendSentiment?.confidence || 0,
           sentimentPositive: comprehendSentiment?.scores?.positive || 0,
           sentimentNegative: comprehendSentiment?.scores?.negative || 0,
           sentimentNeutral: comprehendSentiment?.scores?.neutral || 0,
           sentimentMixed: comprehendSentiment?.scores?.mixed || 0,
+          participants,
+          inReplyTo: inReplyTo || '',
+          references: references || '',
+          chunkStart: baseText.indexOf(chunk),
+          chunkEnd: baseText.indexOf(chunk) + chunk.length,
         },
       }));
 
