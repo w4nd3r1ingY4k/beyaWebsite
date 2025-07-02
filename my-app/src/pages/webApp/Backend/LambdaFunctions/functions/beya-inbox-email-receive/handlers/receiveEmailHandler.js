@@ -121,7 +121,10 @@ async function persistEmailMessage(messageData) {
       Subject:   subject || "(no subject)",
       Body:      textBody || "(no content)",
       Headers:   cleanHeaders,
-      Provider:  provider  // Track which email provider received this
+      Provider:  provider,  // Track which email provider received this
+      // ✅ ADD GSI FIELDS FOR USER ISOLATION
+      userId:    ownerUserId,
+      ThreadIdTimestamp: `${fromAddress || 'unknown'}#${ts}`
     };
     
     // Add HTML body only if it exists

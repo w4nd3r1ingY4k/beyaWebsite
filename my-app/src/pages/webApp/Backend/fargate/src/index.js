@@ -9,7 +9,7 @@ import express from "express";
 import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
-import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect.js';
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
 import { MultiServicePollingManager } from './multi-user-polling.js';
 
@@ -143,6 +143,36 @@ const toolManifest = {
       "create_associations": "HUBSPOT-CREATE-ASSOCIATIONS",
       "batch_create_or_update_contact": "HUBSPOT-BATCH-CREATE-OR-UPDATE-CONTACT",
       "add_contact_to_list": "HUBSPOT-ADD-CONTACT-TO-LIST"
+    }
+  },
+  whatsapp_business: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
+    }
+  },
+  WhatsApp_Business: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
+    }
+  },
+  WhatsApp: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
     }
   },
   OpenAI: {
@@ -516,6 +546,7 @@ Example output:
 - Slack: send_message, create_channel, list_users
 - Google_Sheets: add_single_row, get_values, update_row, create_spreadsheet
 - HubSpot: search_crm, update_lead, update_deal, update_custom_object, update_contact, update_company, get_meeting, get_file_public_url, get_deal, get_contact, get_company, get_associated_meetings, enroll_contact_into_workflow, create_ticket, create_task, create_or_update_contact, create_meeting, create_lead, create_engagement, create_deal, create_custom_object, create_company, create_communication, create_associations, batch_create_or_update_contact, add_contact_to_list
+- whatsapp_business: send_text_message, send_voice_message, send_text_using_template, list_message_templates
 - OpenAI: chat.completions.create
 
 **Important Rules:**
@@ -966,6 +997,11 @@ app.post("/square/connect", async (req, res) => {
 
 app.post("/gmail/connect", async (req, res) => {
   await handleGmailConnect(req, res);
+});
+
+// WhatsApp Business Connect endpoint
+app.post("/whatsapp/connect", async (req, res) => {
+  await handleWhatsAppConnect(req, res);
 });
 
 // Gmail workflow management endpoint

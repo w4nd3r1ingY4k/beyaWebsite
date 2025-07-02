@@ -90,8 +90,18 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       console.log('Loaded flows:', flowsData);
       
       const flowsArray = flowsData.flows || [];
+      
+      // Debug: Check for duplicate flowIds in the API response
+      const flowIds = flowsArray.map((f: any) => f.flowId);
+      const duplicateIds = flowIds.filter((id: string, index: number) => flowIds.indexOf(id) !== index);
+      if (duplicateIds.length > 0) {
+        console.warn('⚠️ Duplicate flow IDs found in API response:', duplicateIds);
+      }
+      
       setFlows(flowsArray);
-      setThreads(flowsArray.map((f: any) => f.flowId));
+      // Deduplicate thread IDs using Set to prevent duplicates
+      const uniqueThreadIds: string[] = Array.from(new Set(flowsArray.map((f: any) => f.flowId)));
+      setThreads(uniqueThreadIds);
       
     } catch (err) {
       console.error('Error loading inbox data:', err);
@@ -105,7 +115,8 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     try {
       console.log('🔄 Loading messages for thread:', threadId);
       
-      const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(threadId)}`);
+      // Pass userId as query parameter for the updated Lambda
+      const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(threadId)}?userId=${encodeURIComponent(user!.userId)}`);
       if (!response.ok) throw new Error('Failed to load messages');
       
       const data = await response.json();

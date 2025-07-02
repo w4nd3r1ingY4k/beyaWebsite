@@ -1,0 +1,16 @@
+{
+  "name": "beya-messages-migration",
+  "version": "1.0.0",
+  "description": "Migration script to backfill Messages table with userId and ThreadIdTimestamp for GSI",
+  "type": "module",
+  "main": "migrate-messages.js",
+  "scripts": {
+    "migrate": "node migrate-messages.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0"
+  },
+  "author": "Beya Team",
+  "license": "MIT"
+} 

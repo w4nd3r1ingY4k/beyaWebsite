@@ -12,6 +12,8 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import { createBackendClient } from "@pipedream/sdk/server";
+import fetch from 'node-fetch';
 
 // ─── 0) Load & validate env vars ──────────────────────────────────────────────
 const REGION      = process.env.AWS_REGION;
@@ -180,12 +182,101 @@ export async function handler(event) {
   try {
     let resp;
     let gmailAccount = null; // Track Gmail account info for event data
+    let userEmailAddress = null; // Store the user's actual email address
 
     let replyId = originalMessageId || null;
     console.log("Fetched replyId:", replyId)
     if (channel === "whatsapp") {
-      // ─── WhatsApp send ─────────────────────────────────────────────────
-      resp = await sendWhatsApp(to, text);
+      // ─── WhatsApp send - fetch credentials from Pipedream ─────────────────────
+      let whatsappCredentials = null;
+      
+      try {
+        // Initialize Pipedream client
+        const pd = createBackendClient({
+          environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT || "production",
+          credentials: {
+            clientId: process.env.PIPEDREAM_CLIENT_ID,
+            clientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
+          },
+          projectId: process.env.PIPEDREAM_PROJECT_ID,
+        });
+
+        // Check if user has connected WhatsApp account
+        const accounts = await pd.getAccounts({
+          external_user_id: userId,
+          app: "whatsapp_business",
+          include_credentials: true,
+        });
+        
+        console.log(`📱 WhatsApp accounts for user ${userId}:`, JSON.stringify(accounts, null, 2));
+        
+        if (accounts && accounts.data && accounts.data.length > 0) {
+          const whatsappAccount = accounts.data[0];
+          console.log(`📱 Found WhatsApp account: ${whatsappAccount.name || whatsappAccount.external_id}`);
+          
+          // Get the auth data which should contain the access token and phone number ID
+          // This is where Pipedream stores the WhatsApp credentials
+          // Note: business_account_id is not the same as phone_number_id
+          // We'll need to make an API call to get the phone number ID
+          const businessAccountId = whatsappAccount.credentials?.business_account_id;
+          const accessToken = whatsappAccount.credentials?.permanent_access_token || whatsappAccount.auth?.access_token;
+          
+          if (businessAccountId && accessToken) {
+            // Get phone number ID from the business account
+            try {
+              const phoneNumbersResponse = await fetch(
+                `https://graph.facebook.com/v17.0/${businessAccountId}/phone_numbers`,
+                {
+                  headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                  }
+                }
+              );
+              
+              if (phoneNumbersResponse.ok) {
+                const phoneNumbersData = await phoneNumbersResponse.json();
+                console.log(`📱 Phone numbers response:`, JSON.stringify(phoneNumbersData, null, 2));
+                
+                // Use the first phone number ID found
+                const phoneNumberId = phoneNumbersData.data?.[0]?.id;
+                
+                if (phoneNumberId) {
+                  whatsappCredentials = {
+                    token: accessToken,
+                    phoneNumberId: phoneNumberId,
+                    businessAccountId: businessAccountId,
+                    accountName: whatsappAccount.name || whatsappAccount.external_id
+                  };
+                  console.log(`📱 WhatsApp credentials found with phone number ID: ${phoneNumberId}`);
+                } else {
+                  console.error('❌ No phone numbers found for this WhatsApp Business account');
+                }
+              } else {
+                console.error('❌ Failed to fetch phone numbers:', await phoneNumbersResponse.text());
+              }
+            } catch (error) {
+              console.error('❌ Error fetching phone number ID:', error);
+            }
+          } else {
+            // Fallback to original logic if structure is different
+            whatsappCredentials = {
+              token: accessToken,
+              phoneNumberId: whatsappAccount.auth?.phone_number_id || whatsappAccount.auth?.whatsapp_business_account_id,
+              accountName: whatsappAccount.name || whatsappAccount.external_id
+            };
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️ Failed to fetch WhatsApp credentials from Pipedream:`, error.message);
+      }
+
+      // Send WhatsApp message ONLY if we have Pipedream credentials
+      if (whatsappCredentials?.token && whatsappCredentials?.phoneNumberId) {
+        console.log('📱 Using WhatsApp credentials from Pipedream');
+        resp = await sendWhatsApp(to, text, whatsappCredentials.token, whatsappCredentials.phoneNumberId);
+      } else {
+        throw new Error('No WhatsApp Business account connected. Please connect your WhatsApp Business account through Pipedream first.');
+      }
 
     } else if (channel === "email") {
       // ─── Email branch: Try Gmail MCP first, fallback to SES ─────────────
@@ -199,6 +290,9 @@ export async function handler(event) {
         useGmail = await gmailSender.isGmailConnected(userId);
         if (useGmail) {
           gmailAccount = await gmailSender.getGmailAccount(userId);
+          // Get the user's email address from the Gmail account
+          userEmailAddress = gmailAccount.name || gmailAccount.external_id;
+          console.log(`📧 User's Gmail address: ${userEmailAddress}`);
         }
         console.log(`📧 Gmail connection status for user ${userId}:`, useGmail);
       } catch (error) {
@@ -222,7 +316,8 @@ export async function handler(event) {
         hasReplyId: !!replyId,
         replyId: replyId,
         isReply: !!replyId,
-        useGmail: useGmail
+        useGmail: useGmail,
+        userEmailAddress: userEmailAddress
       });
 
       if (useGmail) {
@@ -280,11 +375,15 @@ export async function handler(event) {
       Channel:    channel,
       Direction:  'outgoing',
       Body:       text,
-      Result:     {}
+      Result:     {},
+      userId:     userId,
+      ThreadIdTimestamp: `${to}#${timestamp}`
     };
 
     if (channel === "whatsapp") {
-      messageItem.Result = { MessageId: resp.MessageId || resp.messageId };
+      messageItem.Result = { 
+        MessageId: resp?.messageId || resp?.MessageId || resp?.messages?.[0]?.id || 'whatsapp-sent'
+      };
     } else {
       messageItem.Result = { MessageId: resp?.MessageId || resp };
       if (replyId) {
@@ -316,14 +415,24 @@ export async function handler(event) {
     }));
 
     // ─── 7) Build rawEvent envelope for context engine ────────────────────
-    // Determine the sender email based on provider
+    // Determine the sender email based on provider and available user info
     let senderEmail = "akbar@usebeya.com"; // Default SES sender
     let provider = "ses"; // Default provider
     
-    if (resp && resp.provider === "gmail-mcp") {
-      senderEmail = resp.from || gmailAccount?.external_id || "gmail-user@connected.com";
+    if (channel === "whatsapp") {
+      // WhatsApp message handling
+      provider = "whatsapp";
+    } else if (resp && resp.provider === "gmail-mcp") {
+      // Gmail MCP was used - use the email from the response
+      senderEmail = resp.from || userEmailAddress || gmailAccount?.external_id || "gmail-user@connected.com";
       provider = "gmail";
+    } else if (userEmailAddress) {
+      // User has Gmail connected but we're using SES - still show their Gmail address
+      senderEmail = userEmailAddress;
+      provider = "ses-with-gmail-identity";
+      console.log(`📧 Using user's Gmail address with SES: ${senderEmail}`);
     }
+    // If no Gmail account connected, falls back to default SES sender
 
     const rawEvent = {
       eventId: uuidv4(),
@@ -334,12 +443,18 @@ export async function handler(event) {
       data: {
         messageId: messageItem.Result.MessageId,
         threadId: to,
-        subject: subject,
-        bodyText: text,
-        bodyHtml: html,
-        to: Array.isArray(to) ? to : [to],
-        from: senderEmail,
-        provider: provider, // Track which email provider was used
+        ...(channel === "email" && {
+          subject: subject,
+          bodyText: text,
+          bodyHtml: html,
+          to: Array.isArray(to) ? to : [to],
+          from: senderEmail,
+        }),
+        ...(channel === "whatsapp" && {
+          bodyText: text,
+          to: to
+        }),
+        provider: provider,
         ...(resp && resp.provider === "gmail-mcp" && { gmailData: resp.toolResult })
       }
     };

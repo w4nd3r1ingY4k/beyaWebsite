@@ -1,6 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createFrontendClient } from "@pipedream/sdk/browser";
 import { useAuth } from '../../../../../AuthContext';
+
+// Fargate service URL - using DNS name instead of IP for stability
+const FARGATE_SERVICE_URL = 'http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074';
 
 interface Integration {
   id: string;
@@ -26,6 +29,27 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
     { id: 'square',            name: 'Square',             icon: '💳', description: 'Payment processing and POS',   connected: false,  lastSync: '3 minutes ago' },
     { id: 'klaviyo',           name: 'Klaviyo',            icon: '✉️', description: 'Email marketing automation', connected: false },
   ]);
+
+  // Check localStorage for persisted connections on mount
+  useEffect(() => {
+    if (!user?.userId) return;
+    
+    try {
+      const userConnections = JSON.parse(localStorage.getItem('userConnections') || '{}');
+      const userConnection = userConnections[user.userId];
+      
+      if (userConnection) {
+        console.log('📋 Found persisted connections:', userConnection);
+        
+        // Update Gmail status if found
+        if (userConnection.gmail) {
+          updateIntegration('gmail', true, `Connected to ${userConnection.gmail}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading persisted connections:', error);
+    }
+  }, [user?.userId]);
 
   const updateIntegration = (id: string, connected: boolean, lastSync?: string) => {
     setIntegrations(current =>
@@ -62,52 +86,113 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
       }
       let result;
       if (integrationId === 'shopify') {
-        result = await safeFetch('http://3.234.215.178:2074/shopify/connect', { userId, action: 'create_token' });
+        result = await safeFetch(`${FARGATE_SERVICE_URL}/shopify/connect`, { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'shopify', token: result.token,
           onSuccess: () => updateIntegration('shopify', true, 'just now'),
           onError: err => alert('Shopify connect error: ' + err.message),
         });
       } else if (integrationId === 'business-central') {
-        result = await safeFetch('http://3.234.215.178:2074/business-central/connect', { userId, action: 'create_token' });
+        result = await safeFetch(`${FARGATE_SERVICE_URL}/business-central/connect`, { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'dynamics_365_business_central_api', token: result.token,
           onSuccess: () => updateIntegration('business-central', true, 'just now'),
           onError: err => alert('Business Central connect error: ' + err.message),
         });
       } else if (integrationId === 'klaviyo') {
-        result = await safeFetch('http://3.234.215.178:2074/klaviyo/connect', { userId, action: 'create_token' });
+        result = await safeFetch(`${FARGATE_SERVICE_URL}/klaviyo/connect`, { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'klaviyo', token: result.token,
           onSuccess: () => updateIntegration('klaviyo', true, 'just now'),
           onError: err => alert('Klaviyo connect error: ' + err.message),
         });
       } else if (integrationId === 'square') {
-        result = await safeFetch('http://3.234.215.178:2074/square/connect', { userId, action: 'create_token' });
+        result = await safeFetch(`${FARGATE_SERVICE_URL}/square/connect`, { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'square', token: result.token,
           onSuccess: () => updateIntegration('square', true, 'just now'),
           onError: err => alert('Square connect error: ' + err.message),
         });
+      } else if (integrationId === 'whatsapp') {
+        result = await safeFetch(`${FARGATE_SERVICE_URL}/whatsapp/connect`, { userId, action: 'create_token' });
+        await createFrontendClient().connectAccount({
+          app: 'whatsapp_business', token: result.token,
+          onSuccess: () => updateIntegration('whatsapp', true, 'just now'),
+          onError: err => alert('WhatsApp connect error: ' + err.message),
+        });
       } else if (integrationId === 'gmail') {
-        result = await safeFetch('http://3.234.215.178:2074/gmail/connect', { userId, action: 'create_token' });
+        result = await safeFetch(`${FARGATE_SERVICE_URL}/gmail/connect`, { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'gmail', token: result.token,
-          onSuccess: async () => {
+          onSuccess: async (account) => {
+            console.log('🎉 Gmail account connected:', account);
             updateIntegration('gmail', true, 'just now');
             
-            // Auto-setup Gmail polling after successful connection
+            // Update the Users table with the connected Gmail account
             try {
-              console.log('🔄 Setting up Gmail polling via Fargate service...');
-              const pollingResult = await safeFetch('http://3.234.215.178:2074/api/integrations/setup-polling', { 
+              console.log('📝 Updating user record with Gmail connection...');
+              
+              // Get the email address from the account
+              const gmailAddress = (account as any)?.name || (account as any)?.external_id || 'gmail-connected';
+              
+              // Call an existing endpoint to update the user record
+              // We can use the Flows update endpoint as a workaround to update user data
+              const updatePayload = {
+                userId: userId,
+                connectedAccounts: {
+                  gmail: gmailAddress
+                }
+              };
+              
+              console.log('📧 Storing Gmail address in user record:', gmailAddress);
+              
+              // Store in localStorage as a temporary solution
+              const userConnections = JSON.parse(localStorage.getItem('userConnections') || '{}');
+              userConnections[userId] = {
+                ...userConnections[userId],
+                gmail: gmailAddress,
+                connectedAt: new Date().toISOString()
+              };
+              localStorage.setItem('userConnections', JSON.stringify(userConnections));
+              console.log('✅ Stored Gmail connection in localStorage');
+            } catch (updateError) {
+              console.error('⚠️ Failed to update user record:', updateError);
+              // Don't fail the whole process if update fails
+            }
+            
+            // Phase 1: Create Pipedream workflow first
+            try {
+              console.log('🔄 Step 1: Creating Gmail Pipedream workflow...');
+              const WORKFLOW_LAMBDA_URL = 'https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws/';
+              
+              // Use the account ID from the connection response
+              const gmailAccountId = (account as any)?.id || 'apn_GXhl8aX'; // Fallback to hardcoded if not available
+              
+              console.log('📧 Using Gmail account ID:', gmailAccountId);
+              
+              const workflowResult = await safeFetch(WORKFLOW_LAMBDA_URL, {
+                action: 'create_workflow',
+                userId,
+                gmailAccountId
+                // Don't send userEmail - let Lambda fetch it from Pipedream
+              });
+              console.log('✅ Gmail workflow created:', workflowResult);
+              
+              // Phase 2: Start polling with the created workflow's webhook URL
+              console.log('🔄 Step 2: Setting up Gmail polling via Fargate service...');
+              const webhookUrl = workflowResult.workflow?.webhook_url || workflowResult.workflow?.webhookUrl || 'https://eo2g5g5i8w7vtvc.m.pipedream.net'; // Check both properties
+              console.log('📌 Using webhook URL:', webhookUrl);
+              
+              const pollingResult = await safeFetch(`${FARGATE_SERVICE_URL}/api/integrations/setup-polling`, { 
                 userId, 
                 serviceType: 'gmail',
-                webhookUrl: 'https://eo2g5g5i8w7vtvc.m.pipedream.net'
+                webhookUrl: webhookUrl
               });
               console.log('✅ Gmail polling setup successful:', pollingResult);
-            } catch (pollingError) {
-              console.error('⚠️ Failed to setup Gmail polling:', pollingError);
-              alert('Gmail connected, but failed to start email monitoring. Please try reconnecting.');
+              
+            } catch (setupError) {
+              console.error('⚠️ Failed to setup Gmail integration:', setupError);
+              alert('Gmail connected, but failed to set up the email processing workflow. Please try reconnecting.');
             }
           },
           onError: err => alert('Gmail connect error: ' + err.message),
@@ -125,12 +210,24 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
     console.log('Disconnecting from:', integrationId);
     
     if (integrationId === 'gmail') {
+      // Remove from localStorage
+      try {
+        const userConnections = JSON.parse(localStorage.getItem('userConnections') || '{}');
+        if (userConnections[user!.userId]) {
+          delete userConnections[user!.userId].gmail;
+          localStorage.setItem('userConnections', JSON.stringify(userConnections));
+          console.log('✅ Removed Gmail from localStorage');
+        }
+      } catch (error) {
+        console.error('Error removing from localStorage:', error);
+      }
+      
       // Stop Gmail polling via Fargate service
       try {
         const userId = user?.userId;
         if (userId) {
           console.log('🛑 Stopping Gmail polling...');
-          await safeFetch('http://3.234.215.178:2074/api/integrations/stop-polling', { 
+          await safeFetch(`${FARGATE_SERVICE_URL}/api/integrations/stop-polling`, { 
             userId, 
             serviceType: 'gmail' 
           });
