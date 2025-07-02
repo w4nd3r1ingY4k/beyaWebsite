@@ -48,6 +48,7 @@ export const BeyaFeaturesSection = () => {
 
   return (
     <section
+      id="features"
       style={{
         padding: '8rem 0',
         background: 'linear-gradient(to bottom, #F9FAFB, #FFFFFF)',

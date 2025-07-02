@@ -94,7 +94,7 @@ export const teamMembers = [
     name: "Austin Liu",
     school: "Brown University",
     major: "Applied Math and Computer Science + Economics",
-    role: "Founding Software Engineer",
+    role: "Cofounder, CTO",
     socialLinks: [
       {
         href: "https://www.linkedin.com/in/austin-liu-797877262/",

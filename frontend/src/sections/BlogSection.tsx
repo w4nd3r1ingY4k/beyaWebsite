@@ -147,43 +147,6 @@ export const BlogSection: React.FC<BlogProps> = ({ blogPosts }) => {
             <BlogPost key={index} {...post} />
           ))}
         </div>
-
-        {/* View All Posts Button */}
-        <div style={{ textAlign: "center", marginTop: "4rem" }}>
-          <button
-            style={{
-              padding: "1rem 2.5rem",
-              fontSize: "1rem",
-              fontWeight: 600,
-              color: "#374151",
-              background: "rgba(255, 255, 255, 0.9)",
-              border: "1px solid rgba(229, 231, 235, 0.6)",
-              borderRadius: "9999px",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.08)",
-              fontFamily: systemFontStack,
-              backdropFilter: "blur(10px)",
-              WebkitBackdropFilter: "blur(10px)",
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 8px 20px rgba(0, 0, 0, 0.12)";
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.95)";
-              e.currentTarget.style.borderColor = "#DE1785";
-              e.currentTarget.style.color = "#DE1785";
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.08)";
-              e.currentTarget.style.background = "rgba(255, 255, 255, 0.9)";
-              e.currentTarget.style.borderColor = "rgba(229, 231, 235, 0.6)";
-              e.currentTarget.style.color = "#374151";
-            }}
-          >
-            View All Posts
-          </button>
-        </div>
       </div>
     </section>
   );
