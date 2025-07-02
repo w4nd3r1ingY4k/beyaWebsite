@@ -26,6 +26,9 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
   // Mock tonality analysis feature
   const [showTonalityModal, setShowTonalityModal] = useState(false);
   
+  // Short-term memory configuration
+  const MAX_CONVERSATION_HISTORY = 10; // Keep last 10 messages for context
+  
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -176,6 +179,18 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
+  // Helper function to get conversation history for context
+  const getConversationHistory = () => {
+    return messages
+      .filter(msg => msg.content && msg.content.trim() !== '') // Filter out empty messages
+      .slice(-MAX_CONVERSATION_HISTORY) // Use configurable history length
+      .map(msg => ({
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.content,
+        timestamp: msg.timestamp
+      }));
+  };
+
   // NEW: Real API integration with semantic search
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
@@ -204,11 +219,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
           userId: user?.userId || null,
           responseType: 'auto',
           topK: 5,
-          conversationHistory: messages.slice(-6).map(msg => ({
-            role: msg.sender === 'user' ? 'user' : 'assistant',
-            content: msg.content,
-            timestamp: msg.timestamp
-          }))
+          conversationHistory: getConversationHistory()
         })
       });
 
@@ -255,6 +266,12 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
         startTypewriter(errorMessage.id, errorText);
       }, 100);
     }
+  };
+
+  // Clear conversation history (useful for starting fresh)
+  const clearConversationHistory = () => {
+    setMessages([]);
+    setTypewriterStates({});
   };
 
   // Mock tonality analysis feature
@@ -342,6 +359,13 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
             }}>
               Context-aware AI assistant
             </p>
+            <p style={{
+              margin: '2px 0 0 0',
+              fontSize: '10px',
+              color: '#9ca3af'
+            }}>
+              Memory: {getConversationHistory().length}/{MAX_CONVERSATION_HISTORY} messages
+            </p>
           </div>
         </div>
           
@@ -426,11 +450,12 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
                 <div
                   style={{
                     maxWidth: '90%',
-                    padding: '4px 0',
+                    padding: '8px 12px',
+                    borderRadius: '12px',
+                    background: '#c4c9cf',
                     fontSize: '12px',
                     lineHeight: '1.4',
-                    wordWrap: 'break-word',
-                    color: '#111827'
+                    wordWrap: 'break-word'
                   }}
                 >
                   {displayContent}

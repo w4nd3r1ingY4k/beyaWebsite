@@ -13,16 +13,20 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.840.0",
+    "@aws-sdk/client-eventbridge": "^3.840.0",
     "@aws-sdk/client-sqs": "^3.840.0",
+    "@aws-sdk/lib-dynamodb": "^3.840.0",
     "@pinecone-database/pinecone": "^6.1.1",
     "@pipedream/sdk": "^1.6.9",
     "aws-sdk": "^2.1692.0",
     "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "googleapis": "^150.0.1",
     "node-fetch": "^3.3.2",
     "openai": "^5.8.2",
-    "square": "^42.3.0"
+    "square": "^42.3.0",
+    "uuid": "^11.1.0"
   }
 }

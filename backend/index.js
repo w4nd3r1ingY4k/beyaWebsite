@@ -974,7 +974,7 @@ app.post("/gmail/workflow", async (req, res) => {
 
   try {
     // Call the Gmail workflow manager Lambda function
-    const lambdaUrl = process.env.GMAIL_WORKFLOW_LAMBDA_URL || 'https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/';
+    const lambdaUrl = 'https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/';
     
     const response = await fetch(lambdaUrl, {
       method: 'POST',
