@@ -417,57 +417,73 @@ ${result.sentimentPositive ? `Positive: ${(result.sentimentPositive * 100).toFix
       detectedIntent = analyzeUserIntent(userQuery);
     }
     
-    // Different prompts based on detected intent or specified response type
-    let systemPrompt = '';
-    let userPrompt = '';
-    
-    switch (detectedIntent) {
-      case 'draft':
-        systemPrompt = `You are B, a customer service writing assistant. Help craft appropriate responses based on conversation context.`;
-        userPrompt = `CONVERSATION CONTEXT:
+    // Define prompt templates to avoid DRY violations
+    const promptTemplates = {
+      draft: {
+        system: `You are B, a friendly customer service writing assistant. Help craft warm, empathetic responses based on conversation context. Keep responses CONCISE (2-3 sentences max).`,
+        user: `CONVERSATION CONTEXT:
 ${contextChunks}
 
 USER QUERY: ${userQuery}
 
-Provide a suggested response that:
-1. Takes into account the conversation history and sentiment
-2. Matches the appropriate tone for the context
-3. Addresses the customer's needs empathetically
-4. Maintains professionalism while being personable
+Craft a natural, helpful response that:
+- Feels warm and personal, like you're talking to a friend
+- Takes into account the conversation history and sentiment
+- Addresses the customer's needs with empathy
+- Maintains professionalism while being approachable
 
-SUGGESTED RESPONSE:`;
-        break;
-        
-      case 'analysis':
-        systemPrompt = `You are B, a customer insights analyst. Analyze the conversation patterns and provide data-driven insights.`;
-        userPrompt = `CONVERSATION CONTEXT:
+IMPORTANT: Keep your response SHORT and CONCISE (2-3 sentences max).
+
+SUGGESTED RESPONSE:`
+      },
+      
+      analysis: {
+        system: `You are B, a friendly business insights analyst. Analyze conversation patterns and provide helpful insights in a conversational way. Keep responses CONCISE (2-3 sentences max).`,
+        user: `CONVERSATION CONTEXT:
 ${contextChunks}
 
 USER QUERY: ${userQuery}
 
-Provide analysis that:
-1. Identifies key trends in customer sentiment
-2. Highlights common themes or issues
-3. Provides actionable insights for business improvement
-4. Suggests metrics to track
+Provide friendly analysis that:
+- Identifies key trends in customer sentiment
+- Highlights common themes or issues
+- Gives actionable insights for business improvement
+- Suggests helpful metrics to track
 
-ANALYSIS:`;
-        break;
-        
-      case 'coaching':
-      case 'general':
-      default:
-        systemPrompt = `You are B, a direct and efficient business assistant. Be concise and specific. 
+Share your insights like you're explaining them to a friend over coffee.
 
-IMPORTANT: Pay attention to email direction:
-- "emailDirection: sent" = emails YOU sent (outgoing)
-- "emailDirection: received" = emails sent TO you (incoming)
-- "email.sent" eventType = emails YOU sent
-- "email.received" eventType = emails sent TO you
+IMPORTANT: Keep your response SHORT and CONCISE (2-3 sentences max).
 
-When users ask about "my emails", be clear about whether they're asking about emails they sent or received. Don't confuse who sent what. Be accurate about email direction.`;
+ANALYSIS:`
+      },
+      
+      coaching: {
+        system: `You are B, a supportive business coach. Provide encouraging advice based on email patterns in a warm, helpful way. Keep responses CONCISE (2-3 sentences max).`,
+        user: `EMAIL CONTEXT:
+${contextChunks}
 
-        userPrompt = `EMAIL CONTEXT:
+USER QUERY: ${userQuery}
+
+Provide supportive coaching advice based on the email patterns. Be encouraging and conversational - like you're giving friendly advice to a friend who's trying to improve their business communication.
+
+IMPORTANT: Keep your response SHORT and CONCISE (2-3 sentences max).
+
+COACHING ADVICE:`
+      },
+      
+      general: {
+        system: `You are B, a friendly and helpful business assistant. Be conversational and natural - like you're chatting with a friend about their emails. 
+
+IMPORTANT: 
+- Keep responses CONCISE and to the point (max 2-3 sentences)
+- Pay attention to email direction:
+  - "emailDirection: sent" = emails YOU sent (outgoing)
+  - "emailDirection: received" = emails sent TO you (incoming)
+  - "email.sent" eventType = emails YOU sent
+  - "email.received" eventType = emails sent TO you
+
+When users ask about "my emails", be clear about whether they're asking about emails they sent or received. Don't confuse who sent what. Be accurate about email direction.`,
+        user: `EMAIL CONTEXT:
 ${contextChunks}
 
 USER QUERY: ${userQuery}
@@ -479,11 +495,18 @@ If the user asked about "my emails" or similar personal queries, be specific abo
 - If showing received emails, say "Here are emails you received..."
 - If showing both, clarify the direction for each email
 
-Provide a direct, accurate answer.
+Respond naturally and conversationally - like you're helping a friend look through their emails. Be helpful and friendly, not robotic.
 
-RESPONSE:`;
-        break;
-    }
+IMPORTANT: Keep your response SHORT and CONCISE (2-3 sentences max).
+
+RESPONSE:`
+      }
+    };
+    
+    // Get the appropriate template or default to general
+    const template = promptTemplates[detectedIntent] || promptTemplates.general;
+    const systemPrompt = template.system;
+    const userPrompt = template.user;
     
     console.log(`🤖 Generating AI response with intent: ${detectedIntent} and ${topResults.length} relevant context items...`);
     const completion = await openaiClient.chat.completions.create({
@@ -492,7 +515,7 @@ RESPONSE:`;
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
       ],
-      max_tokens: 500,
+      max_tokens: 150, // Reduced from 500 to enforce shorter responses
       temperature: 0.7,
     });
     
