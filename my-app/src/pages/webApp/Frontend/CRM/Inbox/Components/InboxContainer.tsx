@@ -6,6 +6,8 @@ import ComposeModal from './ComposeModal';
 import TeamChat from './TeamChat';
 import LoadingScreen from '../../../components/LoadingScreen';
 import { discussionsService } from '../../../../services/discussionsService';
+import { getUserById } from '../../../../services/userService';
+import { Users, Plus } from 'lucide-react';
 
 interface Message {
   MessageId?: string;
@@ -50,7 +52,9 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
   const [discussionMessages, setDiscussionMessages] = useState<any[]>([]);
 
-
+  // Participants state
+  const [participantNames, setParticipantNames] = useState<{[userId: string]: string}>({});
+  const [participantsLoading, setParticipantsLoading] = useState(false);
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'waiting' | 'resolved' | 'overdue'>('all');
@@ -424,6 +428,51 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
     };
   }, []);
+
+  // Function to fetch participant names
+  const fetchParticipantNames = async (participantIds: string[]) => {
+    if (!participantIds || participantIds.length === 0) return;
+    
+    setParticipantsLoading(true);
+    try {
+      const namePromises = participantIds.map(async (userId: string) => {
+        if (participantNames[userId]) {
+          return { userId, name: participantNames[userId] };
+        }
+        
+        try {
+          const userInfo = await getUserById(userId);
+          const displayName = userInfo.displayName || userInfo.subscriber_email || `User ${userId.slice(-4)}`;
+          return { userId, name: displayName };
+        } catch (error) {
+          console.error(`Error fetching user ${userId}:`, error);
+          return { userId, name: `User ${userId.slice(-4)}` };
+        }
+      });
+      
+      const names = await Promise.all(namePromises);
+      const newNames = { ...participantNames };
+             names.forEach(({ userId, name }: { userId: string; name: string }) => {
+        newNames[userId] = name;
+      });
+      setParticipantNames(newNames);
+    } catch (error) {
+      console.error('Error fetching participant names:', error);
+    } finally {
+      setParticipantsLoading(false);
+    }
+  };
+
+  // Effect to load participant names when selection changes
+  useEffect(() => {
+    const currentFlow = currentView === 'discussions' 
+      ? discussions.find(d => d.discussionId === selectedDiscussionId)
+      : flows.find(f => f.flowId === selectedThreadId);
+    
+    if (currentFlow && Array.isArray(currentFlow.participants) && currentFlow.participants.length > 0) {
+      fetchParticipantNames(currentFlow.participants);
+    }
+  }, [selectedThreadId, selectedDiscussionId, flows, discussions, currentView]);
 
   // Copy the exact functions from MessageList
   async function sendWhatsAppMessage(to: string, body: string) {
@@ -1308,6 +1357,149 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     return flows.length;
   };
 
+    // Get current participants for display
+  const getCurrentParticipants = () => {
+    const currentFlow = currentView === 'discussions' 
+      ? discussions.find(d => d.discussionId === selectedDiscussionId)
+      : flows.find(f => f.flowId === selectedThreadId);
+    
+    if (!currentFlow || !Array.isArray(currentFlow.participants)) {
+      return [];
+    }
+    
+    return currentFlow.participants.map((userId: string) => ({
+      userId,
+      name: participantNames[userId] || `User ${userId.slice(-4)}`,
+      isCurrentUser: userId === user?.userId
+    }));
+  };
+
+  // Add participant function
+  // Helper function to update a flow (copied from MessageList)
+  async function updateFlow(flowId: string, updates: Record<string, any>) {
+    // Ensure userId is present in updates
+    const payload = {
+      ...updates,
+      userId: user!.userId // Add userId from auth context
+    };
+
+    const FUNCTION_URL = 'https://spizyylamz3oavcuay5a3hrmsi0eairh.lambda-url.us-east-1.on.aws';
+
+    const res = await fetch(
+      `${FUNCTION_URL}/flows/${encodeURIComponent(flowId)}`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.json().catch(() => null);
+      throw new Error(err?.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+
+  // Add participant function (copied from MessageList and adapted)
+  async function addParticipant(flowId: string, newEmail: string) {
+    // 1) Find the flow object in local state
+    const flowObj = currentView === 'discussions' 
+      ? discussions.find(d => d.discussionId === flowId)
+      : flows.find(f => f.flowId === flowId);
+    
+    if (!flowObj) {
+      throw new Error("Flow not found");
+    }
+
+    // 2) Lookup the userId for `newEmail`
+    const API_BASE = 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod';
+    let lookupResponse: Response;
+    try {
+      lookupResponse = await fetch(`${API_BASE}/users/email?email=${encodeURIComponent(newEmail)}`);
+    } catch (networkErr) {
+      console.error("Network error while looking up email:", networkErr);
+      throw new Error("Could not reach user‐lookup service");
+    }
+
+    if (lookupResponse.status === 404) {
+      // The user wasn't found in the Users table
+      throw new Error(`No user found with email "${newEmail}"`);
+    }
+
+    if (!lookupResponse.ok) {
+      // Some other error (500, etc.)
+      const errBody = await lookupResponse.text().catch(() => null);
+      console.error("Error from user‐lookup endpoint:", lookupResponse.status, errBody);
+      throw new Error("Error looking up user by email");
+    }
+
+    // 3) Parse the JSON to get the userId
+    const userRecord = (await lookupResponse.json()) as { userId: string; [key: string]: any };
+    const newUserId = userRecord.userId;
+    if (!newUserId) {
+      console.error("Lookup returned no userId:", userRecord);
+      throw new Error("Invalid lookup result: missing userId");
+    }
+
+    // 4) Grab existing participants (userIds) or default to empty array
+    const existing: string[] = Array.isArray(flowObj.participants)
+      ? flowObj.participants
+      : [];
+
+    // 5) Dedupe via a Set, then add the new userId
+    const deduped = new Set(existing);
+    deduped.add(newUserId);
+
+    // 6) Convert back to array
+    const updatedParticipants = Array.from(deduped);
+
+    // 7) Call updateFlow, sending the full deduped array of userIds
+    let updatedFlowData: any;
+    try {
+      const { updated } = await updateFlow(flowId, {
+        participants: updatedParticipants,
+      });
+      updatedFlowData = updated;
+    } catch (updateErr: any) {
+      console.error("Error updating flow participants:", updateErr);
+      throw new Error("Could not update flow participants");
+    }
+
+    // 8) Update local React state so the UI refreshes
+    if (currentView === 'discussions') {
+      setDiscussions(prev => prev.map(d => 
+        d.discussionId === updatedFlowData.flowId 
+          ? { ...d, participants: updatedParticipants }
+          : d
+      ));
+    } else {
+      setFlows(prev => prev.map(f => 
+        f.flowId === updatedFlowData.flowId 
+          ? { ...f, participants: updatedParticipants }
+          : f
+      ));
+    }
+
+    // Refresh participant names
+    fetchParticipantNames(updatedParticipants);
+  }
+
+  const handleAddParticipant = async () => {
+    if (!selectedThreadId && !selectedDiscussionId) return;
+    
+    const email = prompt('Enter email to add:');
+    if (email) {
+      try {
+        const currentFlowId = selectedThreadId || selectedDiscussionId;
+        if (currentFlowId) {
+          await addParticipant(currentFlowId, email);
+        }
+      } catch (err: any) {
+        alert(`Error: ${err.message}`);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <LoadingScreen 
@@ -1551,6 +1743,151 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
               </button>
             ))}
             
+            {/* Participants Display & Share */}
+            {(selectedThreadId || selectedDiscussionId) && (() => {
+              const participants = getCurrentParticipants();
+              
+              return (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginLeft: '24px',
+                  paddingLeft: '24px',
+                  borderLeft: '1px solid #e5e7eb'
+                }}>
+                  {participants.length > 0 ? (
+                    // Show full participants display when there are participants
+                    <>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}>
+                        <Users size={16} style={{ color: '#6b7280' }} />
+                        <span style={{
+                          fontSize: '14px',
+                          color: '#6b7280',
+                          fontWeight: '500'
+                        }}>
+                          Participants:
+                        </span>
+                      </div>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        maxWidth: '300px',
+                        overflow: 'hidden'
+                      }}>
+                        {participantsLoading ? (
+                          <span style={{
+                            fontSize: '14px',
+                            color: '#6b7280',
+                            fontStyle: 'italic'
+                          }}>
+                            Loading...
+                          </span>
+                        ) : (
+                          participants.slice(0, 3).map((participant: {userId: string; name: string; isCurrentUser: boolean}, index: number) => (
+                            <div key={participant.userId} style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px'
+                            }}>
+                              <div style={{
+                                width: '8px',
+                                height: '8px',
+                                borderRadius: '50%',
+                                backgroundColor: participant.isCurrentUser ? '#10b981' : '#6b7280'
+                              }} />
+                              <span style={{
+                                fontSize: '14px',
+                                color: '#374151',
+                                fontWeight: participant.isCurrentUser ? '600' : '400'
+                              }}>
+                                {participant.isCurrentUser ? 'You' : participant.name}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                        {participants.length > 3 && (
+                          <span style={{
+                            fontSize: '14px',
+                            color: '#6b7280',
+                            fontStyle: 'italic'
+                          }}>
+                            +{participants.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Add Participant Button */}
+                      <button
+                        onClick={handleAddParticipant}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '28px',
+                          height: '28px',
+                          borderRadius: '50%',
+                          border: '1px solid #e5e7eb',
+                          backgroundColor: '#f9fafb',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          marginLeft: '8px'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f3f4f6';
+                          e.currentTarget.style.borderColor = '#d1d5db';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = '#f9fafb';
+                          e.currentTarget.style.borderColor = '#e5e7eb';
+                        }}
+                        title="Add participant"
+                      >
+                        <Plus size={14} style={{ color: '#6b7280' }} />
+                      </button>
+                    </>
+                  ) : (
+                    // Show share button when there are no participants
+                    <button
+                      onClick={handleAddParticipant}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        backgroundColor: '#f9fafb',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        fontSize: '14px',
+                        color: '#6b7280'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f3f4f6';
+                        e.currentTarget.style.borderColor = '#d1d5db';
+                        e.currentTarget.style.color = '#374151';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = '#f9fafb';
+                        e.currentTarget.style.borderColor = '#e5e7eb';
+                        e.currentTarget.style.color = '#6b7280';
+                      }}
+                      title="Share conversation"
+                    >
+                      <Users size={16} />
+                      <span style={{ fontWeight: '500' }}>Share</span>
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
+            
             {/* Real-time indicator when polling is active */}
             {isPolling && selectedThreadId && (
               <div style={{
@@ -1697,7 +2034,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         )}
       </div>
 
-      {/* Main content area - no margin here, let ThreadList handle its own spacing */}
+      {/* Main content area - offset by status bar height */}
       <div style={{
         display: 'flex',
         flex: 1,

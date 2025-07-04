@@ -1497,25 +1497,6 @@ setTeamChatInput("");
                   
                   <div style={{ textAlign: 'left', marginTop: 20 }}>
                   <button
-                    onClick={() => {
-                    const email = prompt('Enter email to add:')
-                    if (email) addParticipant(selectedId, email)
-                    }}
-                    style={{
-                    background: '#DE1785',
-                    color: '#fff',
-                    padding: '7px 18px',
-                    border: 'none',
-                    borderRadius: 6,
-                    fontSize: '1.1em',
-                    cursor: 'pointer',
-                    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
-                    marginRight: 20
-                    }}
-                  >
-                    Share
-                  </button>
-                  <button
                     onClick={() => setIsReplying(!isReplying)}
                     style={{
                     background: '#DE1785',
