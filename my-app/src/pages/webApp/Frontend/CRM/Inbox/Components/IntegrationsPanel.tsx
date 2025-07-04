@@ -21,13 +21,13 @@ interface IntegrationsPanelProps {
 const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) => {
   const { user } = useAuth();
   const [integrations, setIntegrations] = useState<Integration[]>([
-    { id: 'shopify',           name: 'Shopify',            icon: '🛍️', description: 'E-commerce platform',           connected: false },
-    { id: 'business-central',  name: 'Business Central BI', icon: '📊', description: 'Microsoft business intelligence', connected: false },
+    // { id: 'shopify',           name: 'Shopify',            icon: '🛍️', description: 'E-commerce platform',           connected: false },
+    // { id: 'business-central',  name: 'Business Central BI', icon: '📊', description: 'Microsoft business intelligence', connected: false },
     { id: 'gmail',             name: 'Gmail',              icon: '📧', description: 'Email integration',            connected: false },
     { id: 'whatsapp',          name: 'WhatsApp Business',  icon: '📱', description: 'Messaging platform',          connected: true,  lastSync: '5 minutes ago' },
-    { id: 'slack',             name: 'Slack',              icon: '💬', description: 'Team communication',          connected: false },
-    { id: 'square',            name: 'Square',             icon: '💳', description: 'Payment processing and POS',   connected: false,  lastSync: '3 minutes ago' },
-    { id: 'klaviyo',           name: 'Klaviyo',            icon: '✉️', description: 'Email marketing automation', connected: false },
+    // { id: 'slack',             name: 'Slack',              icon: '💬', description: 'Team communication',          connected: false },
+    // { id: 'square',            name: 'Square',             icon: '💳', description: 'Payment processing and POS',   connected: false,  lastSync: '3 minutes ago' },
+    // { id: 'klaviyo',           name: 'Klaviyo',            icon: '✉️', description: 'Email marketing automation', connected: false },
   ]);
 
   // Check localStorage for persisted connections on mount
@@ -85,39 +85,59 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
         return;
       }
       let result;
-      if (integrationId === 'shopify') {
-        result = await safeFetch(`${FARGATE_SERVICE_URL}/shopify/connect`, { userId, action: 'create_token' });
-        await createFrontendClient().connectAccount({
-          app: 'shopify', token: result.token,
-          onSuccess: () => updateIntegration('shopify', true, 'just now'),
-          onError: err => alert('Shopify connect error: ' + err.message),
-        });
-      } else if (integrationId === 'business-central') {
-        result = await safeFetch(`${FARGATE_SERVICE_URL}/business-central/connect`, { userId, action: 'create_token' });
-        await createFrontendClient().connectAccount({
-          app: 'dynamics_365_business_central_api', token: result.token,
-          onSuccess: () => updateIntegration('business-central', true, 'just now'),
-          onError: err => alert('Business Central connect error: ' + err.message),
-        });
-      } else if (integrationId === 'klaviyo') {
-        result = await safeFetch(`${FARGATE_SERVICE_URL}/klaviyo/connect`, { userId, action: 'create_token' });
-        await createFrontendClient().connectAccount({
-          app: 'klaviyo', token: result.token,
-          onSuccess: () => updateIntegration('klaviyo', true, 'just now'),
-          onError: err => alert('Klaviyo connect error: ' + err.message),
-        });
-      } else if (integrationId === 'square') {
-        result = await safeFetch(`${FARGATE_SERVICE_URL}/square/connect`, { userId, action: 'create_token' });
-        await createFrontendClient().connectAccount({
-          app: 'square', token: result.token,
-          onSuccess: () => updateIntegration('square', true, 'just now'),
-          onError: err => alert('Square connect error: ' + err.message),
-        });
-      } else if (integrationId === 'whatsapp') {
+      // if (integrationId === 'shopify') {
+      //   result = await safeFetch(`${FARGATE_SERVICE_URL}/shopify/connect`, { userId, action: 'create_token' });
+      //   await createFrontendClient().connectAccount({
+      //     app: 'shopify', token: result.token,
+      //     onSuccess: () => updateIntegration('shopify', true, 'just now'),
+      //     onError: err => alert('Shopify connect error: ' + err.message),
+      //   });
+      // } else if (integrationId === 'business-central') {
+      //   result = await safeFetch(`${FARGATE_SERVICE_URL}/business-central/connect`, { userId, action: 'create_token' });
+      //   await createFrontendClient().connectAccount({
+      //     app: 'dynamics_365_business_central_api', token: result.token,
+      //     onSuccess: () => updateIntegration('business-central', true, 'just now'),
+      //     onError: err => alert('Business Central connect error: ' + err.message),
+      //   });
+      // } else if (integrationId === 'klaviyo') {
+      //   result = await safeFetch(`${FARGATE_SERVICE_URL}/klaviyo/connect`, { userId, action: 'create_token' });
+      //   await createFrontendClient().connectAccount({
+      //     app: 'klaviyo', token: result.token,
+      //     onSuccess: () => updateIntegration('klaviyo', true, 'just now'),
+      //     onError: err => alert('Klaviyo connect error: ' + err.message),
+      //   });
+      // } else if (integrationId === 'square') {
+      //   result = await safeFetch(`${FARGATE_SERVICE_URL}/square/connect`, { userId, action: 'create_token' });
+      //   await createFrontendClient().connectAccount({
+      //     app: 'square', token: result.token,
+      //     onSuccess: () => updateIntegration('square', true, 'just now'),
+      //     onError: err => alert('Square connect error: ' + err.message),
+      //   });
+      // } else 
+      if (integrationId === 'whatsapp') {
         result = await safeFetch(`${FARGATE_SERVICE_URL}/whatsapp/connect`, { userId, action: 'create_token' });
         await createFrontendClient().connectAccount({
           app: 'whatsapp_business', token: result.token,
-          onSuccess: () => updateIntegration('whatsapp', true, 'just now'),
+          onSuccess: async (account) => {
+            console.log('🎉 WhatsApp Business account connected:', account);
+            updateIntegration('whatsapp', true, 'just now');
+            
+            try {
+              // Set up WhatsApp webhook subscriptions (this will also update the Users table)
+              console.log('📱 Setting up WhatsApp webhook subscriptions...');
+              
+              const webhookResult = await safeFetch(`${FARGATE_SERVICE_URL}/whatsapp/setup-webhooks`, {
+                userId,
+                whatsappAccountId: (account as any)?.id
+              });
+              
+              console.log('✅ WhatsApp webhook subscriptions completed:', webhookResult);
+              
+            } catch (setupError) {
+              console.error('⚠️ Failed to setup WhatsApp integration:', setupError);
+              alert('WhatsApp connected, but failed to set up message receiving. Please try reconnecting.');
+            }
+          },
           onError: err => alert('WhatsApp connect error: ' + err.message),
         });
       } else if (integrationId === 'gmail') {
@@ -135,18 +155,20 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
               // Get the email address from the account
               const gmailAddress = (account as any)?.name || (account as any)?.external_id || 'gmail-connected';
               
-              // Call an existing endpoint to update the user record
-              // We can use the Flows update endpoint as a workaround to update user data
-              const updatePayload = {
-                userId: userId,
+              console.log('📧 Storing Gmail address in user record:', gmailAddress);
+              
+              // Update Users table via UpdateUserFunction Lambda
+              const UPDATE_USER_LAMBDA_URL = 'https://6ggkpnpbpj5kynb2h5q7qke6te0fhwmx.lambda-url.us-east-1.on.aws/';
+              
+              await safeFetch(UPDATE_USER_LAMBDA_URL, {
+                userId,
                 connectedAccounts: {
                   gmail: gmailAddress
                 }
-              };
+              });
+              console.log('✅ Updated Users table with Gmail connection');
               
-              console.log('📧 Storing Gmail address in user record:', gmailAddress);
-              
-              // Store in localStorage as a temporary solution
+              // Keep localStorage as backup for now (can remove later)
               const userConnections = JSON.parse(localStorage.getItem('userConnections') || '{}');
               userConnections[userId] = {
                 ...userConnections[userId],
@@ -154,7 +176,7 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
                 connectedAt: new Date().toISOString()
               };
               localStorage.setItem('userConnections', JSON.stringify(userConnections));
-              console.log('✅ Stored Gmail connection in localStorage');
+              console.log('✅ Also stored Gmail connection in localStorage (backup)');
             } catch (updateError) {
               console.error('⚠️ Failed to update user record:', updateError);
               // Don't fail the whole process if update fails
@@ -243,20 +265,10 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
     updateIntegration(integrationId, false);
   };
 
-  const connectedCount = integrations.filter(i => i.connected).length;
-
   return (
-    <div style={{ width, display: 'flex', flexDirection: 'column', background: '#FFFBFA', borderLeft: '1px solid #e5e7eb' }}>
-      {/* Header */}
-      <div style={{ padding: 16, borderBottom: '1px solid #f0f0f0', background: '#FBF7F7' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <span style={{ fontSize: 18 }}>🔗</span>
-          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, color: '#111827' }}>Integrations</h3>
-        </div>
-        <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>{connectedCount} of {integrations.length} connected</p>
-      </div>
+    <div style={{ width, height: '100%', display: 'flex', flexDirection: 'column', background: '#FFFBFA', borderLeft: '1px solid #e5e7eb' }}>
       {/* List */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: 8 }}>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '56px 8px 8px 8px' }}>
         {integrations.map(integration => (
           <div key={integration.id} style={{ margin: '8px 0', padding: 12, background: '#fff', border: `1px solid ${integration.connected ? '#DE1785' : '#e5e7eb'}`, borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>

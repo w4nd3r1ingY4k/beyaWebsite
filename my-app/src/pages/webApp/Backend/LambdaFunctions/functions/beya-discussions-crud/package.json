@@ -1,0 +1,19 @@
+{
+  "name": "beya-discussions-crud",
+  "version": "1.0.0",
+  "description": "CRUD operations for team discussions with event emission",
+  "main": "handlers/discussionsHandler.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@aws-sdk/client-eventbridge": "^3.0.0",
+    "uuid": "^9.0.0"
+  },
+  "keywords": ["aws", "lambda", "discussions", "crud", "eventbridge"],
+  "author": "Beya",
+  "license": "ISC"
+} 

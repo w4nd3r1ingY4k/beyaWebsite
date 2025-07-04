@@ -10,6 +10,7 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { simpleParser } from "mailparser";
 import { v4 as uuidv4 } from "uuid";
+import { generateOrGetFlowId, updateFlowMetadata } from "../lib/flowUtils.js";
 
 const REGION      = process.env.AWS_REGION;
 const MSG_TABLE   = process.env.MSG_TABLE;
@@ -108,12 +109,15 @@ async function persistEmailMessage(messageData) {
   const internalId = messageId || uuidv4();
 
   try {
+    // Generate or get unique flowId for this user+contact combination
+    const flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, ownerUserId, fromAddress);
+    
     // Clean headers to remove any undefined values
     const cleanHeaders = cleanUndefinedValues(headers) || {};
     
     // Persist message
     const messageItem = {
-      ThreadId:  fromAddress || 'unknown',
+      ThreadId:  flowId,  // Use unique flowId instead of fromAddress
       Timestamp: ts,
       MessageId: internalId,
       Channel:   "email",
@@ -124,7 +128,7 @@ async function persistEmailMessage(messageData) {
       Provider:  provider,  // Track which email provider received this
       // ✅ ADD GSI FIELDS FOR USER ISOLATION
       userId:    ownerUserId,
-      ThreadIdTimestamp: `${fromAddress || 'unknown'}#${ts}`
+      ThreadIdTimestamp: `${flowId}#${ts}`  // Use flowId for consistency
     };
     
     // Add HTML body only if it exists
@@ -137,25 +141,8 @@ async function persistEmailMessage(messageData) {
       Item: messageItem
     }));
 
-    // Update flow
-    await docClient.send(new UpdateCommand({
-      TableName: FLOWS_TABLE,
-      Key: {
-        contactId: ownerUserId,
-        flowId:    fromAddress
-      },
-      UpdateExpression: `
-        SET createdAt     = if_not_exists(createdAt, :ts),
-            lastMessageAt = :ts,
-            tags          = if_not_exists(tags, :tags)
-        ADD messageCount :inc
-      `,
-      ExpressionAttributeValues: {
-        ":ts":   ts,
-        ":inc":  1,
-        ":tags": ["all"]
-      }
-    }));
+    // Update flow metadata (flowId was already generated above)
+    await updateFlowMetadata(docClient, FLOWS_TABLE, ownerUserId, flowId, fromAddress, ts);
 
     // Build and emit rawEvent for context engine
     const rawEvent = {
@@ -166,7 +153,7 @@ async function persistEmailMessage(messageData) {
       eventType: "email.received",
       data: {
         messageId: headers['Message-ID'] || internalId,
-        threadId: fromAddress,
+        threadId: flowId,  // Use unique flowId instead of fromAddress
         subject: subject,
         bodyText: textBody,
         bodyHtml: htmlBody || "",

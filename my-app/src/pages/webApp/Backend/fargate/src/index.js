@@ -12,6 +12,7 @@ import cors from "cors";
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
 import { MultiServicePollingManager } from './multi-user-polling.js';
+import { normalizeNumber } from './normalizePhone.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -1002,6 +1003,135 @@ app.post("/gmail/connect", async (req, res) => {
 // WhatsApp Business Connect endpoint
 app.post("/whatsapp/connect", async (req, res) => {
   await handleWhatsAppConnect(req, res);
+});
+
+// WhatsApp Business webhook setup endpoint
+app.post("/whatsapp/setup-webhooks", async (req, res) => {
+  try {
+    const { userId, whatsappAccountId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    console.log(`📱 Setting up WhatsApp webhooks for user ${userId}`);
+    
+    // Get WhatsApp credentials from Pipedream
+    const { WhatsAppConnectService } = await import('./whatsapp-connect.js');
+    const whatsappService = new WhatsAppConnectService();
+    const credentials = await whatsappService.getCredentials(userId);
+    
+    if (!credentials) {
+      throw new Error('No WhatsApp Business credentials found');
+    }
+
+    const accessToken = credentials.permanent_access_token || credentials.access_token;
+    const businessAccountId = credentials.business_account_id;
+    
+    if (!accessToken || !businessAccountId) {
+      throw new Error('Missing WhatsApp access token or business account ID');
+    }
+
+    // Get phone number ID
+    const phoneNumbersResponse = await fetch(
+      `https://graph.facebook.com/v17.0/${businessAccountId}/phone_numbers`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      }
+    );
+    
+    if (!phoneNumbersResponse.ok) {
+      throw new Error('Failed to fetch phone numbers');
+    }
+    
+    const phoneNumbersData = await phoneNumbersResponse.json();
+    const phoneNumberId = phoneNumbersData.data?.[0]?.id;
+    const displayPhoneNumber = phoneNumbersData.data?.[0]?.display_phone_number;
+    
+    if (!phoneNumberId || !displayPhoneNumber) {
+      throw new Error('No phone numbers found for this WhatsApp Business account');
+    }
+
+    console.log(`📱 Found phone number: ${displayPhoneNumber} (ID: ${phoneNumberId})`);
+
+    // Subscribe to webhooks for WABA
+    const wabaSubscription = await fetch(
+      `https://graph.facebook.com/v17.0/${businessAccountId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `access_token=${accessToken}`
+      }
+    );
+
+    // Subscribe to webhooks for phone number
+    const phoneSubscription = await fetch(
+      `https://graph.facebook.com/v17.0/${phoneNumberId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `access_token=${accessToken}`
+      }
+    );
+
+    console.log(`📱 WABA subscription status: ${wabaSubscription.status}`);
+    console.log(`📱 Phone subscription status: ${phoneSubscription.status}`);
+
+    // Update user record with the display phone number for webhook matching
+    try {
+      // Normalize phone number to match receive lambda format
+      const normalizedPhoneNumber = normalizeNumber(displayPhoneNumber);
+      console.log(`📱 Updating user ${userId} with normalized phone number: ${normalizedPhoneNumber} (original: ${displayPhoneNumber})`);
+      
+      // Call CreateUserFunction Lambda to update the phone number
+      const CREATE_USER_LAMBDA_URL = process.env.CREATE_USER_LAMBDA_URL || 'https://qfk6yjyzg6utzok6gpels4cyhy0vhrmg.lambda-url.us-east-1.on.aws/';
+      
+      const updateResponse = await fetch(CREATE_USER_LAMBDA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          userId,
+          connectedAccounts: {
+            whatsappBusiness: normalizedPhoneNumber
+          }
+        })
+      });
+      
+      if (updateResponse.ok) {
+        console.log(`✅ Updated user ${userId} with WhatsApp phone number: ${normalizedPhoneNumber}`);
+      } else {
+        console.error(`⚠️ Failed to update user record: ${updateResponse.status}`);
+      }
+    } catch (updateError) {
+      console.error(`⚠️ Error updating user record:`, updateError);
+      // Don't fail the whole process if user update fails
+    }
+
+    return res.status(200).json({
+      success: true,
+      businessAccountId,
+      phoneNumberId,
+      displayPhoneNumber,
+      wabaSubscribed: wabaSubscription.ok,
+      phoneSubscribed: phoneSubscription.ok
+    });
+
+  } catch (error) {
+    console.error('❌ WhatsApp webhook setup error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to setup WhatsApp webhooks',
+      message: error.message 
+    });
+  }
 });
 
 // Gmail workflow management endpoint
