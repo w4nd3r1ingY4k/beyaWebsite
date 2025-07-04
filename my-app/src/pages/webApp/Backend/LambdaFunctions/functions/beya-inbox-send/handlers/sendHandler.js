@@ -1,8 +1,9 @@
 // handlers/sendHandler.js
 
-import { sendWhatsApp } from '../lib/whatsapp.js';
+import { sendWhatsApp, sendWhatsAppTemplate } from '../lib/whatsapp.js';
 import { sendEmail, replyEmail } from '../lib/email.js';
 import { GmailMCPSender } from '../lib/gmail-mcp.js';
+import { generateOrGetFlowId, updateFlowMetadata } from '../lib/flowUtils.js';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -165,16 +166,31 @@ export async function handler(event) {
     text,
     html,
     userId,      // NOW REQUIRED for Gmail MCP
-    originalMessageId
+    originalMessageId,
+    // New fields for WhatsApp templates
+    templateName,
+    templateLanguage,
+    templateComponents
   } = payload;
 
   // 3d) Validate required fields
-  if (!channel || !to || !text || !userId) {
+  if (!channel || !to || !userId) {
     return {
       statusCode: 400,
       headers:    CORS,
       body:       JSON.stringify({
-        error: 'Missing required fields: channel, to, text or userId'
+        error: 'Missing required fields: channel, to, or userId'
+      })
+    };
+  }
+  
+  // For regular messages, text is required
+  if (!templateName && !text) {
+    return {
+      statusCode: 400,
+      headers:    CORS,
+      body:       JSON.stringify({
+        error: 'Missing required field: text (or templateName for templates)'
       })
     };
   }
@@ -273,7 +289,22 @@ export async function handler(event) {
       // Send WhatsApp message ONLY if we have Pipedream credentials
       if (whatsappCredentials?.token && whatsappCredentials?.phoneNumberId) {
         console.log('📱 Using WhatsApp credentials from Pipedream');
-        resp = await sendWhatsApp(to, text, whatsappCredentials.token, whatsappCredentials.phoneNumberId);
+        
+        // Check if this is a template message
+        if (templateName) {
+          console.log('📱 Sending WhatsApp template message');
+          resp = await sendWhatsAppTemplate(
+            to, 
+            templateName, 
+            templateLanguage || 'en_US', 
+            templateComponents,
+            whatsappCredentials.token, 
+            whatsappCredentials.phoneNumberId
+          );
+        } else {
+          console.log('📱 Sending regular WhatsApp text message');
+          resp = await sendWhatsApp(to, text, whatsappCredentials.token, whatsappCredentials.phoneNumberId);
+        }
       } else {
         throw new Error('No WhatsApp Business account connected. Please connect your WhatsApp Business account through Pipedream first.');
       }
@@ -365,20 +396,32 @@ export async function handler(event) {
       };
     }
 
-    // ─── 5) Persist outgoing message in Messages table ───────────────────────
+    // ─── 5) Generate or get unique flowId for this user+contact combination FIRST ───
+    const flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, userId, to);
+    
+    // ─── 6) Persist outgoing message in Messages table using flowId as ThreadId ───
     const timestamp = Date.now();
     const messageId = uuidv4();
     const messageItem = {
-      ThreadId:   to,
+      ThreadId:   flowId,  // ✅ Use flowId as ThreadId for consistency
       Timestamp:  timestamp,
       MessageId:  messageId,
       Channel:    channel,
       Direction:  'outgoing',
-      Body:       text,
+      Body:       text || `[Template: ${templateName}]`,
       Result:     {},
       userId:     userId,
-      ThreadIdTimestamp: `${to}#${timestamp}`
+      ThreadIdTimestamp: `${flowId}#${timestamp}`  // ✅ Use flowId here too
     };
+    
+    // Add template info if this was a template message
+    if (templateName) {
+      messageItem.TemplateInfo = {
+        name: templateName,
+        language: templateLanguage || 'en_US',
+        components: templateComponents
+      };
+    }
 
     if (channel === "whatsapp") {
       messageItem.Result = { 
@@ -396,25 +439,11 @@ export async function handler(event) {
       Item:      messageItem
     }));
 
-    // ─── 6) Update per-user Flow in Flows table ───────────────────────────────
-    await docClient.send(new UpdateCommand({
-      TableName: FLOWS_TABLE,
-      Key: {
-        contactId: userId,
-        flowId:    to
-      },
-      UpdateExpression: [
-        "SET createdAt     = if_not_exists(createdAt, :ts)",
-        "   , lastMessageAt = :ts",
-        "ADD messageCount  :inc"
-      ].join(' '),
-      ExpressionAttributeValues: {
-        ":ts":  timestamp,
-        ":inc": 1
-      }
-    }));
+    // ─── 7) Update per-user Flow in Flows table ───────────────────────────────
+    // flowId was already generated above, just update metadata
+    await updateFlowMetadata(docClient, FLOWS_TABLE, userId, flowId, timestamp);
 
-    // ─── 7) Build rawEvent envelope for context engine ────────────────────
+    // ─── 8) Build rawEvent envelope for context engine ────────────────────
     // Determine the sender email based on provider and available user info
     let senderEmail = "akbar@usebeya.com"; // Default SES sender
     let provider = "ses"; // Default provider
@@ -442,7 +471,7 @@ export async function handler(event) {
       eventType: channel === "whatsapp" ? "whatsapp.sent" : "email.sent",
       data: {
         messageId: messageItem.Result.MessageId,
-        threadId: to,
+        threadId: flowId,  // ✅ Use flowId for consistency
         ...(channel === "email" && {
           subject: subject,
           bodyText: text,
@@ -451,15 +480,22 @@ export async function handler(event) {
           from: senderEmail,
         }),
         ...(channel === "whatsapp" && {
-          bodyText: text,
-          to: to
+          bodyText: text || `[Template: ${templateName}]`,
+          to: to,
+          ...(templateName && {
+            templateInfo: {
+              name: templateName,
+              language: templateLanguage || 'en_US',
+              components: templateComponents
+            }
+          })
         }),
         provider: provider,
         ...(resp && resp.provider === "gmail-mcp" && { gmailData: resp.toolResult })
       }
     };
 
-    // ─── 5c) Emit rawEvent to EventBridge ──────────────────────────────────────
+    // ─── 8c) Emit rawEvent to EventBridge ──────────────────────────────────────
     try {
       await eventBridgeClient.send(new PutEventsCommand({
         Entries: [{
@@ -476,7 +512,7 @@ export async function handler(event) {
       // Don't fail the entire request if event emission fails
     }
 
-    // ─── 8) Return success + provider's messageId ──────────────────────────
+    // ─── 9) Return success + provider's messageId ──────────────────────────
     return {
       statusCode: 200,
       headers:    CORS,

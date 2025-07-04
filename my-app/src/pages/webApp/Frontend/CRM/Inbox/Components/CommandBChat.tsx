@@ -317,8 +317,6 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
       {/* Header */}
       <div style={{
         padding: '16px',
-        borderBottom: '1px solid #f0f0f0',
-        background: '#FBF7F7',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -470,8 +468,6 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
       {/* Input Area */}
       <div style={{
         padding: '12px 12px 8px 12px',
-        borderTop: '1px solid #f0f0f0',
-        background: '#FBF7F7',
         flexShrink: 0
       }}>
         <div style={{

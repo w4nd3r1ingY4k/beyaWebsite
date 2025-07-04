@@ -13,6 +13,7 @@ body, html {
   display: flex;
   height: 100vh;
   background-color: #FFFBFA;
+  margin-top: -14px;
 }
 
 .sidebar {

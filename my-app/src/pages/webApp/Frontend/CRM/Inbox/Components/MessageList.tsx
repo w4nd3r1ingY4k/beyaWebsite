@@ -601,10 +601,25 @@ function linkifyWithImages(text: string) {
 
   // Sends a WhatsApp message via API
   async function sendWhatsAppMessage(to: string, body: string) {
+    // IMPORTANT: Extract actual phone number from flowId if needed
+    let actualRecipient = to;
+    
+    // If 'to' looks like a UUID (flowId), look up the actual phone number
+    if (to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const flow = flows.find(f => f.flowId === to);
+      if (flow?.contactIdentifier) {
+        actualRecipient = flow.contactIdentifier;
+        console.log(`🔄 Converted flowId ${to} to phone number ${actualRecipient}`);
+      } else {
+        console.error('❌ Could not find contact identifier for flowId:', to);
+        throw new Error('Could not find phone number for this conversation');
+      }
+    }
+    
     const res = await fetch(`${API_BASE}/send/whatsapp`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to, text: body, userId: user!.userId }), // Include userId
+      body: JSON.stringify({ to: actualRecipient, text: body, userId: user!.userId }), // Include userId
     })
     if (!res.ok) throw new Error(await res.text())
     return res.json()
@@ -620,9 +635,25 @@ async function sendEmailMessage(
   htmlContent: string,
   originalMessageId?: string   // ← NEW optional parameter
 ) {
+  // IMPORTANT: Extract actual email address from flowId if needed (same logic as WhatsApp)
+  let actualRecipient = to;
+  
+  // If 'to' looks like a UUID (flowId), look up the actual email address
+  if (to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+    const flow = flows.find(f => f.flowId === to);
+    if (flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail) {
+      // Try different email fields in order of preference
+      actualRecipient = flow.contactIdentifier || flow.contactEmail || flow.fromEmail;
+      console.log(`🔄 Converted flowId ${to} to email address ${actualRecipient}`);
+    } else {
+      console.error('❌ Could not find email address for flowId:', to);
+      throw new Error('Could not find email address for this conversation');
+    }
+  }
+
   // Build the payload
   const payload: any = {
-    to,
+    to: actualRecipient, // Use the actual email address
     subject,
     text: plainText,    // plain‐text fallback
     html: htmlContent,  // HTML version
@@ -1332,7 +1363,25 @@ setTeamChatInput("");
               ) : (
                 filteredThreads.map(id => {
                   const flow = myFlows.find(f => f.flowId === id);
-                  const senderDisplayName = flow?.customerName || (id.includes('@') ? id.split('@')[0] : id); // Use customerName if available, else derive from ID
+                  // Updated to use contactIdentifier first, with fallbacks for backward compatibility
+                  let senderDisplayName = flow?.customerName || 
+                    flow?.contactIdentifier || 
+                    flow?.contactEmail || 
+                    flow?.fromEmail || 
+                    flow?.contactPhone || 
+                    flow?.fromPhone;
+                  
+                  // BACKWARD COMPATIBILITY: For old flows where flowId IS the contact identifier
+                  if (!senderDisplayName && flow?.flowId) {
+                    if (flow.flowId.includes('@') || flow.flowId.startsWith('+')) {
+                      senderDisplayName = flow.flowId.includes('@') ? flow.flowId.split('@')[0] : flow.flowId;
+                    }
+                  }
+                  
+                  // Final fallback
+                  if (!senderDisplayName) {
+                    senderDisplayName = 'Unknown Contact';
+                  }
                   return (
                     <MessageBox
                       key={id}

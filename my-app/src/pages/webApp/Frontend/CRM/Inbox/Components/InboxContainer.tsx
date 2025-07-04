@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../../../../../AuthContext';
 import ThreadList from './ThreadList';
 import MessageView from './MessageView';
 import ComposeModal from './ComposeModal';
 import TeamChat from './TeamChat';
 import LoadingScreen from '../../../components/LoadingScreen';
+import { discussionsService } from '../../../../services/discussionsService';
 
 interface Message {
   MessageId?: string;
@@ -41,15 +42,29 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   // Modal states
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeMode, setComposeMode] = useState<'new' | 'reply'>('new');
-  const [isTeamChatVisible, setIsTeamChatVisible] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+
+  // View state for switching between Inbox and Discussions
+  const [currentView, setCurrentView] = useState<'inbox' | 'discussions'>('inbox');
+  const [discussions, setDiscussions] = useState<any[]>([]);
+  const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
+  const [discussionMessages, setDiscussionMessages] = useState<any[]>([]);
+
+
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'waiting' | 'resolved' | 'overdue'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
-  const [showReminderModal, setShowReminderModal] = useState(false);
   
+  // New filter for discussions
+  const [viewFilter, setViewFilter] = useState<'all' | 'shared-with-me' | 'shared-by-me' | 'deleted'>('all');
 
+  // Polling state
+  const [isPolling, setIsPolling] = useState(false);
+  const [isCheckingMessages, setIsCheckingMessages] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastMessageCountRef = useRef<number>(0);
 
   // API Base URL
   const apiBase = 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod';
@@ -61,7 +76,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
 
   // Load data on mount
   useEffect(() => {
-    loadInboxData();
+    loadInboxData(false);
   }, [user]);
 
 
@@ -77,25 +92,33 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     }
   }, [selectedThreadId]);
 
-  const loadInboxData = async () => {
+  const loadInboxData = async (fromPolling = false) => {
     try {
-      setLoading(true);
-      setError(null);
+      if (!fromPolling) {
+        setLoading(true);
+        setError(null);
+      }
 
       // Load flows
       const flowsResponse = await fetch(`${apiBase}/flows`);
       if (!flowsResponse.ok) throw new Error('Failed to load conversations');
       
       const flowsData = await flowsResponse.json();
-      console.log('Loaded flows:', flowsData);
+      if (!fromPolling) {
+        console.log('Loaded flows:', flowsData);
+      }
       
       const flowsArray = flowsData.flows || [];
       
-      // Debug: Check for duplicate flowIds in the API response
-      const flowIds = flowsArray.map((f: any) => f.flowId);
-      const duplicateIds = flowIds.filter((id: string, index: number) => flowIds.indexOf(id) !== index);
-      if (duplicateIds.length > 0) {
-        console.warn('⚠️ Duplicate flow IDs found in API response:', duplicateIds);
+      // Debug: Check for duplicate flowIds in the API response (only log when not polling)
+      if (!fromPolling) {
+        const flowIds = flowsArray.map((f: any) => f.flowId);
+        const duplicateIds = flowIds.filter((id: string, index: number) => flowIds.indexOf(id) !== index);
+        if (duplicateIds.length > 0) {
+          console.warn('⚠️ Duplicate flow IDs found in API response:', duplicateIds);
+          console.warn('⚠️ This indicates contact identifiers (email/phone) are being used as flowId instead of unique UUIDs');
+          console.warn('⚠️ This should be resolved after updating the flow creation logic to use unique flowIds');
+        }
       }
       
       setFlows(flowsArray);
@@ -103,32 +126,211 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       const uniqueThreadIds: string[] = Array.from(new Set(flowsArray.map((f: any) => f.flowId)));
       setThreads(uniqueThreadIds);
       
+      // Preload last messages for the 5 most recent threads for better preview
+      if (!fromPolling && flowsArray.length > 0) {
+        const recentFlows = flowsArray
+          .sort((a: any, b: any) => {
+            const dateA = new Date(a.lastUpdated || a.createdAt || a.timestamp || 0);
+            const dateB = new Date(b.lastUpdated || b.createdAt || b.timestamp || 0);
+            return dateB.getTime() - dateA.getTime();
+          })
+          .slice(0, 5); // Get top 5 most recent
+        
+        // Preload messages for these recent threads
+        recentFlows.forEach(async (flow: any) => {
+          try {
+            const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(flow.flowId)}?userId=${encodeURIComponent(user!.userId)}`);
+            if (response.ok) {
+              const data = await response.json();
+              const messagesArray = data.messages || [];
+              
+              if (messagesArray.length > 0) {
+                // Use the same logic as loadMessages to update the flow
+                const sortedMessages = [...messagesArray].sort((a, b) => {
+                  const timestampA = a.Timestamp || a.timestamp || 0;
+                  const timestampB = b.Timestamp || b.timestamp || 0;
+                  return timestampB - timestampA;
+                });
+                
+                const lastMessage = sortedMessages[0];
+                let messageContent = lastMessage.Body || lastMessage.Text || lastMessage.body || lastMessage.text || '';
+                
+                if (lastMessage.Channel === 'email' || lastMessage.channel === 'email') {
+                  const subject = lastMessage.Subject || lastMessage.subject || '';
+                  if (subject && (!messageContent || messageContent.length > 100)) {
+                    messageContent = `📧 ${subject}`;
+                  } else if (messageContent.length > 100) {
+                    messageContent = messageContent.substring(0, 100) + '...';
+                  }
+                }
+                
+                if (messageContent.trim()) {
+                  const direction = lastMessage.Direction || lastMessage.direction || 'unknown';
+                  const indicator = direction === 'outgoing' ? '➤ ' : '← ';
+                  const finalContent = `${indicator}${messageContent.trim()}`;
+                  
+                  setFlows(prevFlows => 
+                    prevFlows.map(f => 
+                      f.flowId === flow.flowId 
+                        ? { ...f, lastMessage: finalContent }
+                        : f
+                    )
+                  );
+                }
+              }
+            }
+          } catch (err) {
+            console.error(`Error preloading messages for thread ${flow.flowId}:`, err);
+          }
+        });
+      }
+      
     } catch (err) {
       console.error('Error loading inbox data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load data');
+      if (!fromPolling) {
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      }
     } finally {
-      setLoading(false);
+      if (!fromPolling) {
+        setLoading(false);
+      }
     }
   };
 
-  const loadMessages = async (threadId: string) => {
+  const loadDiscussions = async (fromPolling = false) => {
+    if (!user?.userId) return;
+    
     try {
-      console.log('🔄 Loading messages for thread:', threadId);
+      if (!fromPolling) {
+        setLoading(true);
+        setError(null);
+      }
+      
+      const apiDiscussions = await discussionsService.listDiscussions(user.userId);
+      if (!fromPolling) {
+        console.log('🔍 Raw API discussions before transformation:', apiDiscussions);
+      }
+      
+      // Transform discussions to match the expected format for ThreadList
+      const transformedDiscussions = apiDiscussions.map(discussion => {
+        if (!fromPolling) {
+          console.log(`🔍 Processing discussion "${discussion.title}":`, {
+            originalStatus: discussion.status,
+            originalPrimaryTag: discussion.primaryTag,
+            originalSecondaryTags: discussion.secondaryTags
+          });
+        }
+        
+        const participantNames = discussion.participants.map(id => 
+          id === user.userId ? (user.displayName || 'You') : `User ${id.slice(-4)}`
+        );
+        
+        const finalStatus = discussion.status || 'open'; // Default to 'open' if no status
+        if (!fromPolling) {
+          console.log(`🔍 Final status for "${discussion.title}": ${finalStatus}`);
+        }
+        
+        return {
+          ...discussion,
+          flowId: discussion.discussionId, // Map discussionId to flowId for compatibility
+          contactName: discussion.title, // Map title to contactName so getThreadTitle can find it
+          subject: discussion.title, // Also map to subject as fallback
+          status: finalStatus, // Use actual status from API, fallback to 'open'
+          primaryTag: discussion.primaryTag || 'discussion', // Use actual primaryTag from API
+          secondaryTags: discussion.secondaryTags || [], // Use actual secondaryTags from API
+          lastMessage: `${participantNames.join(', ') || 'Team discussion'} • ${discussion.messageCount || 0} messages`, // Preview text
+          createdByName: discussion.createdBy === user.userId ? (user.displayName || 'You') : `User ${discussion.createdBy.slice(-4)}`,
+          participantNames
+        };
+      });
+      
+      if (!fromPolling) {
+        console.log('✅ Transformed discussions with status:', transformedDiscussions.map(d => ({ 
+          title: d.title, 
+          status: d.status, 
+          primaryTag: d.primaryTag,
+          secondaryTags: d.secondaryTags 
+        })));
+      }
+      
+      setDiscussions(transformedDiscussions);
+      
+    } catch (err) {
+      console.error('Error loading discussions:', err);
+      if (!fromPolling) {
+        setError('Failed to load discussions');
+      }
+    } finally {
+      if (!fromPolling) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const loadMessages = async (threadId: string, fromPolling = false) => {
+    try {
+      if (!fromPolling) {
+        console.log('🔄 Loading messages for thread:', threadId);
+      }
       
       // Pass userId as query parameter for the updated Lambda
       const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(threadId)}?userId=${encodeURIComponent(user!.userId)}`);
       if (!response.ok) throw new Error('Failed to load messages');
       
       const data = await response.json();
-      console.log('📥 Raw API response:', data);
+      if (!fromPolling) {
+        console.log('📥 Raw API response:', data);
+      }
       
       const messagesArray = data.messages || [];
-      console.log('📥 Processed messages array:', messagesArray);
-      console.log('📥 Setting messages count:', messagesArray.length);
+      if (!fromPolling) {
+        console.log('📥 Processed messages array:', messagesArray);
+        console.log('📥 Setting messages count:', messagesArray.length);
+      }
       
       setMessages(messagesArray);
       
-      console.log('✅ Messages set for thread:', threadId);
+      // Update the flow with the actual last message content
+      if (messagesArray.length > 0) {
+        // Sort messages by timestamp to get the true last message
+        const sortedMessages = [...messagesArray].sort((a, b) => {
+          const timestampA = a.Timestamp || a.timestamp || 0;
+          const timestampB = b.Timestamp || b.timestamp || 0;
+          return timestampB - timestampA; // Most recent first
+        });
+        
+        const lastMessage = sortedMessages[0];
+        let messageContent = lastMessage.Body || lastMessage.Text || lastMessage.body || lastMessage.text || '';
+        
+        // For email messages, prefer subject if body is empty or too long
+        if (lastMessage.Channel === 'email' || lastMessage.channel === 'email') {
+          const subject = lastMessage.Subject || lastMessage.subject || '';
+          if (subject && (!messageContent || messageContent.length > 100)) {
+            messageContent = `📧 ${subject}`;
+          } else if (messageContent.length > 100) {
+            messageContent = messageContent.substring(0, 100) + '...';
+          }
+        }
+        
+        // Add direction indicator for clarity
+        if (messageContent.trim()) {
+          const direction = lastMessage.Direction || lastMessage.direction || 'unknown';
+          const indicator = direction === 'outgoing' ? '➤ ' : '← ';
+          const finalContent = `${indicator}${messageContent.trim()}`;
+          
+          setFlows(prevFlows => 
+            prevFlows.map(flow => 
+              flow.flowId === threadId 
+                ? { ...flow, lastMessage: finalContent }
+                : flow
+            )
+          );
+        }
+      }
+      
+      if (!fromPolling) {
+        console.log('✅ Messages set for thread:', threadId);
+      }
     } catch (err) {
       console.error('❌ Error loading messages:', err);
       setMessages([]); // Clear messages on error
@@ -149,15 +351,98 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     }
   };
 
+  const loadDiscussionMessages = async (discussionId: string) => {
+    if (!user?.userId) return;
+    
+    try {
+      const messages = await discussionsService.getMessages(discussionId, user.userId);
+      setDiscussionMessages(messages);
+      
+    } catch (err) {
+      console.error('Error loading discussion messages:', err);
+      setDiscussionMessages([]);
+    }
+  };
+
   const handleThreadSelect = (threadId: string) => {
     console.log('🎯 Thread selected:', threadId);
     console.log('🎯 Previous thread was:', selectedThreadId);
     setSelectedThreadId(threadId);
   };
 
+  // Polling for real-time message updates
+  const pollForNewMessages = async () => {
+    if (!selectedThreadId || !user?.userId) return;
+    
+    try {
+      setIsCheckingMessages(true);
+      
+      // Use the existing loadMessages function with polling flag
+      await loadMessages(selectedThreadId, true);
+      
+      // Also refresh team messages (without triggering loading state)
+      await loadTeamMessages(selectedThreadId);
+      
+    } catch (err) {
+      console.error('Error polling for messages:', err);
+    } finally {
+      setIsCheckingMessages(false);
+    }
+  };
+
+  // Start/stop polling based on thread selection and view
+  useEffect(() => {
+    if (selectedThreadId && currentView === 'inbox') {
+      setIsPolling(true);
+      lastMessageCountRef.current = messages.length;
+      
+      // Poll every 3 seconds when thread is active
+      pollingIntervalRef.current = setInterval(pollForNewMessages, 3000);
+      
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setIsPolling(false);
+      };
+    } else {
+      // Stop polling when no thread selected or not in inbox view
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      setIsPolling(false);
+    }
+  }, [selectedThreadId, currentView, messages.length]);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   // Copy the exact functions from MessageList
   async function sendWhatsAppMessage(to: string, body: string) {
-    const payload = { to, text: body, userId: user!.userId };
+    // IMPORTANT: Extract actual phone number from flowId if needed
+    let actualRecipient = to;
+    
+    // If 'to' looks like a UUID (flowId), look up the actual phone number
+    if (to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const flow = flows.find(f => f.flowId === to);
+      if (flow?.contactIdentifier) {
+        actualRecipient = flow.contactIdentifier;
+        console.log(`🔄 Converted flowId ${to} to phone number ${actualRecipient}`);
+      } else {
+        console.error('❌ Could not find contact identifier for flowId:', to);
+        throw new Error('Could not find phone number for this conversation');
+      }
+    }
+    
+    const payload = { to: actualRecipient, text: body, userId: user!.userId };
     console.log('WhatsApp payload:', payload);
     console.log('User object:', user);
     
@@ -177,8 +462,24 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     htmlContent: string,
     originalMessageId?: string
   ) {
+    // IMPORTANT: Extract actual email address from flowId if needed (same logic as WhatsApp)
+    let actualRecipient = to;
+    
+    // If 'to' looks like a UUID (flowId), look up the actual email address
+    if (to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+      const flow = flows.find(f => f.flowId === to);
+      if (flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail) {
+        // Try different email fields in order of preference
+        actualRecipient = flow.contactIdentifier || flow.contactEmail || flow.fromEmail;
+        console.log(`🔄 Converted flowId ${to} to email address ${actualRecipient}`);
+      } else {
+        console.error('❌ Could not find email address for flowId:', to);
+        throw new Error('Could not find email address for this conversation');
+      }
+    }
+
     const payload: any = {
-      to,
+      to: actualRecipient, // Use the actual email address
       subject,
       text: plainText,
       html: htmlContent,
@@ -213,7 +514,30 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
       
       if (messageData.channel === 'whatsapp') {
-        await sendWhatsAppMessage(recipient, messageData.content);
+        // Check if this is a template message or regular message
+        if (messageData.templateName) {
+          // Send template message with full template data
+          const templatePayload = {
+            to: recipient,
+            userId: user!.userId,
+            templateName: messageData.templateName,
+            templateLanguage: messageData.templateLanguage,
+            templateComponents: messageData.templateComponents
+          };
+          console.log('WhatsApp template payload:', templatePayload);
+          
+          const res = await fetch(`${apiBase}/send/whatsapp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(templatePayload),
+          });
+          
+          if (!res.ok) throw new Error(await res.text());
+          await res.json();
+        } else {
+          // Regular WhatsApp message
+          await sendWhatsAppMessage(recipient, messageData.content);
+        }
       } else {
         await sendEmailMessage(
           recipient,
@@ -224,10 +548,31 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         );
       }
       
-      // Reload data
-      await loadInboxData();
+      // Reload data (use fromPolling=false to ensure fresh data after sending)
+      await loadInboxData(false);
       if (selectedThreadId) {
-        await loadMessages(selectedThreadId);
+        await loadMessages(selectedThreadId, false);
+      }
+      
+      // Update the flow with the sent message content for immediate UI feedback
+      if (selectedThreadId && messageData.content) {
+        let content = messageData.content.trim();
+        
+        // For email, show subject if available
+        if (messageData.channel === 'email' && messageData.subject) {
+          content = `📧 ${messageData.subject}`;
+        }
+        
+        // Add outgoing indicator since this is a sent message
+        const finalContent = `➤ ${content}`;
+        
+        setFlows(prevFlows => 
+          prevFlows.map(flow => 
+            flow.flowId === selectedThreadId 
+              ? { ...flow, lastMessage: finalContent }
+              : flow
+          )
+        );
       }
       
     } catch (err) {
@@ -286,6 +631,145 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   const handleNewMessage = () => {
     setComposeMode('new');
     setIsComposeOpen(true);
+  };
+
+  const handleDiscussionsClick = async () => {
+    setCurrentView('discussions');
+    setSelectedThreadId(null); // Clear any selected thread when switching to discussions
+    setSelectedDiscussionId(null); // Clear selected discussion
+    
+    // Load real discussions from API
+    await loadDiscussions(false);
+  };
+
+  const handleBackToInbox = () => {
+    setCurrentView('inbox');
+    setSelectedDiscussionId(null);
+    setDiscussionMessages([]);
+  };
+
+  const handleDiscussionSelect = (discussionId: string) => {
+    setSelectedDiscussionId(discussionId);
+    // Load discussion messages from API
+    loadDiscussionMessages(discussionId);
+  };
+
+  const handleSendDiscussionMessage = async (content: string) => {
+    if (!selectedDiscussionId || !content.trim() || !user?.userId) return;
+
+    try {
+      const messagePayload = {
+        discussionId: selectedDiscussionId,
+        content: content.trim()
+      };
+
+      const newMessage = await discussionsService.createMessage(user.userId, messagePayload);
+      
+      // Reload discussion messages to get the latest
+      await loadDiscussionMessages(selectedDiscussionId);
+      
+      // Update discussion last message
+      setDiscussions(prev => prev.map(d => 
+        d.discussionId === selectedDiscussionId 
+          ? { 
+              ...d, 
+              lastMessage: content.trim(), 
+              lastMessageAt: newMessage.createdAt, 
+              messageCount: d.messageCount + 1 
+            }
+          : d
+      ));
+      
+    } catch (err) {
+      console.error('Error sending discussion message:', err);
+    }
+  };
+
+  const handleCreateDiscussion = async (discussionData: any) => {
+    try {
+      // Create the discussion using the real API
+      const response = await fetch('https://45lcjloxwa2wt2hfmbltw42dqm0kiaue.lambda-url.us-east-1.on.aws/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          operation: 'createDiscussion',
+          userId: user!.userId,
+          title: discussionData.title,
+          participants: discussionData.participants || [],
+          tags: [],
+          status: 'open', // Set initial status
+          primaryTag: 'discussion', // Set primary tag
+          secondaryTags: [] // Set empty secondary tags
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to create discussion');
+      }
+
+      const newDiscussion = await response.json();
+      console.log('✅ Created discussion:', newDiscussion);
+
+      // Transform the new discussion to match ThreadList expectations
+      const participantNames = newDiscussion.participants.map((id: string) => 
+        id === user?.userId ? (user?.displayName || 'You') : `User ${id.slice(-4)}`
+      );
+      
+      const transformedDiscussion = {
+        ...newDiscussion,
+        flowId: newDiscussion.discussionId,
+        contactName: newDiscussion.title,
+        subject: newDiscussion.title,
+        status: newDiscussion.status || 'open', // Use actual status from API response
+        primaryTag: newDiscussion.primaryTag || 'discussion',
+        secondaryTags: newDiscussion.secondaryTags || [],
+        lastMessage: `${participantNames.join(', ') || 'Team discussion'} • ${newDiscussion.messageCount || 0} messages`,
+        createdByName: newDiscussion.createdBy === user?.userId ? (user?.displayName || 'You') : `User ${newDiscussion.createdBy.slice(-4)}`,
+        participantNames
+      };
+
+      // Add the transformed discussion to the local state
+      setDiscussions(prev => [transformedDiscussion, ...prev]);
+
+      // Create the initial message
+      if (discussionData.content) {
+        await fetch('https://45lcjloxwa2wt2hfmbltw42dqm0kiaue.lambda-url.us-east-1.on.aws/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            operation: 'createMessage',
+            userId: user!.userId,
+            discussionId: newDiscussion.discussionId,
+            content: discussionData.content
+          }),
+        });
+      }
+
+      // Switch to discussions view and select the new discussion
+      setCurrentView('discussions');
+      setSelectedDiscussionId(newDiscussion.discussionId);
+      
+      // Load the messages for the new discussion
+      if (discussionData.content) {
+        setDiscussionMessages([{
+          messageId: `msg-${Date.now()}`,
+          discussionId: newDiscussion.discussionId,
+          authorId: user?.userId || 'user-1',
+          authorName: user?.displayName || 'You',
+          content: discussionData.content,
+          createdAt: new Date().toISOString()
+        }]);
+      }
+
+    } catch (error) {
+      console.error('Error creating discussion:', error);
+      throw error;
+    }
   };
 
   const handleCategoryFilterChange = (categories: string[]) => {
@@ -358,6 +842,25 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     }
   };
 
+  // Handle discussion status update
+  const handleDiscussionStatusSelect = async (status: 'open' | 'waiting' | 'resolved' | 'overdue') => {
+    if (!selectedDiscussionId || !user?.userId) return;
+
+    try {
+      const updated = await discussionsService.updateDiscussionStatus(selectedDiscussionId, user.userId, { status });
+      
+      // Update discussion in local state
+      setDiscussions(prev => prev.map(d => 
+        d.discussionId === selectedDiscussionId 
+          ? { ...d, status: status }
+          : d
+      ));
+      
+    } catch (err) {
+      console.error('Error updating discussion status:', err);
+    }
+  };
+
   // Handle flow updates from MessageView
   const handleFlowUpdate = (updatedFlow: any) => {
     console.log('🔄 Flow Update Received:', updatedFlow);
@@ -367,18 +870,33 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     // Debug: log first few existing flow IDs
     console.log('🔄 Existing flow IDs:', flows.slice(0, 3).map(f => f.flowId));
     
-    // Update the flows array with the updated flow
-    setFlows(prevFlows => {
-      console.log('🔄 Looking for flowId:', updatedFlow.flowId);
-      console.log('🔄 Available flowIds:', prevFlows.map(f => f.flowId));
-      
-      const updated = prevFlows.map(flow => 
-        flow.flowId === updatedFlow.flowId ? updatedFlow : flow
-      );
-      console.log('🔄 Updated flows count:', updated.length);
-      console.log('🔄 Updated flow found:', updated.find(f => f.flowId === updatedFlow.flowId));
-      return updated;
-    });
+    if (currentView === 'discussions') {
+      // Handle discussion updates
+      setDiscussions(prevDiscussions => {
+        console.log('🔄 Looking for discussionId:', updatedFlow.discussionId);
+        console.log('🔄 Available discussionIds:', prevDiscussions.map(d => d.discussionId));
+        
+        const updated = prevDiscussions.map(discussion => 
+          discussion.discussionId === updatedFlow.discussionId ? updatedFlow : discussion
+        );
+        console.log('🔄 Updated discussions count:', updated.length);
+        console.log('🔄 Updated discussion found:', updated.find(d => d.discussionId === updatedFlow.discussionId));
+        return updated;
+      });
+    } else {
+      // Handle regular flow updates
+      setFlows(prevFlows => {
+        console.log('🔄 Looking for flowId:', updatedFlow.flowId);
+        console.log('🔄 Available flowIds:', prevFlows.map(f => f.flowId));
+        
+        const updated = prevFlows.map(flow => 
+          flow.flowId === updatedFlow.flowId ? updatedFlow : flow
+        );
+        console.log('🔄 Updated flows count:', updated.length);
+        console.log('🔄 Updated flow found:', updated.find(f => f.flowId === updatedFlow.flowId));
+        return updated;
+      });
+    }
   };
 
   // Handle opening AI chat with a specific message - delegate to global handler
@@ -457,7 +975,14 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     const flow = flows.find(f => f.flowId === threadId);
     if (!flow) return 'Unknown Conversation';
     
-    // Prioritize showing email addresses (formatted) - same priority as ThreadList
+    // First priority: Use the new contactIdentifier field
+    if (flow.contactIdentifier) {
+      const formatted = formatEmailAddress(flow.contactIdentifier);
+      console.log('InboxContainer - Using contactIdentifier:', flow.contactIdentifier, '→', formatted);
+      return formatted;
+    }
+    
+    // Fallback: Existing contact fields for backward compatibility
     if (flow.contactEmail) {
       const formatted = formatEmailAddress(flow.contactEmail);
       console.log('InboxContainer - Formatting contactEmail:', flow.contactEmail, '→', formatted);
@@ -477,8 +1002,18 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       return flow.fromPhone;
     }
     
-    // Final fallbacks
-    return flow.contactName || flow.subject || `${threadId.slice(0, 8)}`;
+    // BACKWARD COMPATIBILITY: For old flows where flowId IS the contact identifier
+    if (flow.flowId) {
+      // Check if flowId looks like an email or phone number (old structure)
+      if (flow.flowId.includes('@') || flow.flowId.startsWith('+')) {
+        const formatted = formatEmailAddress(flow.flowId);
+        console.log('InboxContainer - Using legacy flowId as contact:', flow.flowId, '→', formatted);
+        return formatted;
+      }
+    }
+    
+    // Final fallbacks - improved for UUID flowIds
+    return flow.contactName || flow.subject || 'Unknown Contact';
   };
 
   // Reminder Modal Component
@@ -702,6 +1237,77 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     );
   };
 
+  // Filter discussions based on current filters
+  const filteredDiscussions = useMemo(() => {
+    if (currentView !== 'discussions') return discussions;
+
+    console.log('🔍 Filtering discussions:', {
+      totalDiscussions: discussions.length,
+      statusFilter,
+      discussions: discussions.map(d => ({ id: d.discussionId, status: d.status, title: d.title }))
+    });
+
+    let filtered = discussions;
+
+    // Apply view filter (All Messages, Shared with me, Shared by me, Deleted)
+    if (viewFilter === 'shared-with-me') {
+      filtered = filtered.filter(d => 
+        d.participants.includes(user?.userId || '') && d.createdBy !== user?.userId
+      );
+    } else if (viewFilter === 'shared-by-me') {
+      filtered = filtered.filter(d => d.createdBy === user?.userId);
+    } else if (viewFilter === 'deleted') {
+      filtered = filtered.filter(d => 
+        Array.isArray(d.secondaryTags) && d.secondaryTags.includes('deleted')
+      );
+    } else if (viewFilter === 'all') {
+      // Show all discussions except deleted ones
+      filtered = filtered.filter(d => 
+        !Array.isArray(d.secondaryTags) || !d.secondaryTags.includes('deleted')
+      );
+    }
+
+    console.log('🔍 After view filter:', filtered.length);
+
+    // Apply status filter
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(d => {
+        console.log(`🔍 Checking discussion ${d.title}: status="${d.status}" vs filter="${statusFilter}"`);
+        return d.status === statusFilter;
+      });
+    }
+
+    console.log('🔍 After status filter:', {
+      filteredCount: filtered.length,
+      filteredDiscussions: filtered.map(d => ({ id: d.discussionId, status: d.status, title: d.title }))
+    });
+
+    return filtered;
+  }, [discussions, viewFilter, statusFilter, categoryFilter, user?.userId, currentView]);
+
+  // Update the handleViewFilterChange to work with discussions
+  const handleViewFilterChange = (filter: 'all' | 'shared-with-me' | 'shared-by-me' | 'deleted') => {
+    setViewFilter(filter);
+    setSelectedThreadId(null);
+    setSelectedDiscussionId(null);
+  };
+
+  // Update the filtered flows to use the new discussion filtering
+  const displayedItems = useMemo(() => {
+    if (currentView === 'discussions') {
+      return filteredDiscussions;
+    }
+    return flows; // This shows all flows for inbox view
+  }, [currentView, filteredDiscussions, flows]);
+
+  // Update the count display
+  const getItemCount = () => {
+    if (currentView === 'discussions') {
+      return filteredDiscussions.length;
+    }
+    return flows.length;
+  };
+
   if (loading) {
     return (
       <LoadingScreen 
@@ -732,7 +1338,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           <h3 style={{ margin: '0 0 8px 0', color: '#111827' }}>Error loading inbox</h3>
           <p style={{ margin: '0 0 20px 0', color: '#6b7280' }}>{error}</p>
           <button
-            onClick={loadInboxData}
+            onClick={() => loadInboxData(false)}
             style={{
               padding: '8px 16px',
               background: '#de1785',
@@ -752,32 +1358,42 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   }
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      background: '#f9fafb',
-      width: '100%',
-      position: 'relative',
-      overflow: 'hidden'
-    }}>
-      {/* Status Filter Bar positioned absolutely to span ThreadList's right column + MessageView */}
-      {selectedThreadId && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: '180px', // Start after the left sidebar (180px width)
-          right: 0, // Extend to the end
-          padding: '16px 16px 0 16px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          borderBottom: '1px solid #e5e7eb',
-          background: '#FFFBFA',
-          zIndex: 1002,
-          height: '60px', // Fixed height for the status bar
-          boxSizing: 'border-box'
-        }}>
+    <>
+      {/* Add pulse animation CSS */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+      `}</style>
+      
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: '#f9fafb',
+        width: '100%',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Status Filter Bar positioned absolutely to span ThreadList's right column + MessageView */}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: '179px', // Adjusted to overlap by 1px for seamless border connection
+        right: 0, // Extend to the end
+        padding: '0 16px', // Uniform padding for vertical centering
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        borderBottom: '1px solid #e5e7eb',
+        borderLeft: '1px solid #e5e7eb', // Add left border to connect with vertical line
+        background: '#FFFBFA',
+        zIndex: 1002,
+        height: '60px', // Fixed height for the status bar
+        boxSizing: 'border-box'
+      }}>
+        {currentView === 'discussions' ? (
           <div style={{
             display: 'flex',
             fontSize: '15px',
@@ -794,9 +1410,29 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                 fontSize: '17px',
                 color: '#374151',
                 borderRadius: '4px',
+                position: 'relative',
+                outline: 'none',
               }}
             >
-              All
+              <span style={{ position: 'relative', zIndex: 1 }}>
+                All
+              </span>
+              {statusFilter === 'all' && (
+                <span style={{
+                  display: 'block',
+                  position: 'absolute',
+                  left: 6,
+                  right: 6,
+                  bottom: -14,
+                  height: 4,
+                  background: '#DE1780',
+                  borderTopLeftRadius: 4,
+                  borderTopRightRadius: 4,
+                  borderBottomLeftRadius: 0,
+                  borderBottomRightRadius: 0,
+                  zIndex: 0,
+                }} />
+              )}
             </button>
             {(['open', 'waiting', 'resolved', 'overdue'] as const).map(s => (
               <button
@@ -823,11 +1459,11 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                     position: 'absolute',
                     left: 6,
                     right: 6,
-                    bottom: -4,
-                    height: 6,
+                    bottom: -14,
+                    height: 4,
                     background: s === 'open' ? '#10b981' : s === 'waiting' ? '#f59e0b' : s === 'resolved' ? '#6b7280' : '#ef4444',
-                    borderTopLeftRadius: 6,
-                    borderTopRightRadius: 6,
+                    borderTopLeftRadius: 4,
+                    borderTopRightRadius: 4,
                     borderBottomLeftRadius: 0,
                     borderBottomRightRadius: 0,
                     zIndex: 0,
@@ -836,8 +1472,114 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
               </button>
             ))}
           </div>
+        ) : (
+          <div style={{
+            display: 'flex',
+            fontSize: '15px',
+            gap: '12px',
+            alignItems: 'center',
+          }}>
+            <button
+              onClick={() => setStatusFilter('all')}
+              style={{
+                background: statusFilter === 'all' ? '#f3f4f6' : 'transparent',
+                border: 'none',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '17px',
+                color: '#374151',
+                borderRadius: '4px',
+                position: 'relative',
+                outline: 'none',
+              }}
+            >
+              <span style={{ position: 'relative', zIndex: 1 }}>
+                All
+              </span>
+              {statusFilter === 'all' && (
+                <span style={{
+                  display: 'block',
+                  position: 'absolute',
+                  left: 6,
+                  right: 6,
+                  bottom: -14,
+                  height: 4,
+                  background: '#DE1780',
+                  borderTopLeftRadius: 4,
+                  borderTopRightRadius: 4,
+                  borderBottomLeftRadius: 0,
+                  borderBottomRightRadius: 0,
+                  zIndex: 0,
+                }} />
+              )}
+            </button>
+            {(['open', 'waiting', 'resolved', 'overdue'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '6px 12px',
+                  cursor: 'pointer',
+                  fontSize: '17px',
+                  color: '#374151',
+                  borderRadius: '4px',
+                  position: 'relative',
+                  outline: 'none',
+                }}
+              >
+                <span style={{ position: 'relative', zIndex: 1 }}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </span>
+                {statusFilter === s && (
+                  <span style={{
+                    display: 'block',
+                    position: 'absolute',
+                    left: 6,
+                    right: 6,
+                    bottom: -14,
+                    height: 4,
+                    background: s === 'open' ? '#10b981' : s === 'waiting' ? '#f59e0b' : s === 'resolved' ? '#6b7280' : '#ef4444',
+                    borderTopLeftRadius: 4,
+                    borderTopRightRadius: 4,
+                    borderBottomLeftRadius: 0,
+                    borderBottomRightRadius: 0,
+                    zIndex: 0,
+                  }} />
+                )}
+              </button>
+            ))}
+            
+            {/* Real-time indicator when polling is active */}
+            {isPolling && selectedThreadId && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '12px',
+                color: isCheckingMessages ? '#f59e0b' : '#10b981',
+                marginLeft: '8px',
+                padding: '4px 8px',
+                background: isCheckingMessages ? '#fffbeb' : '#f0fdf4',
+                borderRadius: '12px',
+                border: isCheckingMessages ? '1px solid #fed7aa' : '1px solid #bbf7d0'
+              }}>
+                <div style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: isCheckingMessages ? '#f59e0b' : '#10b981',
+                  animation: 'pulse 2s infinite'
+                }} />
+                {isCheckingMessages ? 'Checking...' : 'Live'}
+              </div>
+            )}
+          </div>
+        )}
 
-          {/* Right-side action buttons */}
+        {/* Right-side action buttons - only show for inbox view when a thread is selected */}
+        {((currentView === 'inbox' && selectedThreadId) || (currentView === 'discussions' && selectedDiscussionId)) && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {/* Status dropdown */}
             <div style={{ position: 'relative' }}>
@@ -856,7 +1598,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                   color: '#374151',
                 }}
               >
-                {currentFlow?.status?.charAt(0).toUpperCase() + currentFlow?.status?.slice(1) || 'Select Status'}
+                {currentView === 'discussions' 
+                  ? (discussions.find(d => d.discussionId === selectedDiscussionId)?.status?.charAt(0).toUpperCase() + discussions.find(d => d.discussionId === selectedDiscussionId)?.status?.slice(1) || 'Select Status')
+                  : (currentFlow?.status?.charAt(0).toUpperCase() + currentFlow?.status?.slice(1) || 'Select Status')
+                }
                 <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
                   <path d="M5 8l5 5 5-5" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -875,43 +1620,55 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                     overflow: 'hidden',
                   }}
                 >
-                  {(['open', 'waiting', 'resolved', 'overdue'] as const).map(s => (
-                    <div
-                      key={s}
-                      onClick={() => handleStatusSelect(s)}
-                      style={{
-                        padding: '8px 12px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        color: '#374151',
-                        background: currentFlow?.status === s ? '#f3f4f6' : 'transparent',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                      }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
-                      onMouseLeave={e =>
-                        (e.currentTarget.style.background = currentFlow?.status === s ? '#f3f4f6' : 'transparent')
-                      }
-                    >
+                  {(['open', 'waiting', 'resolved', 'overdue'] as const).map(s => {
+                    const currentStatus = currentView === 'discussions' 
+                      ? discussions.find(d => d.discussionId === selectedDiscussionId)?.status
+                      : currentFlow?.status;
+                    
+                    return (
                       <div
-                        style={{
-                          width: '8px',
-                          height: '8px',
-                          borderRadius: '50%',
-                          background:
-                            s === 'open'
-                              ? '#10b981' // Green
-                              : s === 'waiting'
-                              ? '#f59e0b' // Yellow
-                              : s === 'resolved'
-                              ? '#6b7280' // Gray
-                              : '#ef4444', // Red
+                        key={s}
+                        onClick={() => {
+                          if (currentView === 'discussions') {
+                            handleDiscussionStatusSelect(s);
+                          } else {
+                            handleStatusSelect(s);
+                          }
                         }}
-                      />
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
-                    </div>
-                  ))}
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          fontSize: '14px',
+                          color: '#374151',
+                          background: currentStatus === s ? '#f3f4f6' : 'transparent',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
+                        onMouseLeave={e =>
+                          (e.currentTarget.style.background = currentStatus === s ? '#f3f4f6' : 'transparent')
+                        }
+                      >
+                        <div
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            background:
+                              s === 'open'
+                                ? '#10b981' // Green
+                                : s === 'waiting'
+                                ? '#f59e0b' // Yellow
+                                : s === 'resolved'
+                                ? '#6b7280' // Gray
+                                : '#ef4444', // Red
+                          }}
+                        />
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -937,8 +1694,8 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
               </svg>
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Main content area - no margin here, let ThreadList handle its own spacing */}
       <div style={{
@@ -947,17 +1704,33 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         overflow: 'hidden',
         height: '100%'
       }}>
+        {/* Debug logging */}
+        {currentView === 'discussions' && (() => {
+          console.log('🔍 Rendering ThreadList with discussions:', {
+            discussionsCount: discussions.length,
+            discussions: discussions,
+            threads: discussions.map(d => d.flowId || d.discussionId),
+            selectedDiscussionId
+          });
+          return null;
+        })()}
         {/* Complete ThreadList component (includes left sidebar + thread list) */}
         <ThreadList
-          threads={threads}
-          flows={flows}
-          selectedId={selectedThreadId}
-          onSelect={handleThreadSelect}
+          threads={currentView === 'discussions' ? filteredDiscussions.map(d => d.flowId || d.discussionId) : threads}
+          flows={currentView === 'discussions' ? filteredDiscussions : flows}
+          selectedId={currentView === 'discussions' ? selectedDiscussionId : selectedThreadId}
+          onSelect={currentView === 'discussions' ? handleDiscussionSelect : handleThreadSelect}
           userId={user!.userId}
           statusFilter={statusFilter}
           categoryFilter={categoryFilter}
           onCategoryFilterChange={handleCategoryFilterChange}
           onCompose={handleNewMessage}
+          onDiscussionsClick={handleDiscussionsClick}
+          currentView={currentView}
+          onBackToInbox={handleBackToInbox}
+          viewFilter={viewFilter}
+          onViewFilterChange={handleViewFilterChange}
+          onRefresh={currentView === 'discussions' ? () => loadDiscussions(true) : () => loadInboxData(true)}
         />
 
         {/* Message View */}
@@ -967,11 +1740,11 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           overflow: 'hidden'
         }}>
           <MessageView
-            messages={messages}
-            selectedThreadId={selectedThreadId}
+            messages={currentView === 'discussions' ? discussionMessages : messages}
+            selectedThreadId={currentView === 'discussions' ? selectedDiscussionId : selectedThreadId}
             isLoading={loading}
-            onSendMessage={handleComposeMessage}
-            flow={currentFlow}
+            onSendMessage={currentView === 'discussions' ? undefined : handleComposeMessage}
+            flow={currentView === 'discussions' ? discussions.find(d => d.discussionId === selectedDiscussionId) : currentFlow}
             onReply={handleReply}
             onShare={handleShare}
             statusFilter={statusFilter}
@@ -980,10 +1753,11 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
             onCategoryFilterChange={handleCategoryFilterChange}
             onFlowUpdate={handleFlowUpdate}
             onOpenAIChat={handleOpenAIChatLocal}
+            currentView={currentView}
+            onSendDiscussionMessage={currentView === 'discussions' ? handleSendDiscussionMessage : undefined}
+            onDiscussionStatusSelect={currentView === 'discussions' ? handleDiscussionStatusSelect : undefined}
           />
         </div>
-
-
       </div>
 
       {/* Compose Modal */}
@@ -993,14 +1767,13 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         onSend={handleComposeMessage}
         mode={composeMode}
         replyToId={selectedThreadId ?? undefined}
+        onCreateDiscussion={handleCreateDiscussion}
       />
 
       {/* Reminder Modal */}
       <ReminderModal />
-
-
-
     </div>
+    </>
   );
 };
 

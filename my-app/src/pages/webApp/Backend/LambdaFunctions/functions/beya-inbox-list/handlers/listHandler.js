@@ -108,7 +108,7 @@ export async function handler(event) {
       }
       
       // User has access, so fetch ALL messages for this thread using primary key
-      const resp = await docClient.send(new QueryCommand({
+      let resp = await docClient.send(new QueryCommand({
         TableName: MSG_TABLE,
         KeyConditionExpression: 'ThreadId = :tid',
         ExpressionAttributeValues: {
@@ -116,6 +116,50 @@ export async function handler(event) {
         },
         ScanIndexForward: true // Sort by timestamp ascending
       }));
+
+      // BACKWARDS COMPATIBILITY: If no messages found with UUID, 
+      // check if this is an old flow and look for messages with the original contact identifier
+      if (!resp.Items || resp.Items.length === 0) {
+        console.log(`📧 No messages found for UUID ${threadId}, checking for backwards compatibility...`);
+        
+        // Get the flow to see if it has a contactIdentifier (new flows) or if flowId is actually a contact identifier (old flows)
+        const flowCheck = await docClient.send(new GetCommand({
+          TableName: FLOWS_TABLE,
+          Key: {
+            contactId: userId,
+            flowId: threadId
+          }
+        }));
+        
+        let contactIdentifier = null;
+        if (flowCheck.Item) {
+          // Check if this flow has a contactIdentifier field (new format)
+          if (flowCheck.Item.contactIdentifier) {
+            contactIdentifier = flowCheck.Item.contactIdentifier;
+            console.log(`📧 Found contactIdentifier: ${contactIdentifier} for flow ${threadId}`);
+          } 
+          // OR if flowId looks like an email/phone (old format)
+          else if (threadId.includes('@') || threadId.startsWith('+')) {
+            contactIdentifier = threadId;
+            console.log(`📧 Using flowId as contact identifier: ${contactIdentifier}`);
+          }
+        }
+        
+        // If we found a contact identifier, try querying messages with that
+        if (contactIdentifier) {
+          console.log(`📧 Querying messages with contact identifier: ${contactIdentifier}`);
+          resp = await docClient.send(new QueryCommand({
+            TableName: MSG_TABLE,
+            KeyConditionExpression: 'ThreadId = :tid',
+            ExpressionAttributeValues: {
+              ':tid': contactIdentifier
+            },
+            ScanIndexForward: true
+          }));
+          
+          console.log(`📧 Found ${resp.Items?.length || 0} messages using backwards compatibility`);
+        }
+      }
 
       console.log(`📧 Returning ${resp.Items?.length || 0} messages for thread ${threadId}`);
       

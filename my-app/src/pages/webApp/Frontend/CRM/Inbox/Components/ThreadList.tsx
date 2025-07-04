@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Inbox, Users, Send, Trash2 } from 'lucide-react';
+import { connectionsService, ConnectionsResponse, UserConnections } from '../../../../services/connectionsService';
+import { useAuth } from '../../../../../AuthContext';
 
 type Status = 'open' | 'waiting' | 'resolved' | 'overdue';
 type ViewFilter = "owned" | "sharedWithMe" | "sharedByMe" | "deleted";
@@ -13,6 +16,12 @@ interface Props {
   categoryFilter?: string[];
   onCategoryFilterChange?: (categories: string[]) => void;
   onCompose?: () => void;
+  onDiscussionsClick?: () => void;
+  currentView?: 'inbox' | 'discussions';
+  onBackToInbox?: () => void;
+  viewFilter?: 'all' | 'shared-with-me' | 'shared-by-me' | 'deleted';
+  onViewFilterChange?: (filter: 'all' | 'shared-with-me' | 'shared-by-me' | 'deleted') => void;
+  onRefresh?: () => void; // Add callback for refreshing data
 }
 
 const ThreadList: React.FC<Props> = ({ 
@@ -24,13 +33,66 @@ const ThreadList: React.FC<Props> = ({
   statusFilter: externalStatusFilter = 'all',
   categoryFilter: externalCategoryFilter = [],
   onCategoryFilterChange,
-  onCompose
+  onCompose,
+  onDiscussionsClick,
+  currentView = 'inbox',
+  onBackToInbox,
+  viewFilter: externalViewFilter = 'all',
+  onViewFilterChange,
+  onRefresh
 }) => {
-  // State
-  const [viewFilter, setViewFilter] = useState<'owned' | 'sharedWithMe' | 'sharedByMe' | 'deleted'>('owned');
-  // Use external filters instead of internal state
+  const { user } = useAuth();
+  // State - use external viewFilter for discussions, internal for inbox
+  const [internalViewFilter, setInternalViewFilter] = useState<'owned' | 'sharedWithMe' | 'sharedByMe' | 'deleted'>('owned');
+  
+  // Connections state
+  const [userConnections, setUserConnections] = useState<UserConnections | null>(null);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
+  
+  // Account filtering state
+  const [selectedAccountFilter, setSelectedAccountFilter] = useState<{
+    type: 'all' | 'gmail' | 'whatsapp';
+    accountId?: string;
+    accountEmail?: string;
+  }>({ type: 'all' });
+  
+  // Polling state
+  const [isPolling, setIsPolling] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastThreadCountRef = useRef<number>(0);
+  
+  // Use external filters for discussions, internal for inbox
+  const currentViewFilter = currentView === 'discussions' ? externalViewFilter : internalViewFilter;
   const categoryFilter = externalCategoryFilter;
   const statusFilter = externalStatusFilter;
+  
+  // Convert between external and internal view filter formats
+  const mapExternalToInternal = (external: 'all' | 'shared-with-me' | 'shared-by-me' | 'deleted'): 'owned' | 'sharedWithMe' | 'sharedByMe' | 'deleted' => {
+    switch (external) {
+      case 'all': return 'owned';
+      case 'shared-with-me': return 'sharedWithMe';
+      case 'shared-by-me': return 'sharedByMe';
+      case 'deleted': return 'deleted';
+      default: return 'owned';
+    }
+  };
+  
+  const handleViewFilterChange = (filter: 'owned' | 'sharedWithMe' | 'sharedByMe' | 'deleted') => {
+    if (currentView === 'discussions' && onViewFilterChange) {
+      // Map internal format to external format for discussions
+      const externalFilter = filter === 'owned' ? 'all' : 
+                           filter === 'sharedWithMe' ? 'shared-with-me' :
+                           filter === 'sharedByMe' ? 'shared-by-me' : 'deleted';
+      onViewFilterChange(externalFilter);
+    } else {
+      // Use internal state for inbox
+      setInternalViewFilter(filter);
+    }
+  };
+  
+  // Use mapped filter for logic
+  const actualViewFilter = currentView === 'discussions' ? mapExternalToInternal(externalViewFilter) : internalViewFilter;
   const [showTagDropdown, setShowTagDropdown] = useState(false);
   const [tagSearch, setTagSearch] = useState('');
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -43,12 +105,40 @@ const ThreadList: React.FC<Props> = ({
     inbox: true,
     shared: false,
     sharedByMe: false,
-    deleted: false
+    deleted: false,
+    mailboxes: true, // Keep for backwards compatibility
+    connectedAccounts: true // Keep for backwards compatibility
   });
 
   // Refs
   const tagDropdownRef = useRef<HTMLDivElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Fetch user connections
+  const fetchUserConnections = async () => {
+    if (!userId) return;
+    
+    try {
+      setConnectionsLoading(true);
+      setConnectionsError(null);
+      
+      const connectionsData = await connectionsService.getUserConnections(userId);
+      setUserConnections(connectionsData.connections);
+      
+      console.log('📧 User connections loaded:', connectionsData);
+      
+    } catch (error) {
+      console.error('Error fetching user connections:', error);
+      setConnectionsError('Failed to load connections');
+    } finally {
+      setConnectionsLoading(false);
+    }
+  };
+
+  // Fetch connections on mount
+  useEffect(() => {
+    fetchUserConnections();
+  }, [userId]);
 
   // Derived data
   const ownedFlows = useMemo(() => {
@@ -103,20 +193,101 @@ const ThreadList: React.FC<Props> = ({
   }, [ownedFlows]);
 
   const filteredThreads = useMemo(() => {
+    if (currentView === 'discussions') {
+      console.log('🗣️ Discussion view is active. Using pre-filtered discussions.');
+      console.log('🗣️ Received', flows.length, 'discussions from parent filter.');
+      console.log('🗣️ Discussions:', flows.map(d => ({ id: d.discussionId, status: d.status, title: d.title })));
+      
+      // Use the pre-filtered discussions passed from InboxContainer
+      // The parent has already applied status and view filtering
+      return flows.map(d => d.flowId || d.discussionId);
+    }
     let baseFlows: any[] = [];
-    if (viewFilter === "owned") {
+    if (actualViewFilter === "owned") {
       baseFlows = ownedFlows.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
-    } else if (viewFilter === "sharedWithMe") {
+    } else if (actualViewFilter === "sharedWithMe") {
       baseFlows = sharedWithMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
-    } else if (viewFilter === "sharedByMe") {
+    } else if (actualViewFilter === "sharedByMe") {
       baseFlows = sharedByMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
-    } else if (viewFilter === "deleted") {
+    } else if (actualViewFilter === "deleted") {
       // Show only items with 'deleted' tag from all flows the user has access to
       baseFlows = [...ownedFlows, ...sharedWithMe, ...sharedByMe].filter(f => 
         Array.isArray(f.secondaryTags) && f.secondaryTags.includes('deleted')
       );
     } else {
       baseFlows = [];
+    }
+
+    // Apply account filtering
+    if (selectedAccountFilter.type !== 'all') {
+      console.log('🔍 FILTERING TRIGGERED! Account filter:', selectedAccountFilter);
+      console.log('🔍 Total flows before filtering:', baseFlows.length);
+      console.log('🔍 Sample flows:', baseFlows.slice(0, 3).map(f => ({
+        flowId: f.flowId,
+        contactIdentifier: f.contactIdentifier,
+        contactEmail: f.contactEmail,
+        fromEmail: f.fromEmail
+      })));
+      
+      baseFlows = baseFlows.filter(f => {
+        if (selectedAccountFilter.type === 'gmail') {
+          // Filter for Gmail messages - check various email fields
+          const flowEmail = f.contactIdentifier || f.contactEmail || f.fromEmail;
+          
+          // DEBUG: Log the flow data for Gmail filtering
+          console.log('🔍 Gmail filter check for flow:', {
+            flowId: f.flowId,
+            contactIdentifier: f.contactIdentifier,
+            contactEmail: f.contactEmail,
+            fromEmail: f.fromEmail,
+            combinedFlowEmail: flowEmail,
+            selectedAccountEmail: selectedAccountFilter.accountEmail,
+            isLegacyEmailFlow: f.flowId && f.flowId.includes('@')
+          });
+          
+          if (selectedAccountFilter.accountEmail && selectedAccountFilter.accountEmail !== 'SHOW_ALL_EMAILS') {
+            // Check direct match for specific email
+            if (flowEmail === selectedAccountFilter.accountEmail) {
+              console.log('✅ Direct email match:', flowEmail);
+              return true;
+            }
+            // BACKWARD COMPATIBILITY: Check if flowId itself is the email
+            if (f.flowId && f.flowId.includes('@') && f.flowId === selectedAccountFilter.accountEmail) {
+              console.log('✅ Legacy flowId email match:', f.flowId);
+              return true;
+            }
+            console.log('❌ No email match for flow:', f.flowId);
+            return false;
+          }
+          
+          // Show ALL emails - check if it's any email (contains @)
+          const isEmailFlow = (flowEmail && flowEmail.includes('@')) || (f.flowId && f.flowId.includes('@'));
+          console.log('🔍 Show all emails check:', { flowId: f.flowId, isEmailFlow, flowEmail, isLegacyEmail: f.flowId && f.flowId.includes('@') });
+          
+          if (isEmailFlow) {
+            console.log('✅ Email flow found:', f.flowId);
+            return true;
+          }
+          
+          console.log('❌ Not an email flow:', f.flowId);
+          return false;
+        } else if (selectedAccountFilter.type === 'whatsapp') {
+          // Filter for WhatsApp messages - check phone fields INCLUDING contactIdentifier
+          const flowPhone = f.contactIdentifier || f.contactPhone || f.fromPhone;
+          if (flowPhone && (flowPhone.startsWith('+') || /^\d+$/.test(flowPhone))) {
+            return true;
+          }
+          // BACKWARD COMPATIBILITY: Check if flowId looks like a phone number
+          if (f.flowId && (f.flowId.startsWith('+') || /^\d{10,}$/.test(f.flowId))) {
+            return true;
+          }
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('🔍 FILTERING COMPLETE! Results:', baseFlows.length, 'flows');
+      console.log('🔍 Filtered flow IDs:', baseFlows.map(f => f.flowId));
     }
   
     const baseFlowIds = new Set(baseFlows.map(f => f.flowId));
@@ -192,17 +363,17 @@ const ThreadList: React.FC<Props> = ({
     });
 
     return flowsWithDates.map(item => item.id);
-  }, [threads, ownedFlows, sharedWithMe, sharedByMe, categoryFilter, statusFilter, viewFilter, searchQuery, sortOrder]);
+  }, [threads, ownedFlows, sharedWithMe, sharedByMe, categoryFilter, statusFilter, actualViewFilter, searchQuery, sortOrder, currentView, flows, selectedAccountFilter]);
 
   const selectedFlow = useMemo(() => {
     let setToUse: any[] = [];
-    if (viewFilter === "owned") {
+    if (actualViewFilter === "owned") {
       setToUse = ownedFlows.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
-    } else if (viewFilter === "sharedWithMe") {
+    } else if (actualViewFilter === "sharedWithMe") {
       setToUse = sharedWithMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
-    } else if (viewFilter === "sharedByMe") {
+    } else if (actualViewFilter === "sharedByMe") {
       setToUse = sharedByMe.filter(f => !Array.isArray(f.secondaryTags) || !f.secondaryTags.includes('deleted'));
-    } else if (viewFilter === "deleted") {
+    } else if (actualViewFilter === "deleted") {
       setToUse = [...ownedFlows, ...sharedWithMe, ...sharedByMe].filter(f => 
         Array.isArray(f.secondaryTags) && f.secondaryTags.includes('deleted')
       );
@@ -210,7 +381,54 @@ const ThreadList: React.FC<Props> = ({
       setToUse = [];
     }
     return setToUse.find(f => f.flowId === selectedId);
-  }, [ownedFlows, sharedWithMe, sharedByMe, selectedId, viewFilter]);
+  }, [ownedFlows, sharedWithMe, sharedByMe, selectedId, actualViewFilter]);
+
+  // Polling for new threads
+  const pollForNewThreads = async () => {
+    if (onRefresh) {
+      console.log('🔄 Polling for new threads...');
+      try {
+        await onRefresh();
+      } catch (err) {
+        console.error('Error polling for new threads:', err);
+      }
+    }
+  };
+
+  // Start/stop polling based on view and thread count
+  useEffect(() => {
+    if (currentView === 'inbox') {
+      setIsPolling(true);
+      lastThreadCountRef.current = filteredThreads.length;
+      
+      // Poll every 10 seconds for new threads (less frequent than message polling)
+      pollingIntervalRef.current = setInterval(pollForNewThreads, 10000);
+      
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setIsPolling(false);
+      };
+    } else {
+      // Stop polling when not in inbox view
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      setIsPolling(false);
+    }
+  }, [currentView, onRefresh]);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
 
   // Effects
   useEffect(() => {
@@ -227,9 +445,36 @@ const ThreadList: React.FC<Props> = ({
   }, []);
 
   // Helper functions
-  const getPreviewText = (threadId: string): string => {
+  const getPreviewText = (threadId: string): { content: string; isOutgoing: boolean; isEmail: boolean } => {
     const flow = flows.find(f => f.flowId === threadId);
-    return flow?.lastMessage || flow?.subject || '';
+    
+    // If we have a real last message, use it
+    if (flow?.lastMessage && flow.lastMessage.trim()) {
+      const message = flow.lastMessage.trim();
+      const isOutgoing = message.startsWith('➤ ');
+      const isEmail = message.includes('📧 ');
+      
+      // Remove direction indicators for clean display
+      let cleanMessage = message.replace(/^[➤←] /, '').trim();
+      
+      // Truncate if needed
+      const maxLength = 55;
+      if (cleanMessage.length > maxLength) {
+        cleanMessage = cleanMessage.substring(0, maxLength) + '...';
+      }
+      
+      return { content: cleanMessage, isOutgoing, isEmail };
+    }
+    
+    // Fallback to subject
+    if (flow?.subject && flow.subject.trim()) {
+      const cleanSubject = flow.subject.trim();
+      const truncated = cleanSubject.length > 55 ? cleanSubject.substring(0, 55) + '...' : cleanSubject;
+      return { content: truncated, isOutgoing: false, isEmail: true };
+    }
+    
+    // Default fallback
+    return { content: 'No messages yet', isOutgoing: false, isEmail: false };
   };
 
   const formatEmailAddress = (email: string): string => {
@@ -252,7 +497,14 @@ const ThreadList: React.FC<Props> = ({
   const getThreadTitle = (threadId: string): string => {
     const flow = flows.find(f => f.flowId === threadId);
     
-    // Prioritize showing email addresses (formatted)
+    // First priority: Use the new contactIdentifier field
+    if (flow?.contactIdentifier) {
+      const formatted = formatEmailAddress(flow.contactIdentifier);
+      console.log('ThreadList - Using contactIdentifier:', flow.contactIdentifier, '→', formatted);
+      return formatted;
+    }
+    
+    // Fallback: Existing contact fields for backward compatibility
     if (flow?.contactEmail) {
       const formatted = formatEmailAddress(flow.contactEmail);
       console.log('ThreadList - Formatting contactEmail:', flow.contactEmail, '→', formatted);
@@ -272,8 +524,18 @@ const ThreadList: React.FC<Props> = ({
       return flow.fromPhone;
     }
     
-    // Final fallbacks
-    return flow?.contactName || flow?.subject || `${threadId.slice(0, 30)}`;
+    // BACKWARD COMPATIBILITY: For old flows where flowId IS the contact identifier
+    if (flow?.flowId) {
+      // Check if flowId looks like an email or phone number (old structure)
+      if (flow.flowId.includes('@') || flow.flowId.startsWith('+')) {
+        const formatted = formatEmailAddress(flow.flowId);
+        console.log('ThreadList - Using legacy flowId as contact:', flow.flowId, '→', formatted);
+        return formatted;
+      }
+    }
+    
+    // Final fallbacks - improved for UUID flowIds
+    return flow?.contactName || flow?.subject || 'Unknown Contact';
   };
 
   const getStatusColor = (status: string) => {
@@ -399,6 +661,7 @@ const ThreadList: React.FC<Props> = ({
 
   return (
     <div style={{
+      
       width: '460px', // Increased width to accommodate both columns
       minWidth: '460px', // Prevent compression
       maxWidth: '460px', // Prevent expansion
@@ -413,15 +676,17 @@ const ThreadList: React.FC<Props> = ({
       {/* Left Column - Categories and Filters */}
       <div style={{
         width: '180px',
-        height: 'calc(100vh - 65px)', // Subtract the header space to prevent cropping
+        height: '110vh', // Always use full height
         borderRight: '1px solid #e5e7eb',
         display: 'flex',
         flexDirection: 'column',
-        background: '#FFFBFA'
+        background: '#FFFBFA',
+        position: 'relative'
       }}>
+
         {/* Compose Button - Moved to top */}
         <div style={{
-          padding: '16px 16px 0 16px'
+          padding: '16px'
         }}>
           <button
             onClick={onCompose}
@@ -454,7 +719,7 @@ const ThreadList: React.FC<Props> = ({
           padding: '16px'
         }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {/* Inbox Section */}
+            {/* Inbox Section - Updated with integrated connected accounts */}
             <div>
               <button
                 onClick={() => toggleSection('inbox')}
@@ -478,7 +743,8 @@ const ThreadList: React.FC<Props> = ({
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  📧 Inbox
+                  <Inbox size={16} />
+                  Inbox
                 </div>
                 <span style={{ 
                   fontSize: '12px',
@@ -491,12 +757,17 @@ const ThreadList: React.FC<Props> = ({
               
               {expandedSections.inbox && (
                 <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
+                  {/* All Inboxes Option */}
                   <button
-                    onClick={() => setViewFilter("owned")}
+                    onClick={() => {
+                      setSelectedAccountFilter({ type: 'all' });
+                      handleViewFilterChange("owned");
+                      onBackToInbox?.();
+                    }}
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      background: viewFilter === "owned" ? "#EAE5E5" : "transparent",
+                      background: selectedAccountFilter.type === 'all' && actualViewFilter === "owned" ? "#EAE5E5" : "transparent",
                       border: "1px solid transparent",
                       borderRadius: "6px",
                       cursor: "pointer",
@@ -505,10 +776,230 @@ const ThreadList: React.FC<Props> = ({
                       color: "#374151",
                       textAlign: "left",
                       transition: "background 0.18s",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      marginBottom: "2px"
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!(selectedAccountFilter.type === 'all' && actualViewFilter === "owned")) {
+                        e.currentTarget.style.background = "#f9fafb";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!(selectedAccountFilter.type === 'all' && actualViewFilter === "owned")) {
+                        e.currentTarget.style.background = "transparent";
+                      }
                     }}
                   >
-                    All Messages
+                    <span style={{ fontSize: '12px' }}>📥</span>
+                    <span style={{ fontWeight: '600' }}>All Inboxes</span>
                   </button>
+
+                  {/* Connected Accounts */}
+                  {connectionsLoading && (
+                    <div style={{ 
+                      padding: '8px 12px', 
+                      fontSize: '12px', 
+                      color: '#6b7280',
+                      textAlign: 'center'
+                    }}>
+                      Loading accounts...
+                    </div>
+                  )}
+                  
+                  {connectionsError && (
+                    <div style={{ 
+                      padding: '8px 12px', 
+                      fontSize: '12px', 
+                      color: '#ef4444',
+                      textAlign: 'center'
+                    }}>
+                      Failed to load accounts
+                    </div>
+                  )}
+                  
+                  {userConnections && !connectionsLoading && !connectionsError && (
+                    <>
+                      {/* Gmail Accounts */}
+                      {userConnections.gmail.connected && userConnections.gmail.accounts.map((account, index) => (
+                        <button
+                          key={`gmail-${index}`}
+                          onClick={() => {
+                            setSelectedAccountFilter({
+                              type: 'gmail',
+                              accountId: account.id,
+                              accountEmail: account.email
+                            });
+                            handleViewFilterChange("owned");
+                            onBackToInbox?.();
+                            console.log('📧 Filtering by Gmail account:', account.email);
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "8px 12px",
+                            background: selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email ? "#EAE5E5" : "transparent",
+                            border: "1px solid transparent",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            color: "#374151",
+                            textAlign: "left",
+                            transition: "background 0.18s",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "2px"
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email)) {
+                              e.currentTarget.style.background = "#f9fafb";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email)) {
+                              e.currentTarget.style.background = "transparent";
+                            }
+                          }}
+                        >
+                          <span style={{ fontSize: '12px' }}>📧</span>
+                          <span style={{ 
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {connectionsService.getAccountDisplayName(account)}
+                          </span>
+                        </button>
+                      ))}
+                      
+                      {/* Fallback Gmail Account using user's subscriber_email */}
+                      {!userConnections.gmail.connected && user?.subscriber_email && (
+                        <button
+                          onClick={() => {
+                            console.log('🔥 GMAIL BUTTON CLICKED! Showing all email conversations');
+                            
+                            const newFilter = {
+                              type: 'gmail' as const,
+                              accountId: 'primary-gmail',
+                              accountEmail: 'SHOW_ALL_EMAILS' // Special value to show all emails
+                            };
+                            
+                            console.log('🔥 Setting new filter:', newFilter);
+                            setSelectedAccountFilter(newFilter);
+                            
+                            handleViewFilterChange("owned");
+                            onBackToInbox?.();
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "8px 12px",
+                            background: selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail' ? "#EAE5E5" : "transparent",
+                            border: "1px solid transparent",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            color: "#374151",
+                            textAlign: "left",
+                            transition: "background 0.18s",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "2px"
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail')) {
+                              e.currentTarget.style.background = "#f9fafb";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail')) {
+                              e.currentTarget.style.background = "transparent";
+                            }
+                          }}
+                        >
+                          <span style={{ fontSize: '12px' }}>📧</span>
+                          <span style={{ 
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            Gmail (All)
+                          </span>
+                        </button>
+                      )}
+                      
+                      {/* WhatsApp Accounts */}
+                      {userConnections.whatsapp.connected && userConnections.whatsapp.accounts.map((account, index) => (
+                        <button
+                          key={`whatsapp-${index}`}
+                          onClick={() => {
+                            console.log('🔥 WHATSAPP BUTTON CLICKED! Setting filter to:', account.name);
+                            setSelectedAccountFilter({
+                              type: 'whatsapp',
+                              accountId: account.id
+                            });
+                            handleViewFilterChange("owned");
+                            onBackToInbox?.();
+                            console.log('📱 WhatsApp filter state updated:', { 
+                              type: 'whatsapp', 
+                              accountId: account.id 
+                            });
+                          }}
+                          style={{
+                            width: "100%",
+                            padding: "8px 12px",
+                            background: selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id ? "#EAE5E5" : "transparent",
+                            border: "1px solid transparent",
+                            borderRadius: "6px",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "500",
+                            color: "#374151",
+                            textAlign: "left",
+                            transition: "background 0.18s",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                            marginBottom: "2px"
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!(selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id)) {
+                              e.currentTarget.style.background = "#f9fafb";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!(selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id)) {
+                              e.currentTarget.style.background = "transparent";
+                            }
+                          }}
+                        >
+                          <span style={{ fontSize: '12px' }}>📱</span>
+                          <span style={{ 
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {connectionsService.getAccountDisplayName(account)}
+                          </span>
+                        </button>
+                      ))}
+                      
+                      {/* No connections message */}
+                      {!userConnections.gmail.connected && !userConnections.whatsapp.connected && (
+                        <div style={{ 
+                          padding: '8px 12px', 
+                          fontSize: '12px', 
+                          color: '#6b7280',
+                          textAlign: 'center'
+                        }}>
+                          No connected accounts
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </div>
@@ -537,7 +1028,8 @@ const ThreadList: React.FC<Props> = ({
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  👥 Shared with me
+                  <Users size={16} />
+                  Shared with me
                 </div>
                 <span style={{ 
                   fontSize: '12px',
@@ -551,11 +1043,14 @@ const ThreadList: React.FC<Props> = ({
               {expandedSections.shared && (
                 <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
                   <button
-                    onClick={() => setViewFilter("sharedWithMe")}
+                    onClick={() => {
+                      handleViewFilterChange("sharedWithMe");
+                      onBackToInbox?.();
+                    }}
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      background: viewFilter === "sharedWithMe" ? "#EAE5E5" : "transparent",
+                      background: actualViewFilter === "sharedWithMe" ? "#EAE5E5" : "transparent",
                       border: "1px solid transparent",
                       borderRadius: "6px",
                       cursor: "pointer",
@@ -596,7 +1091,8 @@ const ThreadList: React.FC<Props> = ({
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  📤 Shared by me
+                  <Send size={16} />
+                  Shared By Me ({sharedByMe.length})
                 </div>
                 <span style={{ 
                   fontSize: '12px',
@@ -610,11 +1106,11 @@ const ThreadList: React.FC<Props> = ({
               {expandedSections.sharedByMe && (
                 <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
                   <button
-                    onClick={() => setViewFilter("sharedByMe")}
+                    onClick={() => handleViewFilterChange("sharedByMe")}
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      background: viewFilter === "sharedByMe" ? "#EAE5E5" : "transparent",
+                      background: actualViewFilter === "sharedByMe" ? "#EAE5E5" : "transparent",
                       border: "1px solid transparent",
                       borderRadius: "6px",
                       cursor: "pointer",
@@ -625,7 +1121,7 @@ const ThreadList: React.FC<Props> = ({
                       transition: "background 0.18s",
                     }}
                   >
-                    My Shared Items
+                    All Shared By Me
                   </button>
                 </div>
               )}
@@ -655,7 +1151,8 @@ const ThreadList: React.FC<Props> = ({
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  🗑️ Deleted
+                  <Trash2 size={16} />
+                  Deleted
                 </div>
                 <span style={{ 
                   fontSize: '12px',
@@ -669,11 +1166,11 @@ const ThreadList: React.FC<Props> = ({
               {expandedSections.deleted && (
                 <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
                   <button
-                    onClick={() => setViewFilter("deleted")}
+                    onClick={() => handleViewFilterChange("deleted")}
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      background: viewFilter === "deleted" ? "#EAE5E5" : "transparent",
+                      background: actualViewFilter === "deleted" ? "#EAE5E5" : "transparent",
                       border: "1px solid transparent",
                       borderRadius: "6px",
                       cursor: "pointer",
@@ -690,6 +1187,40 @@ const ThreadList: React.FC<Props> = ({
               )}
             </div>
           </div>
+
+          {/* Discussions Section */}
+          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
+            <button
+              onClick={onDiscussionsClick}
+              style={{
+                width: "100%",
+                padding: "12px",
+                background: "#f8f9fa",
+                border: "2px solid #DE1785",
+                borderRadius: "8px",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "600",
+                color: "#DE1785",
+                textAlign: "center",
+                transition: "all 0.18s",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = "#DE1785";
+                e.currentTarget.style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = "#f8f9fa";
+                e.currentTarget.style.color = "#DE1785";
+              }}
+            >
+              💬 Discussions
+            </button>
+          </div>
         </div>
 
 
@@ -698,12 +1229,11 @@ const ThreadList: React.FC<Props> = ({
       {/* Right Column - Thread List */}
       <div style={{
         flex: 1,
-        height: selectedId ? 'calc(100vh - 145px)' : 'calc(100vh - 65px)', // Adjust height when status bar is visible (extra 20px buffer)
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         width: '300vh',
-        marginTop: selectedId ? '60px' : '0' // Only push down the thread list, not the left sidebar
+        paddingTop: '60px' // Space for status bar without affecting height calculation
       }}>
         {/* Thread List Header */}
         <div style={{
@@ -979,6 +1509,7 @@ const ThreadList: React.FC<Props> = ({
             filteredThreads.map(threadId => {
               const flow = flows.find(f => f.flowId === threadId);
               const isSelected = threadId === selectedId;
+              const previewData = getPreviewText(threadId);
               
               return (
                 <div
@@ -1042,6 +1573,32 @@ const ThreadList: React.FC<Props> = ({
                     )}
                   </div>
                   
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginBottom: '4px'
+                  }}>
+                    {/* Direction indicator */}
+                    <span style={{
+                      fontSize: '10px',
+                      color: previewData.isOutgoing ? '#10b981' : '#6b7280',
+                      fontWeight: '500'
+                    }}>
+                      {previewData.isOutgoing ? '➤' : '←'}
+                    </span>
+                    
+                    {/* Channel indicator */}
+                    {previewData.isEmail && (
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#6b7280'
+                      }}>
+                        📧
+                      </span>
+                    )}
+                  </div>
+                  
                   <p style={{
                     margin: 0,
                     fontSize: '12px',
@@ -1052,7 +1609,7 @@ const ThreadList: React.FC<Props> = ({
                     WebkitBoxOrient: 'vertical',
                     overflow: 'hidden'
                   }}>
-                    {getPreviewText(threadId)}
+                    {previewData.content}
                   </p>
                   
                   <div style={{ marginTop: '8px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
