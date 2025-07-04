@@ -6,6 +6,7 @@ import EmailReplyEditor from '../SendBox';
 import WhatsAppTemplateSelector from './WhatsAppTemplateSelector';
 import { getUserById } from '../../../../services/userService';
 import { discussionsService } from '../../../../services/discussionsService';
+import { Reply } from 'lucide-react';
 import './MessageView.css';
 
 interface APIMessage {
@@ -95,6 +96,7 @@ const MessageView: React.FC<MessageViewProps> = ({
   const { user } = useAuth();
   
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replySubject, setReplySubject] = useState('');
@@ -1771,22 +1773,25 @@ const MessageView: React.FC<MessageViewProps> = ({
                       border: '1px solid #f0f0f0',
                       wordWrap: 'break-word',
                       overflowWrap: 'break-word',
+                      position: 'relative',
                       
                       maxHeight: isActive ? 'none' : '110px',
                       transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                      setHoveredMessageId(chat.id);
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
+                      setHoveredMessageId(null);
                     }}
                   >
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between', 
                       alignItems: 'center',
-                      marginBottom: '8px'
+                      marginBottom: '0px'
                     }}>
                       <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
                         <strong style={{ color: chat.direction === 'incoming' ? '#DE1785' : '#000000' }}>
@@ -1796,17 +1801,54 @@ const MessageView: React.FC<MessageViewProps> = ({
                           {formatDisplayDate(chat.timestamp)}
                         </span>
                       </p>
-                      <div style={{
-                        fontSize: '10px',
-                        background: chat.direction === 'incoming' ? '#f3f4f6' : '#FDE7F1',
-                        color: chat.direction === 'incoming' ? '#374151' : '#DE1785',
-                        padding: '2px 6px',
-                        borderRadius: '10px',
-                        textTransform: 'uppercase',
-                        fontWeight: 'bold'
-                      }}>
-                        {chat.direction}
-                      </div>
+                      {/* Show direction tag only when not hovering */}
+                      {hoveredMessageId !== chat.id && (
+                        <div style={{
+                          fontSize: '10px',
+                          background: chat.direction === 'incoming' ? '#f3f4f6' : '#FDE7F1',
+                          color: chat.direction === 'incoming' ? '#374151' : '#DE1785',
+                          padding: '2px 6px',
+                          borderRadius: '10px',
+                          textTransform: 'uppercase',
+                          fontWeight: 'bold'
+                        }}>
+                          {chat.direction}
+                        </div>
+                      )}
+                      
+                      {/* Show reply button when hovering and not active */}
+                      {hoveredMessageId === chat.id && !isActive && selectedThreadId && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMessageId(chat.id);
+                            setIsReplying(true);
+                          }}
+                          style={{
+                            background: '#FDE7F1', // Light pink background same as secondary tag
+                            color: '#DE1785', // Beya pink for the icon
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            margin: 'auto 0' // Better vertical centering
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#fce7f3';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#FDE7F1';
+                          }}
+                          title="Reply to this message"
+                        >
+                          <Reply size={14} />
+                        </button>
+                      )}
                     </div>
                     
                     {chat.subject && (
@@ -1839,6 +1881,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                     }}>
                       {linkifyWithImages(chat.body)}
                     </div>
+
                     
                     {isActive && selectedThreadId && (
                       <div style={{ 
@@ -1849,32 +1892,6 @@ const MessageView: React.FC<MessageViewProps> = ({
                         display: 'flex',
                         gap: '12px'
                       }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const email = prompt('Enter email to add:');
-                            if (email) addParticipant(selectedThreadId, email);
-                          }}
-                          style={{
-                            background: '#6366f1',
-                            color: '#fff',
-                            padding: '8px 16px',
-                            border: 'none',
-                            borderRadius: 6,
-                            fontSize: '14px',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                            transition: 'background 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#4f46e5';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#6366f1';
-                          }}
-                        >
-                          Share
-                        </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -2353,7 +2370,6 @@ const MessageView: React.FC<MessageViewProps> = ({
                 justifyContent: 'center',
                 fontSize: '14px',
                 flexShrink: 0,
-                transition: 'background 0.2s'
               }}
             >
               ↑

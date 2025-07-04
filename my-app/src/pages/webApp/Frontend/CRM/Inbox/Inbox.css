@@ -44,7 +44,7 @@ body, html {
 }
 
 .content {
-  height: calc(100vh - 65px); /* Subtract the margin-top to prevent overflow */
+  height: calc(100vh - 5vh); /* Subtract the .main margin-top to fit properly */
   display: flex;
   overflow: hidden;
   position: relative;
