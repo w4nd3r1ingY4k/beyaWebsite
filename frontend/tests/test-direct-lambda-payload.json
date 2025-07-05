@@ -1,0 +1,11 @@
+{
+  "requestContext": {
+    "http": {
+      "method": "POST"
+    }
+  },
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"userId\": \"f41814b8-d0a1-7041-ef1f-e1e5c2dafc86\", \"gmail_account_id\": \"apn_r5hmJDa\", \"email\": \"akbar.shamjijr@gmail.com\", \"gmail_data\": {\"id\": \"test123\", \"snippet\": \"Test email content\", \"payload\": {\"headers\": [{\"name\": \"From\", \"value\": \"sender@example.com\"}, {\"name\": \"To\", \"value\": \"akbar.shamjijr@gmail.com\"}, {\"name\": \"Subject\", \"value\": \"Test Gmail Integration\"}]}}}"
+} 

@@ -1,0 +1,116 @@
+.privacy-container {
+  min-height: 100vh;
+  background-color: white;
+  color: #374151;
+  display: flex;
+  flex-direction: column;
+}
+
+.privacy-header {
+  background-color: #F9FAFB;
+  width: 100%;
+  padding: 10rem 1rem;
+  text-align: center;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.privacy-title {
+  font-size: 3rem;
+  font-weight: bold;
+  color: #3A3A3A;
+  margin-bottom: 1rem;
+}
+
+.privacy-subtitle {
+  margin-top: 1rem;
+  color: #6B7280;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.6;
+}
+
+.privacy-main {
+  flex-grow: 1;
+  padding: 3rem 1.5rem;
+  max-width: 64rem;
+  margin: 0 auto;
+}
+
+.privacy-intro {
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.privacy-section {
+  margin-bottom: 2rem;
+}
+
+.privacy-section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: #1F2937;
+}
+
+.privacy-list {
+  list-style-type: disc;
+  list-style-position: inside;
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}
+
+.privacy-list li {
+  margin-bottom: 0.5rem;
+  color: #374151;
+}
+
+.privacy-paragraph {
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.privacy-address {
+  font-style: normal;
+  margin-bottom: 1.5rem;
+  color: #374151;
+}
+
+.privacy-address strong {
+  color: #1F2937;
+}
+
+.privacy-footer {
+  margin-top: 3rem;
+  font-style: italic;
+  font-size: 0.875rem;
+  color: #6B7280;
+  text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .privacy-title {
+    font-size: 2.5rem;
+  }
+  
+  .privacy-main {
+    padding: 2rem 1rem;
+  }
+  
+  .privacy-section-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .privacy-title {
+    font-size: 2rem;
+  }
+  
+  .privacy-header {
+    padding: 6rem 1rem;
+  }
+} 
