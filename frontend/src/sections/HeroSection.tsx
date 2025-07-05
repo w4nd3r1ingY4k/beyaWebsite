@@ -1,27 +1,16 @@
 import React from "react";
 import { HeroSectionProps } from "../ComponentTypes";
 
-const desktop = require("../pages/webApp/assets/media/desktop.png");
-const mobile = require("../pages/webApp/assets/media/mobile.png");
+const desktop = require("../pages/webApp/Assets/Media/desktop.png");
+const mobile = require("../pages/webApp/Assets/Media/mobile.png");
 
-<<<<<<< HEAD:my-app/src/sections/HeroSection.tsx
-export const HeroSection: React.FC<HeroSectionProps> = ({
-  title,
-  description,
-  appDownload,
-  heroImage,
-}) => (
-  <section
-    className="relative bg-gradient-to-b from-pink-500 to-brandPink py-40"
-    id="mission"
-=======
+
 export const HeroSection: React.FC<HeroSectionProps> = () => {
   const systemFontStack =
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'";
 
   return (
     <section
-      id="mission"
       style={{
         marginTop: -30,
         width: "100%",
@@ -89,96 +78,166 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
       backgroundClip: "text",
       color: "transparent",
     }}
->>>>>>> main:frontend/src/sections/HeroSection.tsx
   >
-    <div className="container mx-auto px-4">
-      <div className="flex flex-col-reverse lg:flex-row items-center justify-between">
-        {/* Text Section with White Box */}
-        <div className="w-full lg:w-1/2 px-4 sm:px-6 sm:w-2/3 lg:px-8 mb-12 lg:mb-0 mt-8 sm:mt-12 lg:mt-0">
-          <motion.div
-            className="bg-white p-6 sm:p-10 rounded-lg shadow-lg lg:ml-10"
-            variants={containerVariants}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, amount: 0.5 }}
+    one conversation
+  </span>
+</h1>
+
+            <p
+              style={{
+                fontSize: "1.375rem",
+                color: "#4B5563",
+                fontWeight: 400,
+                maxWidth: "38rem",
+                lineHeight: 1.6,
+                margin: 0,
+              }}
+            >
+              AI that understands your business. Commerce and marketing tools that just work. All in one place.
+            </p>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", marginTop: "1rem" }}>
+              {["AI-Powered Commerce", "Unified Dashboard", "Natural Language Control"].map((text, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: "0.65rem 1.3rem",
+                    background: "rgba(255, 255, 255, 0.8)",
+                    borderRadius: "9999px",
+                    fontSize: "0.95rem",
+                    color: "#374151",
+                    border: "1px solid rgba(229, 231, 235, 0.6)",
+                    fontWeight: 500,
+                    backdropFilter: "blur(10px)",
+                    WebkitBackdropFilter: "blur(10px)",
+                  }}
+                >
+                  {text}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", marginTop: "1.5rem" }}>
+              <button
+                style={{
+                  padding: "1.2rem 2.6rem",
+                  color: "#fff",
+                  fontWeight: 600,
+                  borderRadius: "9999px",
+                  background: "linear-gradient(135deg, #DE1785, #F472B6)",
+                  border: "none",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: "0 10px 25px rgba(222, 23, 133, 0.25), 0 4px 12px rgba(0, 0, 0, 0.05)",
+                  alignSelf: "flex-start",
+                  fontSize: "1.1rem",
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = "translateY(-2px)";
+                  e.currentTarget.style.boxShadow = "0 15px 35px rgba(222, 23, 133, 0.35), 0 8px 20px rgba(0, 0, 0, 0.1)";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 10px 25px rgba(222, 23, 133, 0.25), 0 4px 12px rgba(0, 0, 0, 0.05)";
+                }}
+              >
+                Get Early Access
+              </button>
+              <p style={{ fontSize: "0.95rem", color: "#6B7280", margin: 0 }}>
+                For businesses ready to grow smarter
+              </p>
+            </div>
+          </div>
+
+          {/* Visual Element - Redesigned */}
+          <div
+            style={{
+              position: "relative",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              height: "750px",
+              perspective: "1500px",
+            }}
           >
-            <motion.h1
-              className="text-3xl sm:text-2xl lg:text-5xl font-bold mb-6 text-gray-900"
-              variants={itemVariants}
+            {/* Desktop Image - Main focal point */}
+            <div
+              style={{
+                position: "relative",
+                zIndex: 10,
+                transform: "rotateY(-5deg) rotateX(2deg)",
+                transformStyle: "preserve-3d",
+              }}
             >
-              {title}
-            </motion.h1>
+              <img
+                src={desktop}
+                alt="Desktop app preview"
+                style={{
+                  width: "800px",
+                  height: "500px",
+                  borderRadius: "18px",
+                  boxShadow: "0 35px 70px rgba(0, 0, 0, 0.18), 0 14px 35px rgba(0, 0, 0, 0.12)",
+                  border: "2px solid rgba(255, 255, 255, 0.25)",
+                  background: "#fff",
+                  objectFit: "fill",
+                }}
+              />
+            </div>
 
-            <motion.p
-              className="text-base sm:text-sm lg:text-xl mb-8 text-gray-700"
-              variants={itemVariants}
+            {/* Mobile Image - Positioned to the right and slightly forward */}
+            <div
+              style={{
+                position: "absolute",
+                right: "-100px",
+                bottom: "40px",
+                zIndex: 15,
+                transform: "rotateY(-15deg) rotateX(5deg) translateZ(50px)",
+                transformStyle: "preserve-3d",
+              }}
             >
-              {description}
-            </motion.p>
+              <img
+                src={mobile}
+                alt="Mobile app preview"
+                style={{
+                  width: "250px", // iPhone scale (larger)
+                  height: "500px", // maintain 2:1 iPhone-like aspect
+                  borderRadius: "32px",
+                  boxShadow: "0 24px 48px rgba(0, 0, 0, 0.22), 0 10px 24px rgba(0, 0, 0, 0.12)",
+                  border: "4px solid #fff",
+                  background: "#fff",
+                  objectFit: "fill",
+                }}
+              />
+            </div>
 
-            <motion.p
-              className="text-lg sm:text-base lg:text-xl mb-4 text-gray-700"
-              variants={itemVariants}
-            >
-              <b>
-                <a
-                  href="https://www.figma.com/proto/qO9vcMMjS1UxcYTYAbOEIQ/UI?page-id=578%3A195&node-id=578-398&viewport=838%2C453%2C0.14&t=rt5qp9FqxhzAbZPG-1&scaling=scale-down&content-scaling=fixed&starting-point-node-id=578%3A398"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-indigo-600 hover:underline"
-                >
-                  Wireframe Demo
-                </a>
-              </b>
-              &nbsp; | &nbsp;
-              <b>
-                <a
-                  href="https://calendly.com/akbar-usebeya"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-indigo-600 hover:underline"
-                >
-                  Book a Call
-                </a>
-              </b>
-            </motion.p>
+            {/* Subtle floating elements */}
+            <div
+              style={{
+                position: "absolute",
+                top: "-20px",
+                right: "30px",
+                width: "120px",
+                height: "120px",
+                background: "linear-gradient(135deg, rgba(222, 23, 133, 0.1), rgba(244, 114, 182, 0.1))",
+                borderRadius: "50%",
+                filter: "blur(40px)",
+                zIndex: 1,
+              }}
+            />
+            <div
+              style={{
+                position: "absolute",
+                bottom: "-40px",
+                left: "-30px",
+                width: "160px",
+                height: "160px",
+                background: "linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(147, 197, 253, 0.08))",
+                borderRadius: "50%",
+                filter: "blur(50px)",
+                zIndex: 1,
+              }}
+            />
 
-<<<<<<< HEAD:my-app/src/sections/HeroSection.tsx
-            {/* <motion.div variants={itemVariants} className="mb-8">
-              <a
-                href="#beta"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="
-                  inline-block 
-                  bg-indigo-600 hover:bg-indigo-700 
-                  text-white 
-                  font-semibold 
-                  py-3 px-6 
-                  rounded-lg 
-                  text-lg sm:text-base lg:text-xl 
-                  transition-colors duration-200
-                "
-              >
-                Join Our Beta Testing
-              </a>
-            </motion.div> */}
-
-            {/* (existing AppDownload block commented out) */}
-            <motion.div variants={itemVariants} className="mb-8">
-              <h2
-                className={`text-xl sm:text-2xl font-semibold mb-4 ${
-                  isGreyedOut ? "text-gray-400" : "text-gray-900"
-                }`}
-              >
-                Download App (Coming Soon)
-              </h2>
-              <div className={isGreyedOut ? "greyed-out" : ""}>
-                <AppDownload {...appDownload} />
-              </div>
-            </motion.div>
-          </motion.div>
-=======
             {/* Additional depth elements */}
             <div
               style={{
@@ -194,7 +253,6 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               }}
             />
           </div>
->>>>>>> main:frontend/src/sections/HeroSection.tsx
         </div>
 
         {/* Trust indicators */}

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from "@/pages/AuthContext";
+import { useAuth } from "../../../../AuthContext";
 import { EditorState, convertToRaw, Editor } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import EmailReplyEditor from '../SendBox';
 import WhatsAppTemplateSelector from './WhatsAppTemplateSelector';
-import { getUserById } from '../../../../services/userService';
-import { discussionsService } from '../../../../services/discussionsService';
+import { getUserById } from '../../../../../userService';
+import { discussionsService } from '../../../../../discussionsService';
 import { Reply } from 'lucide-react';
 import './MessageView.css';
 

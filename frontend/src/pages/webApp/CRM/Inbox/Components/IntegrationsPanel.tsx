@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createFrontendClient } from "@pipedream/sdk/browser";
-import { useAuth } from "@/pages/AuthContext";
+import { useAuth } from "../../../../AuthContext";
 
 // Fargate service URL - using DNS name instead of IP for stability
 const FARGATE_SERVICE_URL = 'http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074';

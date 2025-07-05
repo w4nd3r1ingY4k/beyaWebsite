@@ -1,6 +1,6 @@
 import React from 'react';
 import './Inbox.css';
-import InboxContainer from './components/InboxContainer';
+import InboxContainer from './Components/InboxContainer';
 
 interface InboxHomeProps {
   onOpenAIChat?: (message?: string) => void;

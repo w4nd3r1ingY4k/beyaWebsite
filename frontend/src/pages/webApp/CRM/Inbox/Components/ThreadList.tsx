@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Inbox, Users, Send, Trash2 } from 'lucide-react';
-import { connectionsService, ConnectionsResponse, UserConnections } from '../../../../services/connectionsService';
-import { useAuth } from '../../../../../AuthContext';
+import { connectionsService, ConnectionsResponse, UserConnections } from '../../../../../connectionsService';
+import { useAuth } from '../../../../AuthContext';
 
 type Status = 'open' | 'waiting' | 'resolved' | 'overdue';
 type ViewFilter = "owned" | "sharedWithMe" | "sharedByMe" | "deleted";

@@ -2,9 +2,9 @@
 import React, { useEffect, useRef } from 'react';
 
 // Replace these with your actual imports (or require paths) for the SVG/PNG icons:
-const mic = require('../assets/icons/mic.png');
-const add = require('../assets/icons/add.png');
-const send = require('../assets/icons/arrow_warm_up.png');
+const mic = require('../Assets/Icons/mic.png');
+const add = require('../Assets/Icons/add.png');
+const send = require('../Assets/Icons/arrow_warm_up.png');
 
 interface ChatInputBarProps {
   message: string;
