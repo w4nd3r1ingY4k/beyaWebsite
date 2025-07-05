@@ -4,5 +4,5 @@
   "headers": {
     "Content-Type": "application/json"
   },
-  "body": "{\"action\": \"create_workflow\", \"userId\": \"f41814b8-d0a1-7041-ef1f-e1e5c2dafc86\", \"gmailAccountId\": \"apn_r5hmJDa\", \"userEmail\": \"akbar.shamjijr@gmail.com\"}"
+  "body": "{\"action\": \"create_workflow\", \"userId\": \"f41814b8-d0a1-7041-ef1f-e1e5c2dafc86\", \"gmailAccountId\": \"apn_GXhl8aX\", \"userEmail\": \"akbar.shamjijr@gmail.com\"}"
 } 

@@ -1,1 +1,1 @@
-{"statusCode":500,"headers":{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"},"body":"{\"success\":false,\"error\":\"Failed to get workflow: 400\"}"}
+{"statusCode":500,"headers":{"Content-Type":"application/json","Access-Control-Allow-Origin":"*"},"body":"{\"success\":false,\"error\":\"Failed to list workflows: 404\"}"}

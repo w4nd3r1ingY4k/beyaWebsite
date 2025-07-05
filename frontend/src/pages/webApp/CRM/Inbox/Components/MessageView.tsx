@@ -3,6 +3,10 @@ import { useAuth } from "@/pages/AuthContext";
 import { EditorState, convertToRaw, Editor } from 'draft-js';
 import draftToHtml from 'draftjs-to-html';
 import EmailReplyEditor from '../SendBox';
+import WhatsAppTemplateSelector from './WhatsAppTemplateSelector';
+import { getUserById } from '../../../../services/userService';
+import { discussionsService } from '../../../../services/discussionsService';
+import { Reply } from 'lucide-react';
 import './MessageView.css';
 
 interface APIMessage {
@@ -27,7 +31,7 @@ interface MessageViewProps {
   isLoading: boolean;
   onReply?: () => void;
   onShare?: (threadId: string) => void;
-  onSendMessage: (messageData: any) => Promise<void>;
+  onSendMessage?: (messageData: any) => Promise<void>;
   flow?: any;
   statusFilter?: Status | 'all';
   onStatusFilterChange?: (status: Status | 'all') => void;
@@ -35,6 +39,9 @@ interface MessageViewProps {
   onCategoryFilterChange?: (categories: string[]) => void;
   onFlowUpdate?: (updatedFlow: any) => void;
   onOpenAIChat?: (message: string) => void; // New prop for opening AI chat with a message
+  currentView?: 'inbox' | 'discussions';
+  onSendDiscussionMessage?: (content: string) => void;
+  onDiscussionStatusSelect?: (status: 'open' | 'waiting' | 'resolved' | 'overdue') => void;
 }
 
 interface Message {
@@ -81,11 +88,15 @@ const MessageView: React.FC<MessageViewProps> = ({
   categoryFilter: externalCategoryFilter = 'all',
   onCategoryFilterChange,
   onFlowUpdate,
-  onOpenAIChat
+  onOpenAIChat,
+  currentView = 'inbox',
+  onSendDiscussionMessage,
+  onDiscussionStatusSelect
 }) => {
   const { user } = useAuth();
   
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+  const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replySubject, setReplySubject] = useState('');
@@ -119,13 +130,38 @@ const MessageView: React.FC<MessageViewProps> = ({
   const primaryTagOptions = ['sales', 'logistics', 'support'];
   const secondaryTagOptions = ['urgent', 'vip', 'complex', 'enterprise', 'follow-up', 'escalated'];
 
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
+  
+  // Discussion message state
+  const [discussionMessageInput, setDiscussionMessageInput] = useState('');
+  const [subscriberEmail, setSubscriberEmail] = useState('');
+
   useEffect(() => {
     if (selectedThreadId) {
-      loadTeamMessages(selectedThreadId);
+      if (currentView === 'discussions') {
+        // Don't load team messages for discussions
+        setTeamMessages([]);
+      } else {
+        loadTeamMessages(selectedThreadId);
+      }
     } else {
       setTeamMessages([]);
     }
-  }, [selectedThreadId]);
+  }, [selectedThreadId, currentView]);
+
+  useEffect(() => {
+    if (currentView === 'discussions' && flow?.createdBy) {
+      getUserById(flow.createdBy)
+        .then(user => {
+          if (user?.subscriber_email) {
+            setSubscriberEmail(user.subscriber_email);
+          }
+        })
+        .catch(err => console.error('Failed to get subscriber email', err));
+    } else {
+      setSubscriberEmail('');
+    }
+  }, [flow, currentView]);
 
   // Sync local flow state when prop changes
   useEffect(() => {
@@ -234,7 +270,19 @@ const MessageView: React.FC<MessageViewProps> = ({
         const plainText = emailEditorState.getCurrentContent().getPlainText();
         
         // Get recipient from flow or use the decoded threadId as fallback
-        const recipient = flow?.contactEmail || decodeURIComponent(selectedThreadId);
+        let recipient = flow?.contactEmail || flow?.contactIdentifier || flow?.fromEmail || decodeURIComponent(selectedThreadId);
+        
+        // IMPORTANT: Extract actual email address from flowId if needed
+        if (selectedThreadId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // If selectedThreadId is a UUID (flowId), look up the actual email address
+          if (flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail) {
+            recipient = flow.contactIdentifier || flow.contactEmail || flow.fromEmail;
+            console.log(`🔄 Converted flowId ${selectedThreadId} to email address ${recipient}`);
+          } else {
+            console.error('❌ Could not find email address for flowId:', selectedThreadId);
+            throw new Error('Could not find email address for this conversation');
+          }
+        }
         
         // Find the most recent incoming message to get the original subject
         const incomingMessages = messages.filter(msg => msg.Direction === 'incoming');
@@ -257,7 +305,7 @@ const MessageView: React.FC<MessageViewProps> = ({
         
         // DON'T pass originalMessageId - let the backend look it up automatically!
         // The backend has the correct logic to find the Message-ID from Headers
-        await onSendMessage({
+        await onSendMessage?.({
           channel: 'email',
           to: recipient,
           subject: finalSubject || 'Re: (no subject)',
@@ -270,9 +318,21 @@ const MessageView: React.FC<MessageViewProps> = ({
         setReplySubject('');
       } else {
         // Get recipient from flow or use the decoded threadId as fallback
-        const recipient = flow?.contactPhone || decodeURIComponent(selectedThreadId);
+        let recipient = flow?.contactPhone || flow?.contactIdentifier || flow?.fromPhone || decodeURIComponent(selectedThreadId);
         
-        await onSendMessage({
+        // IMPORTANT: Extract actual phone number from flowId if needed
+        if (selectedThreadId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
+          // If selectedThreadId is a UUID (flowId), look up the actual phone number
+          if (flow?.contactIdentifier || flow?.contactPhone || flow?.fromPhone) {
+            recipient = flow.contactIdentifier || flow.contactPhone || flow.fromPhone;
+            console.log(`🔄 Converted flowId ${selectedThreadId} to phone number ${recipient}`);
+          } else {
+            console.error('❌ Could not find phone number for flowId:', selectedThreadId);
+            throw new Error('Could not find phone number for this conversation');
+          }
+        }
+        
+        await onSendMessage?.({
           channel: 'whatsapp',
           to: recipient,
           content: replyText
@@ -379,8 +439,123 @@ const MessageView: React.FC<MessageViewProps> = ({
     return res.json();
   };
 
+  // Update discussion function for tag and status changes
+  const updateDiscussion = async (discussionId: string, updates: Record<string, any>) => {
+    try {
+      const result = await discussionsService.updateDiscussionStatus(discussionId, user!.userId, updates);
+      return result;
+    } catch (error) {
+      console.error('Error updating discussion:', error);
+      throw error;
+    }
+  };
+
+  // Handle primary tag selection for discussions
+  const handleDiscussionPrimaryTagSelect = async (tag: string) => {
+    if (!selectedThreadId || !localFlow || currentView !== 'discussions') {
+      alert('No discussion selected');
+      return;
+    }
+
+    try {
+      // Get existing secondary tags
+      const existingSecondaryTags = Array.isArray(localFlow.secondaryTags) ? localFlow.secondaryTags : [];
+      
+      // Primary tag is exclusive - set or clear
+      const newPrimaryTag = tag === '' ? undefined : tag;
+      
+      // Update local state immediately
+      const updatedLocalFlow = {
+        ...localFlow,
+        primaryTag: newPrimaryTag,
+        secondaryTags: existingSecondaryTags,
+      };
+      setLocalFlow(updatedLocalFlow);
+      
+      // Call API
+      console.log('Updating discussion primary tag:', { 
+        discussionId: localFlow.discussionId,
+        primaryTag: newPrimaryTag,
+        secondaryTags: existingSecondaryTags 
+      });
+      
+      const updated = await updateDiscussion(localFlow.discussionId, { 
+        primaryTag: newPrimaryTag,
+        secondaryTags: existingSecondaryTags
+      });
+      
+      console.log('Discussion primary tag update response:', updated);
+
+      if (onFlowUpdate) {
+        onFlowUpdate(updated);
+      }
+    } catch (err: any) {
+      console.error('Failed to update discussion primary tag:', err);
+      alert('Could not update primary tag: ' + err.message);
+      setLocalFlow(flow);
+    }
+  };
+
+  // Handle secondary tag selection for discussions
+  const handleDiscussionSecondaryTagSelect = async (tag: string) => {
+    if (!selectedThreadId || !localFlow || currentView !== 'discussions') {
+      alert('No discussion selected');
+      return;
+    }
+
+    try {
+      const existingPrimaryTag = localFlow.primaryTag;
+      const existingSecondaryTags = Array.isArray(localFlow.secondaryTags) ? localFlow.secondaryTags : [];
+      
+      // Handle clear all secondary tags
+      let updatedSecondaryTags: string[];
+      if (tag === '') {
+        updatedSecondaryTags = [];
+      } else {
+        // Toggle secondary tag
+        updatedSecondaryTags = existingSecondaryTags.includes(tag)
+          ? existingSecondaryTags.filter((t: string) => t !== tag)
+          : [...existingSecondaryTags, tag];
+      }
+      
+      // Update local state immediately
+      const updatedLocalFlow = {
+        ...localFlow,
+        primaryTag: existingPrimaryTag,
+        secondaryTags: updatedSecondaryTags,
+      };
+      setLocalFlow(updatedLocalFlow);
+      
+      // Call API
+      console.log('Updating discussion secondary tags:', { 
+        discussionId: localFlow.discussionId,
+        primaryTag: existingPrimaryTag,
+        secondaryTags: updatedSecondaryTags 
+      });
+      
+      const updated = await updateDiscussion(localFlow.discussionId, { 
+        primaryTag: existingPrimaryTag,
+        secondaryTags: updatedSecondaryTags
+      });
+      
+      console.log('Discussion secondary tags update response:', updated);
+
+      if (onFlowUpdate) {
+        onFlowUpdate(updated);
+      }
+    } catch (err: any) {
+      console.error('Failed to update discussion secondary tags:', err);
+      alert('Could not update secondary tags: ' + err.message);
+      setLocalFlow(flow);
+    }
+  };
+
   // Handle primary tag selection (exclusive)
   const handlePrimaryTagSelect = async (tag: string) => {
+    if (currentView === 'discussions') {
+      return handleDiscussionPrimaryTagSelect(tag);
+    }
+    
     if (!selectedThreadId || !localFlow) {
       alert('No conversation selected');
       return;
@@ -437,6 +612,10 @@ const MessageView: React.FC<MessageViewProps> = ({
 
   // Handle secondary tag selection (multiple)
   const handleSecondaryTagSelect = async (tag: string) => {
+    if (currentView === 'discussions') {
+      return handleDiscussionSecondaryTagSelect(tag);
+    }
+    
     if (!selectedThreadId || !localFlow) {
       alert('No conversation selected');
       return;
@@ -494,6 +673,43 @@ const MessageView: React.FC<MessageViewProps> = ({
     } catch (err: any) {
       console.error('Failed to update secondary tags:', err);
       alert('Could not update secondary tags: ' + err.message);
+      setLocalFlow(flow);
+    }
+  };
+
+  // Handle discussion status update
+  const handleDiscussionStatusSelect = async (status: 'open' | 'waiting' | 'resolved' | 'overdue') => {
+    if (!selectedThreadId || !localFlow || currentView !== 'discussions') {
+      alert('No discussion selected');
+      return;
+    }
+
+    try {
+      // Update local state immediately
+      const updatedLocalFlow = {
+        ...localFlow,
+        status: status,
+      };
+      setLocalFlow(updatedLocalFlow);
+      
+      // Call API
+      console.log('Updating discussion status:', { 
+        discussionId: localFlow.discussionId,
+        status: status
+      });
+      
+      const updated = await updateDiscussion(localFlow.discussionId, { 
+        status: status
+      });
+      
+      console.log('Discussion status update response:', updated);
+
+      if (onFlowUpdate) {
+        onFlowUpdate(updated);
+      }
+    } catch (err: any) {
+      console.error('Failed to update discussion status:', err);
+      alert('Could not update status: ' + err.message);
       setLocalFlow(flow);
     }
   };
@@ -606,6 +822,38 @@ const MessageView: React.FC<MessageViewProps> = ({
     }
   };
 
+  // Helper function to get contact name for messages
+  const getContactName = (): string => {
+    if (!flow) return 'Customer';
+    
+    // First priority: Use the new contactIdentifier field
+    if (flow.contactIdentifier) {
+      return flow.contactIdentifier;
+    }
+    
+    // Fallback: Existing contact fields for backward compatibility
+    if (flow.contactEmail) {
+      return flow.contactEmail;
+    }
+    if (flow.fromEmail) {
+      return flow.fromEmail;
+    }
+    if (flow.contactPhone) {
+      return flow.contactPhone;
+    }
+    if (flow.fromPhone) {
+      return flow.fromPhone;
+    }
+    
+    // BACKWARD COMPATIBILITY: For old flows where flowId IS the contact identifier
+    if (flow.flowId && (flow.flowId.includes('@') || flow.flowId.startsWith('+'))) {
+      return flow.flowId;
+    }
+    
+    // Final fallbacks
+    return flow.contactName || flow.customerName || 'Customer';
+  };
+
   const normalizeMessage = (msg: APIMessage) => ({
     id: msg.MessageId || `${msg.Timestamp || Date.now()}`,
     body: msg.Body || msg.Text || '',
@@ -613,7 +861,7 @@ const MessageView: React.FC<MessageViewProps> = ({
     timestamp: formatTimestamp(msg.Timestamp),
     channel: msg.Channel || 'email',
     threadId: msg.ThreadId || '',
-    senderName: msg.Direction === 'incoming' ? 'Customer' : 'You',
+    senderName: msg.Direction === 'incoming' ? getContactName() : 'You',
     subject: msg.Subject || ''
   });
 
@@ -695,6 +943,56 @@ const MessageView: React.FC<MessageViewProps> = ({
     }
   };
 
+  // Handle WhatsApp template selection
+  const handleTemplateSelect = async (template: any, templateParams?: any) => {
+    if (!selectedThreadId) return;
+    
+    if (!template) {
+      // User closed template selector
+      setShowTemplateSelector(false);
+      return;
+    }
+    
+    try {
+      // Get recipient from flow or use the decoded threadId as fallback
+      const recipient = flow?.contactPhone || decodeURIComponent(selectedThreadId);
+      
+      // Send template message
+      await onSendMessage?.({
+        channel: 'whatsapp',
+        to: recipient,
+        templateName: templateParams.templateName,
+        templateLanguage: templateParams.templateLanguage,
+        templateComponents: templateParams.templateComponents
+      });
+      
+      // Close template selector and reply interface
+      setShowTemplateSelector(false);
+      setIsReplying(false);
+      
+    } catch (err) {
+      console.error('Error sending template:', err);
+      alert('Failed to send template message');
+    }
+  };
+
+  // Discussion message handlers
+  const handleDiscussionSend = () => {
+    if (!discussionMessageInput.trim() || !onSendDiscussionMessage) return;
+    
+    onSendDiscussionMessage?.(discussionMessageInput);
+    setDiscussionMessageInput('');
+  };
+
+  const handleDiscussionKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleDiscussionSend();
+    }
+  };
+
+  // Polling is handled by the parent InboxContainer component
+
   if (isLoading) {
     return (
       <div style={{ 
@@ -718,18 +1016,27 @@ const MessageView: React.FC<MessageViewProps> = ({
         alignItems: 'center', 
         justifyContent: 'center',
         height: 'calc(100vh - 65px)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        background: '#FBF7F7'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>💬</div>
-          <h3>Select a conversation</h3>
-          <p>Choose a conversation from the sidebar to view messages</p>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+            {currentView === 'discussions' ? '💬' : '💬'}
+          </div>
+          <h3 style={{ color: '#111827' }}>
+            {currentView === 'discussions' ? 'Select a discussion' : 'Select a conversation'}
+          </h3>
+          <p style={{ color: '#6b7280' }}>
+            {currentView === 'discussions' 
+              ? 'Choose a discussion from the sidebar to view messages' 
+              : 'Choose a conversation from the sidebar to view messages'}
+          </p>
         </div>
       </div>
     );
   }
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && currentView === 'inbox') {
     return (
       <div style={{ 
         flex: 1, 
@@ -748,6 +1055,254 @@ const MessageView: React.FC<MessageViewProps> = ({
     );
   }
 
+  // If we're in discussions view, render the discussion chat
+  if (currentView === 'discussions') {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: selectedThreadId ? 'calc(100% - 60px)' : '100%',
+        marginTop: selectedThreadId ? '60px' : '0',
+        background: '#FBF7F7'
+      }}>
+        {selectedThreadId ? (
+          <>
+            {/* Discussion Header */}
+            <div style={{
+              padding: '20px',
+              borderBottom: '1px solid #e5e7eb',
+              background: '#fff',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div>
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: '600',
+                  color: '#111827'
+                }}>
+                  {flow?.title || 'Discussion'}
+                </h2>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#6b7280',
+                  marginTop: '4px'
+                }}>
+                  {subscriberEmail || 'Loading...'}
+                </div>
+              </div>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                fontSize: '14px',
+                color: '#6b7280'
+              }}>
+                <span>👥 {flow?.participantNames?.length || 0} participants</span>
+                <span>💬 {flow?.messageCount || 0} messages</span>
+              </div>
+            </div>
+
+            {/* Discussion Messages */}
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              padding: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+              background: '#FBF7F7'
+            }}>
+              {messages.length === 0 ? (
+                <div style={{
+                  textAlign: 'center',
+                  color: '#6b7280',
+                  padding: '40px 20px'
+                }}>
+                  <div style={{ fontSize: '32px', marginBottom: '16px' }}>💬</div>
+                  <h3>Start the conversation</h3>
+                  <p>Be the first to share your thoughts in this discussion.</p>
+                </div>
+              ) : (
+                messages.map((message: any) => {
+                  const isOwnMessage = message.authorId === user?.userId;
+                  const getInitials = (name: string) => {
+                    return name.split(' ').map(n => n.charAt(0)).join('').toUpperCase();
+                  };
+                  
+                  const getAvatarColor = (name: string) => {
+                    const colors = ['#DE1785', '#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+                    const index = name.length % colors.length;
+                    return colors[index];
+                  };
+
+                  const formatTime = (timestamp: string) => {
+                    const date = new Date(timestamp);
+                    const now = new Date();
+                    const diff = now.getTime() - date.getTime();
+                    const minutes = Math.floor(diff / 60000);
+                    const hours = Math.floor(diff / 3600000);
+                    const days = Math.floor(diff / 86400000);
+
+                    if (minutes < 1) return 'Just now';
+                    if (minutes < 60) return `${minutes}m ago`;
+                    if (hours < 24) return `${hours}h ago`;
+                    if (days < 7) return `${days}d ago`;
+                    return date.toLocaleDateString();
+                  };
+
+                  return (
+                    <div
+                      key={message.messageId}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '12px',
+                        padding: '16px',
+                        background: '#fff',
+                        borderRadius: '12px',
+                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                      }}
+                    >
+                      <div style={{
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '50%',
+                        background: getAvatarColor(message.authorName),
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: '600',
+                        flexShrink: 0
+                      }}>
+                        {getInitials(message.authorName)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          marginBottom: '8px'
+                        }}>
+                          <span style={{
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: '#111827'
+                          }}>
+                            {message.authorName}
+                          </span>
+                          <span style={{
+                            fontSize: '12px',
+                            color: '#6b7280'
+                          }}>
+                            {formatTime(message.createdAt)}
+                          </span>
+                        </div>
+                        <div style={{
+                          fontSize: '14px',
+                          color: '#374151',
+                          lineHeight: '1.5'
+                        }}>
+                          {message.content}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Discussion Input */}
+            <div style={{
+              padding: '20px',
+              borderTop: '1px solid #e5e7eb',
+              background: '#fff'
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: '12px'
+              }}>
+                <div style={{
+                  flex: 1,
+                  minHeight: '40px',
+                  maxHeight: '120px',
+                  position: 'relative'
+                }}>
+                  <textarea
+                    value={discussionMessageInput}
+                    onChange={(e) => setDiscussionMessageInput(e.target.value)}
+                    onKeyPress={handleDiscussionKeyPress}
+                    placeholder="Type your message..."
+                    style={{
+                      width: '100%',
+                      minHeight: '40px',
+                      maxHeight: '120px',
+                      padding: '12px 16px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '20px',
+                      fontSize: '14px',
+                      resize: 'none',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      lineHeight: '1.5'
+                    }}
+                  />
+                </div>
+                <button
+                  onClick={handleDiscussionSend}
+                  disabled={!discussionMessageInput.trim()}
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: discussionMessageInput.trim() ? '#DE1785' : '#d1d5db',
+                    color: '#fff',
+                    border: 'none',
+                    cursor: discussionMessageInput.trim() ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '16px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  →
+                </button>
+              </div>
+              <div style={{
+                fontSize: '12px',
+                color: '#6b7280',
+                marginTop: '8px'
+              }}>
+                Press Enter to send, Shift+Enter for new line
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: '#FBF7F7'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>💬</div>
+              <h3 style={{ color: '#111827' }}>Select a discussion</h3>
+              <p style={{ color: '#6b7280' }}>Choose a discussion from the sidebar to view messages</p>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Regular inbox view
   return (
     <div style={{ 
       display: 'flex', 
@@ -1218,42 +1773,82 @@ const MessageView: React.FC<MessageViewProps> = ({
                       border: '1px solid #f0f0f0',
                       wordWrap: 'break-word',
                       overflowWrap: 'break-word',
+                      position: 'relative',
                       
                       maxHeight: isActive ? 'none' : '110px',
                       transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
                       e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                      setHoveredMessageId(chat.id);
                     }}
                     onMouseLeave={(e) => {
                       e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
+                      setHoveredMessageId(null);
                     }}
                   >
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between', 
                       alignItems: 'center',
-                      marginBottom: '8px'
+                      marginBottom: '0px'
                     }}>
                       <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
-                        <strong style={{ color: chat.direction === 'incoming' ? '#DE1785' : '#2563eb' }}>
+                        <strong style={{ color: chat.direction === 'incoming' ? '#DE1785' : '#000000' }}>
                           {chat.senderName}
                         </strong> ·{' '}
                         <span style={{ color: '#888' }}>
                           {formatDisplayDate(chat.timestamp)}
                         </span>
                       </p>
-                      <div style={{
-                        fontSize: '12px',
-                        background: chat.direction === 'incoming' ? '#f3f4f6' : '#e0f2fe',
-                        color: chat.direction === 'incoming' ? '#374151' : '#0369a1',
-                        padding: '2px 8px',
-                        borderRadius: '12px',
-                        textTransform: 'uppercase',
-                        fontWeight: 'bold'
-                      }}>
-                        {chat.direction}
-                      </div>
+                      {/* Show direction tag only when not hovering */}
+                      {hoveredMessageId !== chat.id && (
+                        <div style={{
+                          fontSize: '10px',
+                          background: chat.direction === 'incoming' ? '#f3f4f6' : '#FDE7F1',
+                          color: chat.direction === 'incoming' ? '#374151' : '#DE1785',
+                          padding: '2px 6px',
+                          borderRadius: '10px',
+                          textTransform: 'uppercase',
+                          fontWeight: 'bold'
+                        }}>
+                          {chat.direction}
+                        </div>
+                      )}
+                      
+                      {/* Show reply button when hovering and not active */}
+                      {hoveredMessageId === chat.id && !isActive && selectedThreadId && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveMessageId(chat.id);
+                            setIsReplying(true);
+                          }}
+                          style={{
+                            background: '#FDE7F1', // Light pink background same as secondary tag
+                            color: '#DE1785', // Beya pink for the icon
+                            border: 'none',
+                            borderRadius: '50%',
+                            width: '28px',
+                            height: '28px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            margin: 'auto 0' // Better vertical centering
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#fce7f3';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = '#FDE7F1';
+                          }}
+                          title="Reply to this message"
+                        >
+                          <Reply size={14} />
+                        </button>
+                      )}
                     </div>
                     
                     {chat.subject && (
@@ -1286,6 +1881,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                     }}>
                       {linkifyWithImages(chat.body)}
                     </div>
+
                     
                     {isActive && selectedThreadId && (
                       <div style={{ 
@@ -1296,32 +1892,6 @@ const MessageView: React.FC<MessageViewProps> = ({
                         display: 'flex',
                         gap: '12px'
                       }}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const email = prompt('Enter email to add:');
-                            if (email) addParticipant(selectedThreadId, email);
-                          }}
-                          style={{
-                            background: '#6366f1',
-                            color: '#fff',
-                            padding: '8px 16px',
-                            border: 'none',
-                            borderRadius: 6,
-                            fontSize: '14px',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                            transition: 'background 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#4f46e5';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#6366f1';
-                          }}
-                        >
-                          Share
-                        </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1524,24 +2094,55 @@ const MessageView: React.FC<MessageViewProps> = ({
           )}
 
           {selectedThreadId && getChannel(selectedThreadId) === 'whatsapp' && (
-            <textarea
-              value={replyText}
-              onChange={e => setReplyText(e.target.value)}
-              placeholder="Type your WhatsApp reply…"
-              style={{
-                width: '100%',
-                minHeight: 120,
-                padding: 16,
-                border: '1px solid #d1d5db',
-                borderRadius: 8,
-                marginBottom: 16,
-                background: '#fff',
-                fontSize: '14px',
-                resize: 'vertical',
-                boxSizing: 'border-box',
-                fontFamily: 'Arial, sans-serif'
-              }}
-            />
+            <>
+              {/* WhatsApp Template Selector */}
+              <WhatsAppTemplateSelector
+                onTemplateSelect={handleTemplateSelect}
+                isVisible={showTemplateSelector}
+              />
+              
+              {/* Template Button */}
+              <div style={{ marginBottom: '12px' }}>
+                <button
+                  onClick={() => setShowTemplateSelector(!showTemplateSelector)}
+                  style={{
+                    background: showTemplateSelector ? '#f0f0f0' : '#fff',
+                    color: showTemplateSelector ? '#DE1785' : '#666',
+                    border: '1px solid #e0e0e0',
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  📱 {showTemplateSelector ? 'Hide Templates' : 'Use Template'}
+                </button>
+              </div>
+              
+              <textarea
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                placeholder="Type your WhatsApp reply…"
+                style={{
+                  width: '100%',
+                  minHeight: 120,
+                  padding: 16,
+                  border: '1px solid #d1d5db',
+                  borderRadius: 8,
+                  marginBottom: 16,
+                  background: '#fff',
+                  fontSize: '14px',
+                  resize: 'vertical',
+                  boxSizing: 'border-box',
+                  fontFamily: 'Arial, sans-serif'
+                }}
+              />
+            </>
           )}
 
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
@@ -1769,7 +2370,6 @@ const MessageView: React.FC<MessageViewProps> = ({
                 justifyContent: 'center',
                 fontSize: '14px',
                 flexShrink: 0,
-                transition: 'background 0.2s'
               }}
             >
               ↑

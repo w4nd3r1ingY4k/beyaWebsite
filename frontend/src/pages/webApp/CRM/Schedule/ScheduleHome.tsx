@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Calendar, dateFnsLocalizer, Views, SlotInfo, View, NavigateAction } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay, parseISO, addHours, startOfDay, endOfDay } from 'date-fns';
 import { enUS } from 'date-fns/locale/en-US';
-import { X, Clock, CalendarIcon, MapPin, Users, Edit2, Trash2, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Clock, CalendarIcon, MapPin, Users, Edit2, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
+
+// ─────────── Constants ───────────
+const API_BASE = 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod';
 
 // ─────────── Date-Fns Localizer Setup ───────────
 const locales = {
@@ -26,6 +29,15 @@ function formatDateKey(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// ─────────── Types ───────────
+interface Contact {
+  contactId: string;
+  firstName: string;
+  lastName: string;
+  company?: string;
+  email?: string;
+}
+
 // ─────────── Enhanced Event Format ───────────
 interface EventData {
   id: string;
@@ -34,10 +46,13 @@ interface EventData {
   location?: string;
   attendees?: string[];
   notes?: string;
+  customerId?: string; // Added to associate with customer
 }
 
-interface EventsByDate {
-  [dateKey: string]: EventData[];
+interface EventsByCustomer {
+  [customerId: string]: {
+    [dateKey: string]: EventData[];
+  };
 }
 
 interface RBCEvent extends EventData {
@@ -49,6 +64,7 @@ interface RBCEvent extends EventData {
 // ─────────── Style Constants ───────────
 const styles = {
   container: {
+    marginTop: '45px',
     height: '100vh',
     backgroundColor: '#F9FAFB',
     display: 'flex',
@@ -60,13 +76,66 @@ const styles = {
     borderBottom: '1px solid #E5E7EB',
     padding: '16px 0',
   },
+  headerContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '0 24px',
+  },
   headerTitle: {
     fontSize: '24px',
     fontWeight: '600',
     color: '#111827',
-    padding: '0 24px',
     margin: 0,
     fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  customerDropdown: {
+    position: 'relative' as const,
+    minWidth: '250px',
+  },
+  dropdownButton: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    padding: '8px 16px',
+    backgroundColor: 'white',
+    border: '1px solid #D1D5DB',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    color: '#374151',
+    transition: 'all 0.2s',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  dropdownMenu: {
+    position: 'absolute' as const,
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: '4px',
+    backgroundColor: 'white',
+    border: '1px solid #D1D5DB',
+    borderRadius: '8px',
+    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+    maxHeight: '300px',
+    overflowY: 'auto' as const,
+    zIndex: 20,
+  },
+  dropdownItem: {
+    padding: '8px 16px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    color: '#374151',
+    transition: 'background-color 0.2s',
+    borderBottom: '1px solid #F3F4F6',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  dropdownItemSelected: {
+    backgroundColor: '#FDF2F8',
+    color: '#EC4899',
+    fontWeight: '500',
   },
   mainContent: {
     flex: 1,
@@ -343,6 +412,14 @@ const styles = {
     alignItems: 'center',
     gap: '4px',
     marginTop: '4px',
+  },
+  loadingContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '200px',
+    color: '#6B7280',
+    fontSize: '14px',
   },
 };
 
@@ -927,37 +1004,87 @@ const EventModal = ({ event, onClose, onSave, onDelete }: {
 
 // ─────────── Main Calendar Component ───────────
 const CalendarPage: React.FC = () => {
-  const [eventsByDate, setEventsByDate] = useState<EventsByDate>({});
+  const [eventsByCustomer, setEventsByCustomer] = useState<EventsByCustomer>({});
   const [currentView, setCurrentView] = useState<View>(Views.MONTH);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedEvent, setSelectedEvent] = useState<RBCEvent | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  
+  // Customer selection state
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('all');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loadingContacts, setLoadingContacts] = useState(true);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Mock auth context (replace with actual auth)
+  const user = {
+    userId: 'user123',
+    displayName: 'John Doe',
+    email: 'john@example.com',
+  };
+  
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch contacts from API
+  useEffect(() => {
+    const fetchContacts = async () => {
+      setLoadingContacts(true);
+      try {
+        const response = await fetch(`${API_BASE}/contacts?limit=100`);
+        if (!response.ok) throw new Error('Failed to fetch contacts');
+        
+        const data = await response.json();
+        const mappedContacts: Contact[] = data.contacts.map((raw: any) => ({
+          contactId: raw.GoldenContactID || `contact_${Date.now()}_${Math.random()}`,
+          firstName: raw.FIRST_NAME || '',
+          lastName: raw.LAST_NAME || '',
+          company: raw.COMPANY || raw['Default.company'] || '',
+          email: raw.PRIMARY_EMAIL || raw.EMAIL_1 || '',
+        }));
+        
+        setContacts(mappedContacts);
+      } catch (error) {
+        console.error('Error fetching contacts:', error);
+        setContacts([]);
+      } finally {
+        setLoadingContacts(false);
+      }
+    };
+    
+    fetchContacts();
+  }, []);
 
   // Load events from localStorage
   useEffect(() => {
-    const stored = localStorage.getItem('calendarEventsEnhanced');
+    const stored = localStorage.getItem('calendarEventsByCustomer');
     if (stored) {
       try {
-        setEventsByDate(JSON.parse(stored));
+        setEventsByCustomer(JSON.parse(stored));
       } catch {
         // Try to migrate from old format
-        const oldStored = localStorage.getItem('calendarEvents');
+        const oldStored = localStorage.getItem('calendarEventsEnhanced');
         if (oldStored) {
           try {
             const oldData = JSON.parse(oldStored);
-            const migrated: EventsByDate = {};
-            Object.entries(oldData).forEach(([dateKey, titles]: [string, any]) => {
-              if (Array.isArray(titles)) {
-                migrated[dateKey] = titles.map((title: string) => ({
-                  id: Date.now().toString() + Math.random(),
-                  title,
-                }));
-              }
-            });
-            setEventsByDate(migrated);
+            // Migrate to new format - put all old events under 'all'
+            const migrated: EventsByCustomer = {
+              all: oldData
+            };
+            setEventsByCustomer(migrated);
           } catch {
-            setEventsByDate({});
+            setEventsByCustomer({});
           }
         }
       }
@@ -966,13 +1093,31 @@ const CalendarPage: React.FC = () => {
 
   // Persist events to localStorage
   useEffect(() => {
-    localStorage.setItem('calendarEventsEnhanced', JSON.stringify(eventsByDate));
-  }, [eventsByDate]);
+    localStorage.setItem('calendarEventsByCustomer', JSON.stringify(eventsByCustomer));
+  }, [eventsByCustomer]);
+
+  // Get current customer's events
+  const currentCustomerEvents = useMemo(() => {
+    if (selectedCustomerId === 'all') {
+      // Aggregate all events from all customers
+      const allEvents: { [dateKey: string]: EventData[] } = {};
+      Object.values(eventsByCustomer).forEach(customerEvents => {
+        Object.entries(customerEvents).forEach(([dateKey, events]) => {
+          if (!allEvents[dateKey]) {
+            allEvents[dateKey] = [];
+          }
+          allEvents[dateKey].push(...events);
+        });
+      });
+      return allEvents;
+    }
+    return eventsByCustomer[selectedCustomerId] || {};
+  }, [eventsByCustomer, selectedCustomerId]);
 
   // Convert events to RBC format
   const rbEvents: RBCEvent[] = useMemo(() => {
     const out: RBCEvent[] = [];
-    Object.entries(eventsByDate).forEach(([dateKey, events]) => {
+    Object.entries(currentCustomerEvents).forEach(([dateKey, events]) => {
       const dayStart = parseISO(dateKey);
       events.forEach((event) => {
         // Parse time if available for day/week views
@@ -1007,7 +1152,7 @@ const CalendarPage: React.FC = () => {
       });
     });
     return out;
-  }, [eventsByDate, currentView]);
+  }, [currentCustomerEvents, currentView]);
 
   // Handle slot selection
   const handleSelectSlot = useCallback(({ start }: SlotInfo) => {
@@ -1031,36 +1176,59 @@ const CalendarPage: React.FC = () => {
   // Save event
   const handleSaveEvent = useCallback((eventData: EventData) => {
     const dateKey = formatDateKey(selectedEvent!.start);
-    setEventsByDate((prev) => {
+    const customerId = selectedCustomerId === 'all' ? 'all' : selectedCustomerId;
+    
+    setEventsByCustomer((prev) => {
       const copy = { ...prev };
-      const existing = copy[dateKey] || [];
+      if (!copy[customerId]) {
+        copy[customerId] = {};
+      }
+      const existing = copy[customerId][dateKey] || [];
       
       if (selectedEvent!.id) {
         // Update existing
-        copy[dateKey] = existing.map(e => 
-          e.id === selectedEvent!.id ? eventData : e
+        copy[customerId][dateKey] = existing.map(e => 
+          e.id === selectedEvent!.id ? { ...eventData, customerId } : e
         );
       } else {
         // Add new
-        copy[dateKey] = [...existing, { ...eventData, id: Date.now().toString() }];
+        copy[customerId][dateKey] = [...existing, { ...eventData, id: Date.now().toString(), customerId }];
       }
       
       return copy;
     });
-  }, [selectedEvent]);
+  }, [selectedEvent, selectedCustomerId]);
 
   // Delete event
   const handleDeleteEvent = useCallback((eventId: string) => {
     const dateKey = formatDateKey(selectedEvent!.start);
-    setEventsByDate((prev) => {
+    
+    setEventsByCustomer((prev) => {
       const copy = { ...prev };
-      copy[dateKey] = (copy[dateKey] || []).filter(e => e.id !== eventId);
-      if (copy[dateKey].length === 0) {
-        delete copy[dateKey];
+      
+      // If viewing all, find which customer owns this event
+      if (selectedCustomerId === 'all') {
+        Object.keys(copy).forEach(customerId => {
+          if (copy[customerId][dateKey]) {
+            copy[customerId][dateKey] = copy[customerId][dateKey].filter(e => e.id !== eventId);
+            if (copy[customerId][dateKey].length === 0) {
+              delete copy[customerId][dateKey];
+            }
+          }
+        });
+      } else {
+        // Delete from specific customer
+        if (copy[selectedCustomerId] && copy[selectedCustomerId][dateKey]) {
+          copy[selectedCustomerId][dateKey] = copy[selectedCustomerId][dateKey].filter(e => e.id !== eventId);
+          if (copy[selectedCustomerId][dateKey].length === 0) {
+            delete copy[selectedCustomerId][dateKey];
+          }
+        }
       }
+      
       return copy;
     });
-  }, [selectedEvent]);
+  }, [selectedEvent, selectedCustomerId]);
 
   // Event styling
   const eventStyleGetter = useCallback((event: RBCEvent) => {
@@ -1096,10 +1264,99 @@ const CalendarPage: React.FC = () => {
     );
   };
 
+  // Get selected customer display name
+  const getCustomerDisplayName = () => {
+    if (selectedCustomerId === 'all') return 'All Customers';
+    const customer = contacts.find(c => c.contactId === selectedCustomerId);
+    if (!customer) return 'Select Customer';
+    const name = `${customer.firstName} ${customer.lastName}`.trim();
+    return name || customer.company || 'Unnamed Customer';
+  };
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.headerTitle}>My Calendar</h1>
+        <div style={styles.headerContent}>
+          <h1 style={styles.headerTitle}>Schedule</h1>
+          
+          {/* Customer Dropdown */}
+          <div style={styles.customerDropdown} ref={dropdownRef}>
+            <button
+              style={styles.dropdownButton}
+              onClick={() => setShowDropdown(!showDropdown)}
+              onMouseEnter={(e) => e.currentTarget.style.borderColor = '#EC4899'}
+              onMouseLeave={(e) => e.currentTarget.style.borderColor = '#D1D5DB'}
+            >
+              <span>{getCustomerDisplayName()}</span>
+              <ChevronDown size={20} style={{ transform: showDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+            </button>
+            
+            {showDropdown && (
+              <div style={styles.dropdownMenu}>
+                <div
+                  style={{
+                    ...styles.dropdownItem,
+                    ...(selectedCustomerId === 'all' ? styles.dropdownItemSelected : {})
+                  }}
+                  onClick={() => {
+                    setSelectedCustomerId('all');
+                    setShowDropdown(false);
+                  }}
+                  onMouseEnter={(e) => {
+                    if (selectedCustomerId !== 'all') {
+                      e.currentTarget.style.backgroundColor = '#F9FAFB';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (selectedCustomerId !== 'all') {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                >
+                  All Customers
+                </div>
+                
+                {loadingContacts ? (
+                  <div style={styles.loadingContainer}>Loading contacts...</div>
+                ) : (
+                  contacts.map(contact => {
+                    const displayName = `${contact.firstName} ${contact.lastName}`.trim() || contact.company || 'Unnamed';
+                    return (
+                      <div
+                        key={contact.contactId}
+                        style={{
+                          ...styles.dropdownItem,
+                          ...(selectedCustomerId === contact.contactId ? styles.dropdownItemSelected : {})
+                        }}
+                        onClick={() => {
+                          setSelectedCustomerId(contact.contactId);
+                          setShowDropdown(false);
+                        }}
+                        onMouseEnter={(e) => {
+                          if (selectedCustomerId !== contact.contactId) {
+                            e.currentTarget.style.backgroundColor = '#F9FAFB';
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (selectedCustomerId !== contact.contactId) {
+                            e.currentTarget.style.backgroundColor = 'transparent';
+                          }
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontWeight: '500' }}>{displayName}</div>
+                          {contact.company && (
+                            <div style={{ fontSize: '12px', color: '#6B7280' }}>{contact.company}</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
       
       <div style={styles.mainContent}>

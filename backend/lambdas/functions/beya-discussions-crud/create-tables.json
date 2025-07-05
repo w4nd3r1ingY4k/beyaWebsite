@@ -1,0 +1,62 @@
+{
+  "discussions_table": {
+    "TableName": "Discussions",
+    "KeySchema": [
+      {
+        "AttributeName": "discussionId",
+        "KeyType": "HASH"
+      }
+    ],
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "discussionId",
+        "AttributeType": "S"
+      }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "Tags": [
+      {
+        "Key": "Environment",
+        "Value": "production"
+      },
+      {
+        "Key": "Service",
+        "Value": "beya-discussions"
+      }
+    ]
+  },
+  "discussion_messages_table": {
+    "TableName": "DiscussionMessages",
+    "KeySchema": [
+      {
+        "AttributeName": "discussionId",
+        "KeyType": "HASH"
+      },
+      {
+        "AttributeName": "createdAt",
+        "KeyType": "RANGE"
+      }
+    ],
+    "AttributeDefinitions": [
+      {
+        "AttributeName": "discussionId",
+        "AttributeType": "S"
+      },
+      {
+        "AttributeName": "createdAt",
+        "AttributeType": "N"
+      }
+    ],
+    "BillingMode": "PAY_PER_REQUEST",
+    "Tags": [
+      {
+        "Key": "Environment",
+        "Value": "production"
+      },
+      {
+        "Key": "Service",
+        "Value": "beya-discussions"
+      }
+    ]
+  }
+} 

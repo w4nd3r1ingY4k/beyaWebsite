@@ -43,7 +43,12 @@ const SettingsPage = () => {
   const handleSignOut = () => {
     if (window.confirm('Are you sure you want to sign out?')) {
       console.log('Signing out...');
-      // Add sign out logic here
+      // Call logout from auth context
+      if (logout) {
+        logout();
+      }
+      // Redirect to home page
+      window.location.href = '/';
     }
   };
 
@@ -325,14 +330,14 @@ const SettingsPage = () => {
           {/* Integrations Tab */}
           {activeTab === 'integrations' && (
         <div>
-          <h2>Connected Accounts for {user!.userId}</h2>
-          {Object.entries(user!.connectedAccounts).length === 0
+          <h2>Connected Accounts{user ? ` for ${user.userId}` : ''}</h2>
+          {!user || !user.connectedAccounts || Object.entries(user.connectedAccounts).length === 0
             ? <p>No integrations connected.</p>
             : (
               <ul style={{ listStyle: 'none', padding: 0 }}>
-                {Object.entries(user!.connectedAccounts).map(([key, value]) => (
+                {Object.entries(user.connectedAccounts).map(([key, value]) => (
                   <li key={key} style={{ margin: '8px 0' }}>
-                    <strong>{key}</strong>: {value}
+                    <strong>{key}</strong>: {String(value)}
                   </li>
                 ))}
               </ul>
@@ -379,7 +384,7 @@ const SettingsPage = () => {
                     fontSize: '15px',
                     color: '#1A1A1A',
                     margin: '6px 0 0 0'
-                  }}>{user!.email}</p>
+                  }}>{user?.email || 'Not available'}</p>
                 </div>
                 
                 <div>

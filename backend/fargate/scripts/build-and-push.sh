@@ -5,7 +5,7 @@ set -e
 
 # Configuration
 AWS_REGION="us-east-1"
-ECR_REPOSITORY="beya-polling-service"
+ECR_REPOSITORY="beya-polling"
 AWS_ACCOUNT_ID="575108947335"
 IMAGE_TAG="latest"
 

@@ -9,6 +9,7 @@ import {
   ScanCommand
 } from '@aws-sdk/lib-dynamodb';
 import { normalizeNumber } from '../lib/normalizePhone.js';
+import { generateOrGetFlowId, updateFlowMetadata } from '../lib/flowUtils.js';
 
 const MSG_TABLE   = process.env.MSG_TABLE;
 const FLOWS_TABLE = process.env.FLOWS_TABLE;
@@ -53,17 +54,20 @@ export async function handler(event) {
     const toAccount = change.value.metadata.display_phone_number;
     if (!toAccount) return { statusCode: 400, body: 'Missing to' };
 
-    // 3) Find the user whose connectedAccounts.whatsappBusiness matches `toAccount`
+    // Normalize the toAccount phone number to match database format
+    const normalizedToAccount = normalizeNumber(toAccount);
+
+    // 3) Find the user whose connectedAccounts.whatsappBusiness matches `normalizedToAccount`
     let usersScan;
     try {
       usersScan = await docClient.send(new ScanCommand({
         TableName: USERS_TABLE,
         // only project userId and the map key to reduce data transfer
         ProjectionExpression: 'userId, connectedAccounts.whatsappBusiness',
-        // filter for map attribute equals our toAccount
+        // filter for map attribute equals our normalizedToAccount
         FilterExpression: 'connectedAccounts.whatsappBusiness = :acc',
         ExpressionAttributeValues: {
-          ':acc': toAccount
+          ':acc': normalizedToAccount
         }
       }));
     } catch (err) {
@@ -72,7 +76,7 @@ export async function handler(event) {
     }
 
     if (!usersScan.Items || usersScan.Items.length === 0) {
-      console.warn(`No user found for WhatsApp business ${toAccount}`);
+      console.warn(`No user found for WhatsApp business ${normalizedToAccount} (original: ${toAccount})`);
       return { statusCode: 404, body: 'Account not registered' };
     }
 
@@ -82,17 +86,22 @@ export async function handler(event) {
     const messageId = msg.id;
     const textBody  = msg.text?.body || '';
 
-    // 4) Put message under that userId
+    // 4) Generate or get unique flowId for this user+contact combination
+    const flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, ownerUserId, from);
+    
+    // 5) Put message under that userId using the unique flowId as ThreadId
     try {
       await docClient.send(new PutCommand({
         TableName: MSG_TABLE,
         Item: {
-          ThreadId:  from,         // PK
+          ThreadId:  flowId,       // Use unique flowId instead of phone number
           Timestamp: timestamp,    // SK
           MessageId: messageId,    // non-key attrs can be anything
           Channel:   'whatsapp',
           Direction: 'incoming',
-          Body:      textBody
+          Body:      textBody,
+          userId:    ownerUserId,  // Required for User-Messages-Index GSI hash key
+          ThreadIdTimestamp: `${flowId}#${timestamp}` // Use flowId for consistency
         },
         ConditionExpression: 'attribute_not_exists(MessageId)'
       }));
@@ -105,26 +114,9 @@ export async function handler(event) {
       }
     }
 
-    // 5) Update flow metadata scoped by userId + flowId
+    // 6) Update flow metadata
     try {
-      await docClient.send(new UpdateCommand({
-        TableName: FLOWS_TABLE,
-        Key: {
-          contactId: ownerUserId,  // <–– HASH key in Flows table
-          flowId:    from          // <–– RANGE key in Flows table
-        },
-        UpdateExpression: `
-          SET createdAt     = if_not_exists(createdAt, :ts),
-              lastMessageAt = :ts,
-              tags          = if_not_exists(tags, :tags)
-          ADD messageCount :inc
-        `,
-        ExpressionAttributeValues: {
-          ':ts':   timestamp,
-          ':inc':  1,
-          ':tags': ['all']
-        }
-      }));
+      await updateFlowMetadata(docClient, FLOWS_TABLE, ownerUserId, flowId, from, timestamp);
     } catch (err) {
       console.error('Error updating flow', err);
       throw err;

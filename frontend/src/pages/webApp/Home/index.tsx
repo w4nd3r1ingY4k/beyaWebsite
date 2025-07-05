@@ -105,7 +105,7 @@ const Homer: React.FC = () => {
   // Call backend (Express on localhost:2074)
   const callOpenAI = async (userMessage: string): Promise<string> => {
     try {
-      const response = await fetch("http://localhost:2074/workflow", {
+              const response = await fetch("http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074/workflow", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

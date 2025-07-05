@@ -1,8 +1,9 @@
 // handlers/sendHandler.js
 
-import { sendWhatsApp } from '../lib/whatsapp.js';
+import { sendWhatsApp, sendWhatsAppTemplate } from '../lib/whatsapp.js';
 import { sendEmail, replyEmail } from '../lib/email.js';
 import { GmailMCPSender } from '../lib/gmail-mcp.js';
+import { generateOrGetFlowId, updateFlowMetadata } from '../lib/flowUtils.js';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -12,6 +13,8 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
+import { createBackendClient } from "@pipedream/sdk/server";
+import fetch from 'node-fetch';
 
 // ─── 0) Load & validate env vars ──────────────────────────────────────────────
 const REGION      = process.env.AWS_REGION;
@@ -163,16 +166,31 @@ export async function handler(event) {
     text,
     html,
     userId,      // NOW REQUIRED for Gmail MCP
-    originalMessageId
+    originalMessageId,
+    // New fields for WhatsApp templates
+    templateName,
+    templateLanguage,
+    templateComponents
   } = payload;
 
   // 3d) Validate required fields
-  if (!channel || !to || !text || !userId) {
+  if (!channel || !to || !userId) {
     return {
       statusCode: 400,
       headers:    CORS,
       body:       JSON.stringify({
-        error: 'Missing required fields: channel, to, text or userId'
+        error: 'Missing required fields: channel, to, or userId'
+      })
+    };
+  }
+  
+  // For regular messages, text is required
+  if (!templateName && !text) {
+    return {
+      statusCode: 400,
+      headers:    CORS,
+      body:       JSON.stringify({
+        error: 'Missing required field: text (or templateName for templates)'
       })
     };
   }
@@ -180,12 +198,116 @@ export async function handler(event) {
   try {
     let resp;
     let gmailAccount = null; // Track Gmail account info for event data
+    let userEmailAddress = null; // Store the user's actual email address
 
     let replyId = originalMessageId || null;
     console.log("Fetched replyId:", replyId)
     if (channel === "whatsapp") {
-      // ─── WhatsApp send ─────────────────────────────────────────────────
-      resp = await sendWhatsApp(to, text);
+      // ─── WhatsApp send - fetch credentials from Pipedream ─────────────────────
+      let whatsappCredentials = null;
+      
+      try {
+        // Initialize Pipedream client
+        const pd = createBackendClient({
+          environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT || "production",
+          credentials: {
+            clientId: process.env.PIPEDREAM_CLIENT_ID,
+            clientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
+          },
+          projectId: process.env.PIPEDREAM_PROJECT_ID,
+        });
+
+        // Check if user has connected WhatsApp account
+        const accounts = await pd.getAccounts({
+          external_user_id: userId,
+          app: "whatsapp_business",
+          include_credentials: true,
+        });
+        
+        console.log(`📱 WhatsApp accounts for user ${userId}:`, JSON.stringify(accounts, null, 2));
+        
+        if (accounts && accounts.data && accounts.data.length > 0) {
+          const whatsappAccount = accounts.data[0];
+          console.log(`📱 Found WhatsApp account: ${whatsappAccount.name || whatsappAccount.external_id}`);
+          
+          // Get the auth data which should contain the access token and phone number ID
+          // This is where Pipedream stores the WhatsApp credentials
+          // Note: business_account_id is not the same as phone_number_id
+          // We'll need to make an API call to get the phone number ID
+          const businessAccountId = whatsappAccount.credentials?.business_account_id;
+          const accessToken = whatsappAccount.credentials?.permanent_access_token || whatsappAccount.auth?.access_token;
+          
+          if (businessAccountId && accessToken) {
+            // Get phone number ID from the business account
+            try {
+              const phoneNumbersResponse = await fetch(
+                `https://graph.facebook.com/v17.0/${businessAccountId}/phone_numbers`,
+                {
+                  headers: {
+                    'Authorization': `Bearer ${accessToken}`
+                  }
+                }
+              );
+              
+              if (phoneNumbersResponse.ok) {
+                const phoneNumbersData = await phoneNumbersResponse.json();
+                console.log(`📱 Phone numbers response:`, JSON.stringify(phoneNumbersData, null, 2));
+                
+                // Use the first phone number ID found
+                const phoneNumberId = phoneNumbersData.data?.[0]?.id;
+                
+                if (phoneNumberId) {
+                  whatsappCredentials = {
+                    token: accessToken,
+                    phoneNumberId: phoneNumberId,
+                    businessAccountId: businessAccountId,
+                    accountName: whatsappAccount.name || whatsappAccount.external_id
+                  };
+                  console.log(`📱 WhatsApp credentials found with phone number ID: ${phoneNumberId}`);
+                } else {
+                  console.error('❌ No phone numbers found for this WhatsApp Business account');
+                }
+              } else {
+                console.error('❌ Failed to fetch phone numbers:', await phoneNumbersResponse.text());
+              }
+            } catch (error) {
+              console.error('❌ Error fetching phone number ID:', error);
+            }
+          } else {
+            // Fallback to original logic if structure is different
+            whatsappCredentials = {
+              token: accessToken,
+              phoneNumberId: whatsappAccount.auth?.phone_number_id || whatsappAccount.auth?.whatsapp_business_account_id,
+              accountName: whatsappAccount.name || whatsappAccount.external_id
+            };
+          }
+        }
+      } catch (error) {
+        console.log(`⚠️ Failed to fetch WhatsApp credentials from Pipedream:`, error.message);
+      }
+
+      // Send WhatsApp message ONLY if we have Pipedream credentials
+      if (whatsappCredentials?.token && whatsappCredentials?.phoneNumberId) {
+        console.log('📱 Using WhatsApp credentials from Pipedream');
+        
+        // Check if this is a template message
+        if (templateName) {
+          console.log('📱 Sending WhatsApp template message');
+          resp = await sendWhatsAppTemplate(
+            to, 
+            templateName, 
+            templateLanguage || 'en_US', 
+            templateComponents,
+            whatsappCredentials.token, 
+            whatsappCredentials.phoneNumberId
+          );
+        } else {
+          console.log('📱 Sending regular WhatsApp text message');
+          resp = await sendWhatsApp(to, text, whatsappCredentials.token, whatsappCredentials.phoneNumberId);
+        }
+      } else {
+        throw new Error('No WhatsApp Business account connected. Please connect your WhatsApp Business account through Pipedream first.');
+      }
 
     } else if (channel === "email") {
       // ─── Email branch: Try Gmail MCP first, fallback to SES ─────────────
@@ -199,6 +321,9 @@ export async function handler(event) {
         useGmail = await gmailSender.isGmailConnected(userId);
         if (useGmail) {
           gmailAccount = await gmailSender.getGmailAccount(userId);
+          // Get the user's email address from the Gmail account
+          userEmailAddress = gmailAccount.name || gmailAccount.external_id;
+          console.log(`📧 User's Gmail address: ${userEmailAddress}`);
         }
         console.log(`📧 Gmail connection status for user ${userId}:`, useGmail);
       } catch (error) {
@@ -222,7 +347,8 @@ export async function handler(event) {
         hasReplyId: !!replyId,
         replyId: replyId,
         isReply: !!replyId,
-        useGmail: useGmail
+        useGmail: useGmail,
+        userEmailAddress: userEmailAddress
       });
 
       if (useGmail) {
@@ -270,21 +396,37 @@ export async function handler(event) {
       };
     }
 
-    // ─── 5) Persist outgoing message in Messages table ───────────────────────
+    // ─── 5) Generate or get unique flowId for this user+contact combination FIRST ───
+    const flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, userId, to);
+    
+    // ─── 6) Persist outgoing message in Messages table using flowId as ThreadId ───
     const timestamp = Date.now();
     const messageId = uuidv4();
     const messageItem = {
-      ThreadId:   to,
+      ThreadId:   flowId,  // ✅ Use flowId as ThreadId for consistency
       Timestamp:  timestamp,
       MessageId:  messageId,
       Channel:    channel,
       Direction:  'outgoing',
-      Body:       text,
-      Result:     {}
+      Body:       text || `[Template: ${templateName}]`,
+      Result:     {},
+      userId:     userId,
+      ThreadIdTimestamp: `${flowId}#${timestamp}`  // ✅ Use flowId here too
     };
+    
+    // Add template info if this was a template message
+    if (templateName) {
+      messageItem.TemplateInfo = {
+        name: templateName,
+        language: templateLanguage || 'en_US',
+        components: templateComponents
+      };
+    }
 
     if (channel === "whatsapp") {
-      messageItem.Result = { MessageId: resp.MessageId || resp.messageId };
+      messageItem.Result = { 
+        MessageId: resp?.messageId || resp?.MessageId || resp?.messages?.[0]?.id || 'whatsapp-sent'
+      };
     } else {
       messageItem.Result = { MessageId: resp?.MessageId || resp };
       if (replyId) {
@@ -297,33 +439,29 @@ export async function handler(event) {
       Item:      messageItem
     }));
 
-    // ─── 6) Update per-user Flow in Flows table ───────────────────────────────
-    await docClient.send(new UpdateCommand({
-      TableName: FLOWS_TABLE,
-      Key: {
-        contactId: userId,
-        flowId:    to
-      },
-      UpdateExpression: [
-        "SET createdAt     = if_not_exists(createdAt, :ts)",
-        "   , lastMessageAt = :ts",
-        "ADD messageCount  :inc"
-      ].join(' '),
-      ExpressionAttributeValues: {
-        ":ts":  timestamp,
-        ":inc": 1
-      }
-    }));
+    // ─── 7) Update per-user Flow in Flows table ───────────────────────────────
+    // flowId was already generated above, just update metadata
+    await updateFlowMetadata(docClient, FLOWS_TABLE, userId, flowId, timestamp);
 
-    // ─── 7) Build rawEvent envelope for context engine ────────────────────
-    // Determine the sender email based on provider
+    // ─── 8) Build rawEvent envelope for context engine ────────────────────
+    // Determine the sender email based on provider and available user info
     let senderEmail = "akbar@usebeya.com"; // Default SES sender
     let provider = "ses"; // Default provider
     
-    if (resp && resp.provider === "gmail-mcp") {
-      senderEmail = resp.from || gmailAccount?.external_id || "gmail-user@connected.com";
+    if (channel === "whatsapp") {
+      // WhatsApp message handling
+      provider = "whatsapp";
+    } else if (resp && resp.provider === "gmail-mcp") {
+      // Gmail MCP was used - use the email from the response
+      senderEmail = resp.from || userEmailAddress || gmailAccount?.external_id || "gmail-user@connected.com";
       provider = "gmail";
+    } else if (userEmailAddress) {
+      // User has Gmail connected but we're using SES - still show their Gmail address
+      senderEmail = userEmailAddress;
+      provider = "ses-with-gmail-identity";
+      console.log(`📧 Using user's Gmail address with SES: ${senderEmail}`);
     }
+    // If no Gmail account connected, falls back to default SES sender
 
     const rawEvent = {
       eventId: uuidv4(),
@@ -333,18 +471,31 @@ export async function handler(event) {
       eventType: channel === "whatsapp" ? "whatsapp.sent" : "email.sent",
       data: {
         messageId: messageItem.Result.MessageId,
-        threadId: to,
-        subject: subject,
-        bodyText: text,
-        bodyHtml: html,
-        to: Array.isArray(to) ? to : [to],
-        from: senderEmail,
-        provider: provider, // Track which email provider was used
+        threadId: flowId,  // ✅ Use flowId for consistency
+        ...(channel === "email" && {
+          subject: subject,
+          bodyText: text,
+          bodyHtml: html,
+          to: Array.isArray(to) ? to : [to],
+          from: senderEmail,
+        }),
+        ...(channel === "whatsapp" && {
+          bodyText: text || `[Template: ${templateName}]`,
+          to: to,
+          ...(templateName && {
+            templateInfo: {
+              name: templateName,
+              language: templateLanguage || 'en_US',
+              components: templateComponents
+            }
+          })
+        }),
+        provider: provider,
         ...(resp && resp.provider === "gmail-mcp" && { gmailData: resp.toolResult })
       }
     };
 
-    // ─── 5c) Emit rawEvent to EventBridge ──────────────────────────────────────
+    // ─── 8c) Emit rawEvent to EventBridge ──────────────────────────────────────
     try {
       await eventBridgeClient.send(new PutEventsCommand({
         Entries: [{
@@ -361,7 +512,7 @@ export async function handler(event) {
       // Don't fail the entire request if event emission fails
     }
 
-    // ─── 8) Return success + provider's messageId ──────────────────────────
+    // ─── 9) Return success + provider's messageId ──────────────────────────
     return {
       statusCode: 200,
       headers:    CORS,

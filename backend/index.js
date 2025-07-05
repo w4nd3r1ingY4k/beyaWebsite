@@ -1,13 +1,18 @@
+// Environment variables are loaded from AWS Secrets Manager in production
+// Only use dotenv for local development
 import dotenv from "dotenv";
-dotenv.config({ path: "./.env" });
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: "./.env" });
+}
 
 import express from "express";
-import { createBackendClient } from "@pipedream/sdk";
+import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
-import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect.js';
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
 import { MultiServicePollingManager } from './multi-user-polling.js';
+import { normalizeNumber } from './normalizePhone.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -139,6 +144,36 @@ const toolManifest = {
       "create_associations": "HUBSPOT-CREATE-ASSOCIATIONS",
       "batch_create_or_update_contact": "HUBSPOT-BATCH-CREATE-OR-UPDATE-CONTACT",
       "add_contact_to_list": "HUBSPOT-ADD-CONTACT-TO-LIST"
+    }
+  },
+  whatsapp_business: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
+    }
+  },
+  WhatsApp_Business: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
+    }
+  },
+  WhatsApp: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
     }
   },
   OpenAI: {
@@ -512,6 +547,7 @@ Example output:
 - Slack: send_message, create_channel, list_users
 - Google_Sheets: add_single_row, get_values, update_row, create_spreadsheet
 - HubSpot: search_crm, update_lead, update_deal, update_custom_object, update_contact, update_company, get_meeting, get_file_public_url, get_deal, get_contact, get_company, get_associated_meetings, enroll_contact_into_workflow, create_ticket, create_task, create_or_update_contact, create_meeting, create_lead, create_engagement, create_deal, create_custom_object, create_company, create_communication, create_associations, batch_create_or_update_contact, add_contact_to_list
+- whatsapp_business: send_text_message, send_voice_message, send_text_using_template, list_message_templates
 - OpenAI: chat.completions.create
 
 **Important Rules:**
@@ -964,6 +1000,140 @@ app.post("/gmail/connect", async (req, res) => {
   await handleGmailConnect(req, res);
 });
 
+// WhatsApp Business Connect endpoint
+app.post("/whatsapp/connect", async (req, res) => {
+  await handleWhatsAppConnect(req, res);
+});
+
+// WhatsApp Business webhook setup endpoint
+app.post("/whatsapp/setup-webhooks", async (req, res) => {
+  try {
+    const { userId, whatsappAccountId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    console.log(`📱 Setting up WhatsApp webhooks for user ${userId}`);
+    
+    // Get WhatsApp credentials from Pipedream
+    const { WhatsAppConnectService } = await import('./whatsapp-connect.js');
+    const whatsappService = new WhatsAppConnectService();
+    const credentials = await whatsappService.getCredentials(userId);
+    
+    if (!credentials) {
+      throw new Error('No WhatsApp Business credentials found');
+    }
+
+    const accessToken = credentials.permanent_access_token || credentials.access_token;
+    const businessAccountId = credentials.business_account_id;
+    
+    if (!accessToken || !businessAccountId) {
+      throw new Error('Missing WhatsApp access token or business account ID');
+    }
+
+    // Get phone number ID
+    const phoneNumbersResponse = await fetch(
+      `https://graph.facebook.com/v17.0/${businessAccountId}/phone_numbers`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      }
+    );
+    
+    if (!phoneNumbersResponse.ok) {
+      throw new Error('Failed to fetch phone numbers');
+    }
+    
+    const phoneNumbersData = await phoneNumbersResponse.json();
+    const phoneNumberId = phoneNumbersData.data?.[0]?.id;
+    const displayPhoneNumber = phoneNumbersData.data?.[0]?.display_phone_number;
+    
+    if (!phoneNumberId || !displayPhoneNumber) {
+      throw new Error('No phone numbers found for this WhatsApp Business account');
+    }
+
+    console.log(`📱 Found phone number: ${displayPhoneNumber} (ID: ${phoneNumberId})`);
+
+    // Subscribe to webhooks for WABA
+    const wabaSubscription = await fetch(
+      `https://graph.facebook.com/v17.0/${businessAccountId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `access_token=${accessToken}`
+      }
+    );
+
+    // Subscribe to webhooks for phone number
+    const phoneSubscription = await fetch(
+      `https://graph.facebook.com/v17.0/${phoneNumberId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `access_token=${accessToken}`
+      }
+    );
+
+    console.log(`📱 WABA subscription status: ${wabaSubscription.status}`);
+    console.log(`📱 Phone subscription status: ${phoneSubscription.status}`);
+
+    // Update user record with the display phone number for webhook matching
+    try {
+      // Normalize phone number to match receive lambda format
+      const normalizedPhoneNumber = normalizeNumber(displayPhoneNumber);
+      console.log(`📱 Updating user ${userId} with normalized phone number: ${normalizedPhoneNumber} (original: ${displayPhoneNumber})`);
+      
+      // Call CreateUserFunction Lambda to update the phone number
+      const CREATE_USER_LAMBDA_URL = process.env.CREATE_USER_LAMBDA_URL || 'https://qfk6yjyzg6utzok6gpels4cyhy0vhrmg.lambda-url.us-east-1.on.aws/';
+      
+      const updateResponse = await fetch(CREATE_USER_LAMBDA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          userId,
+          connectedAccounts: {
+            whatsappBusiness: normalizedPhoneNumber
+          }
+        })
+      });
+      
+      if (updateResponse.ok) {
+        console.log(`✅ Updated user ${userId} with WhatsApp phone number: ${normalizedPhoneNumber}`);
+      } else {
+        console.error(`⚠️ Failed to update user record: ${updateResponse.status}`);
+      }
+    } catch (updateError) {
+      console.error(`⚠️ Error updating user record:`, updateError);
+      // Don't fail the whole process if user update fails
+    }
+
+    return res.status(200).json({
+      success: true,
+      businessAccountId,
+      phoneNumberId,
+      displayPhoneNumber,
+      wabaSubscribed: wabaSubscription.ok,
+      phoneSubscribed: phoneSubscription.ok
+    });
+
+  } catch (error) {
+    console.error('❌ WhatsApp webhook setup error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to setup WhatsApp webhooks',
+      message: error.message 
+    });
+  }
+});
+
 // Gmail workflow management endpoint
 app.post("/gmail/workflow", async (req, res) => {
   const { action, userId, gmailAccountId, userEmail, workflowId } = req.body;
@@ -974,7 +1144,7 @@ app.post("/gmail/workflow", async (req, res) => {
 
   try {
     // Call the Gmail workflow manager Lambda function
-    const lambdaUrl = 'https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/';
+    const lambdaUrl = process.env.GMAIL_WORKFLOW_LAMBDA_URL || 'https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/';
     
     const response = await fetch(lambdaUrl, {
       method: 'POST',
@@ -1028,7 +1198,7 @@ app.post("/debug/test-gmail-send", async (req, res) => {
   }
 
   try {
-    const { GmailMCPSender } = await import('./lambdas/functions/beya-inbox-send/lib/gmail-mcp.js');
+    const { GmailMCPSender } = await import('./LambdaFunctions/functions/beya-inbox-send/lib/gmail-mcp.js');
     const gmailSender = new GmailMCPSender();
     
     const result = await gmailSender.sendEmail(userId, {
@@ -1224,6 +1394,32 @@ app.post("/api/integrations/setup-polling", async (req, res) => {
   }
 
   try {
+    // For Gmail, also create the Pipedream workflow via Lambda
+    if (serviceType === 'gmail') {
+      console.log(`🔧 Creating Pipedream workflow for Gmail user ${userId}`);
+      
+      const lambdaUrl = 'https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/';
+      
+      const workflowResponse = await fetch(lambdaUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'auto_create_for_user',
+          userId: userId
+        })
+      });
+      
+      if (!workflowResponse.ok) {
+        const errorText = await workflowResponse.text();
+        console.error(`❌ Failed to create Pipedream workflow: ${workflowResponse.status} - ${errorText}`);
+        throw new Error(`Failed to create Pipedream workflow: ${workflowResponse.status}`);
+      }
+      
+      const workflowData = await workflowResponse.json();
+      console.log(`✅ Pipedream workflow created: ${workflowData.workflow?.workflowId}`);
+    }
+    
+    // Start the polling
     const result = await multiServicePollingManager.startPollingForUser(
       userId, 
       serviceType, 
@@ -1271,6 +1467,35 @@ app.post("/api/integrations/stop-polling", async (req, res) => {
   }
 
   try {
+    // For Gmail, also delete the Pipedream workflow via Lambda
+    if (serviceType === 'gmail') {
+      console.log(`🗑️ Deleting Pipedream workflow for Gmail user ${userId}`);
+      
+      const lambdaUrl = 'https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/';
+      
+      try {
+        const workflowResponse = await fetch(lambdaUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete_workflow',
+            userId: userId
+          })
+        });
+        
+        if (workflowResponse.ok) {
+          console.log(`✅ Pipedream workflow deleted for user ${userId}`);
+        } else {
+          console.error(`⚠️ Failed to delete Pipedream workflow: ${workflowResponse.status}`);
+          // Continue with polling stop even if workflow deletion fails
+        }
+      } catch (workflowError) {
+        console.error(`⚠️ Error deleting Pipedream workflow:`, workflowError);
+        // Continue with polling stop even if workflow deletion fails
+      }
+    }
+    
+    // Stop the polling
     const result = await multiServicePollingManager.stopPollingForUser(userId, serviceType, true);
     
     return res.status(200).json(result);
@@ -1390,7 +1615,7 @@ app.post("/api/gmail/complete-setup", async (req, res) => {
     // Step 1: Create Pipedream workflow
     console.log(`🔧 Step 1: Creating Pipedream workflow for user ${userId}`);
     
-    const workflowResponse = await fetch('https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/', {
+    const workflowResponse = await fetch('https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1743,33 +1968,6 @@ app.post("/api/v1/suggest-reply", async (req, res) => {
     console.error("🔥 Reply suggestion error:", error);
     return res.status(500).json({ 
       error: error.message || "Reply suggestion failed",
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
-
-// Hybrid search endpoint (semantic + metadata filtering)
-app.post("/api/v1/hybrid-search", async (req, res) => {
-  /**
-   * Request body:
-   * {
-   *   query: string, // required
-   *   filters: object, // optional metadata filters (e.g., { emailParticipant, threadId, timestamp, label })
-   *   topK: number, // optional, default 10
-   *   userId: string // optional
-   * }
-   */
-  const { query, filters = {}, topK = 10, userId = null } = req.body;
-  if (!query) {
-    return res.status(400).json({ error: "query is required" });
-  }
-  try {
-    const results = await semanticSearch(query, filters, topK, userId);
-    return res.status(200).json(results);
-  } catch (error) {
-    console.error("🔥 Hybrid search error:", error);
-    return res.status(500).json({
-      error: error.message || "Hybrid search failed",
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }

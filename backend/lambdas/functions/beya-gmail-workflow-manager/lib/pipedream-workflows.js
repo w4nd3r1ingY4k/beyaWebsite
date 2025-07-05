@@ -3,6 +3,7 @@
 
 import fetch from 'node-fetch';
 import { createBackendClient } from "@pipedream/sdk/server";
+import { google } from 'googleapis';
 
 export default class PipedreamWorkflowManager {
   constructor() {
@@ -21,10 +22,28 @@ export default class PipedreamWorkflowManager {
     this.lambdaUrl = process.env.GMAIL_RECEIVE_WEBHOOK_URL || 'https://22y6e3kow4ozzkerpbd6shyxoi0hbcxx.lambda-url.us-east-1.on.aws/';
     this.orgId = process.env.PIPEDREAM_ORG_ID || 'o_ZjIMD7a';
     this.projectId = process.env.PIPEDREAM_PROJECT_ID || 'proj_GzsqKG9';
+    // Template workflow ID - this should be set to your actual template workflow ID
+    this.templateWorkflowId = process.env.GMAIL_TEMPLATE_WORKFLOW_ID || 'tch_z2f9XN';
   }
 
   /**
-   * Create a Gmail receiving workflow for a specific user using template
+   * Check if the template workflow exists
+   * @returns {boolean} True if template exists
+   */
+  async checkTemplateExists() {
+    try {
+      console.log(`[PipedreamWorkflowManager] Checking if template workflow exists: ${this.templateWorkflowId}`);
+      const workflow = await this.getWorkflowStatus(this.templateWorkflowId);
+      console.log(`✅ Template workflow found: ${workflow.id}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Template workflow not found: ${this.templateWorkflowId}`);
+      return false;
+    }
+  }
+
+  /**
+   * Create a Gmail receiving workflow for a specific user by cloning template
    * @param {string} userId - User ID
    * @param {string} gmailAccountId - Gmail account ID from MCP
    * @param {string} userEmail - User's email address
@@ -32,131 +51,105 @@ export default class PipedreamWorkflowManager {
    */
   async createGmailReceiveWorkflow(userId, gmailAccountId, userEmail) {
     console.log(`[PipedreamWorkflowManager] Attempting to create workflow for userId: ${userId}`);
+    
     try {
+      // Skip template check since template IDs are different from workflow IDs
+      // The template existence will be validated when we try to create from it
+      console.log(`[PipedreamWorkflowManager] Using template ID: ${this.templateWorkflowId}`);
+
       const accessToken = await this.pd.rawAccessToken();
       console.log('[PipedreamWorkflowManager] Acquired raw access token.');
 
+      // If userEmail is not provided, fetch it from Gmail API using OAuth credentials
+      if (!userEmail) {
+        console.log(`[PipedreamWorkflowManager] No userEmail provided, fetching from Gmail API for account: ${gmailAccountId}`);
+        
+        try {
+          userEmail = await this.getGmailEmailAddress(gmailAccountId, accessToken);
+          console.log(`[PipedreamWorkflowManager] Fetched email from Gmail API: ${userEmail}`);
+        } catch (error) {
+          console.error(`[PipedreamWorkflowManager] Error fetching email from Gmail API:`, error);
+          userEmail = `user-${userId}@gmail.com`;
+        }
+      }
+
       const workflowName = `${userEmail} - Gmail Receive`;
       
-      // Use the template-based approach with proper Node.js component code
-      const workflowData = {
-        org_id: this.orgId,
-        project_id: this.projectId,
-        steps: [
-          {
-            namespace: "code",
-            props: {
-              userId: userId,
-              gmailAccountId: gmailAccountId,
-              userEmail: userEmail,
-              lambdaUrl: this.lambdaUrl
-            },
-            // Include the proper Node.js component code
-            code: `import { axios } from "@pipedream/platform";
+             // Use the correct Pipedream template instantiation API format
+       const templateData = {
+         org_id: this.orgId,
+         project_id: this.projectId,
+         settings: {
+           name: workflowName,
+           auto_deploy: true
+         },
+         triggers: [
+           {
+             props: {
+               method: "POST",
+               path: `/gmail-webhook-${userId.substring(0, 8)}`
+             }
+           }
+         ],
+         steps: [
+           {
+             namespace: "code",
+             props: {
+               userId: userId,
+               gmailAccountId: gmailAccountId,
+               userEmail: userEmail,
+               lambdaUrl: this.lambdaUrl
+             }
+           }
+         ]
+       };
 
-export default defineComponent({
-  props: {
-    userId: {
-      type: "string",
-      description: "User ID for this workflow"
-    },
-    gmailAccountId: {
-      type: "string", 
-      description: "Gmail account ID"
-    },
-    userEmail: {
-      type: "string",
-      description: "User's email address"
-    },
-    lambdaUrl: {
-      type: "string",
-      default: "${this.lambdaUrl}"
-    }
-  },
-  async run({ steps, $ }) {
-    // Get the Gmail data from the webhook trigger
-    const gmailData = steps.trigger.event.body.gmail_data;
-    
-    if (!gmailData) {
-      throw new Error("No Gmail data found in trigger event");
-    }
-    
-    // Forward the Gmail data to Beya's email processor
-    // The Lambda expects the gmail_data in the body along with user info
-    const response = await axios($, {
-      method: "POST",
-      url: this.lambdaUrl,
-      data: {
-        userId: this.userId,
-        gmail_account_id: this.gmailAccountId,
-        email: this.userEmail,
-        gmail_data: gmailData
-      },
-      headers: {
-        "Content-Type": "application/json"
-      }
-    });
-    
-    $.export("$summary", \`Forwarded Gmail data to Beya processor for \${this.userEmail}\`);
-    return response;
-  },
-});`
-          }
-        ],
-        triggers: [
-          {
-            props: {
-              emitShape: "ERGONOMIC",
-              responseType: "default",
-              domains: [],
-              authorization: "none",
-              discardAutomatedRequests: null,
-              staticResponseStatus: 200,
-              staticResponseHeaders: {},
-              staticResponseBody: "",
-              bearerToken: ""
-            }
-          }
-        ],
-        settings: {
-          name: workflowName,
-          auto_deploy: true
-        }
-      };
+       console.log('Creating workflow from template with data:', JSON.stringify(templateData, null, 2));
 
-      console.log('Creating workflow with embedded Node.js code:', JSON.stringify(workflowData, null, 2));
-
-      const response = await fetch(`${this.baseUrl}/workflows`, {
+       // Use the template instantiation endpoint
+       const response = await fetch(`${this.baseUrl}/workflows?template_id=${this.templateWorkflowId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(workflowData)
-      });
+                 body: JSON.stringify(templateData)
+       });
 
-      console.log(`[PipedreamWorkflowManager] API Response Status: ${response.status}`);
-      const result = await response.json();
-      console.log('[PipedreamWorkflowManager] API Response Body:', JSON.stringify(result, null, 2));
+       console.log(`[PipedreamWorkflowManager] Template API Response Status: ${response.status}`);
+       const result = await response.json();
+       console.log('[PipedreamWorkflowManager] Template API Response Body:', JSON.stringify(result, null, 2));
 
-      if (!response.ok) {
-        throw new Error(`Pipedream API Error: ${response.status} - ${JSON.stringify(result)}`);
-      }
-      console.log('Template workflow created successfully:', result);
+       if (!response.ok) {
+         throw new Error(`Pipedream Template API Error: ${response.status} - ${JSON.stringify(result)}`);
+       }
 
-      return {
-        userId,
-        workflowId: result.data?.id || result.id,
-        gmailAccountId,
-        userEmail,
-        name: workflowName,
-        active: true,
-        status: 'created_with_embedded_code',
-        createdAt: new Date().toISOString(),
-        // The workflow should now have proper HTTP trigger and code steps
-        webhook_url: result.data?.workflow_url || `https://eogak5zthuwi1jw.m.pipedream.net`,
-        triggers: result.data?.triggers || [],
-        steps: result.data?.steps || []
+       // Get the webhook URL from the created workflow
+       const createdWorkflowId = result.data?.id || result.id;
+       
+       // Extract webhook URL from the response
+       let webhookUrl = 'https://webhook.site/placeholder';
+       if (result.data?.triggers && result.data.triggers.length > 0) {
+         const httpTrigger = result.data.triggers.find(t => t.endpoint_url);
+         if (httpTrigger && httpTrigger.endpoint_url) {
+           webhookUrl = httpTrigger.endpoint_url;
+         }
+       }
+
+       console.log('✅ Workflow created and auto-deployed successfully:', createdWorkflowId);
+       console.log('📍 Webhook URL:', webhookUrl);
+
+             return {
+         userId,
+         workflowId: createdWorkflowId,
+         gmailAccountId,
+         userEmail,
+         name: workflowName,
+         active: true,
+         status: 'created_from_template',
+         createdAt: new Date().toISOString(),
+         webhook_url: webhookUrl,
+        templateId: this.templateWorkflowId
       };
     } catch (error) {
       console.error(`❌ Failed to create Gmail receive workflow for ${userId}:`, error);
@@ -239,6 +232,62 @@ export default defineComponent({
 
     } catch (error) {
       console.error(`❌ Failed to list workflows:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get Gmail email address using OAuth credentials from Pipedream account
+   * @param {string} gmailAccountId - Pipedream Gmail account ID
+   * @param {string} accessToken - Pipedream access token
+   * @returns {string} Gmail email address
+   */
+  async getGmailEmailAddress(gmailAccountId, accessToken) {
+    try {
+      // First, get the OAuth credentials from Pipedream
+      const accountResponse = await fetch(`${this.baseUrl}/accounts/${gmailAccountId}?include_credentials=1`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (!accountResponse.ok) {
+        throw new Error(`Failed to get account credentials: ${accountResponse.status}`);
+      }
+
+      const accountData = await accountResponse.json();
+      const credentials = accountData.data?.credentials;
+
+      if (!credentials?.oauth_access_token || !credentials?.oauth_refresh_token) {
+        throw new Error('Missing OAuth tokens in account credentials');
+      }
+
+      // Create OAuth2 client using environment variables (same as Fargate)
+      const oauth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        'https://developers.google.com/oauthplayground'
+      );
+
+      // Set credentials
+      oauth2Client.setCredentials({
+        access_token: credentials.oauth_access_token,
+        refresh_token: credentials.oauth_refresh_token,
+      });
+
+      // Create Gmail API client
+      const gmail = google.gmail({
+        version: 'v1',
+        auth: oauth2Client,
+      });
+
+      // Get user profile to get email address
+      const profile = await gmail.users.getProfile({ userId: 'me' });
+      
+      return profile.data.emailAddress;
+
+    } catch (error) {
+      console.error('Error getting Gmail email address:', error);
       throw error;
     }
   }

@@ -16,6 +16,8 @@ export const handler = async (event) => {
   console.log('--- NEW INVOCATION ---');
   console.log('EVENT RECEIVED:', JSON.stringify(event, null, 2));
   
+  // Lambda Function URLs handle CORS automatically, no need for manual handling
+  
   // --- Enhanced Diagnostics ---
   console.log('--- ENVIRONMENT VARIABLES ---');
   console.log('PIPEDREAM_PROJECT_ID:', process.env.PIPEDREAM_PROJECT_ID || 'NOT SET');
@@ -52,6 +54,9 @@ export const handler = async (event) => {
       case 'list_workflows':
         return await listAllWorkflows(workflowManager);
       
+      case 'check_template':
+        return await checkTemplate(workflowManager);
+      
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -61,8 +66,7 @@ export const handler = async (event) => {
     return {
       statusCode: 500,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         success: false,
@@ -85,8 +89,7 @@ async function createWorkflow(workflowManager, gmailMCP, userId, gmailAccountId,
     return {
       statusCode: 200,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         success: true,
@@ -105,8 +108,7 @@ async function createWorkflow(workflowManager, gmailMCP, userId, gmailAccountId,
   return {
     statusCode: 200,
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       success: true,
@@ -161,8 +163,7 @@ async function deleteWorkflow(workflowManager, userId, workflowId) {
   return {
     statusCode: 200,
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       success: true,
@@ -180,8 +181,7 @@ async function getWorkflowStatus(workflowManager, userId) {
     return {
       statusCode: 404,
       headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         success: false,
@@ -196,8 +196,7 @@ async function getWorkflowStatus(workflowManager, userId) {
   return {
     statusCode: 200,
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       success: true,
@@ -219,13 +218,35 @@ async function listAllWorkflows(workflowManager) {
   return {
     statusCode: 200,
     headers: {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       success: true,
       stored: storedWorkflows,
       live: liveWorkflows
+    })
+  };
+}
+
+/**
+ * Check if template workflow exists
+ */
+async function checkTemplate(workflowManager) {
+  const templateExists = await workflowManager.checkTemplateExists();
+  const templateId = workflowManager.templateWorkflowId;
+  
+  return {
+    statusCode: 200,
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      success: true,
+      templateId: templateId,
+      exists: templateExists,
+      message: templateExists 
+        ? `Template workflow ${templateId} exists and is ready to use` 
+        : `Template workflow ${templateId} not found. Please create it in Pipedream first.`
     })
   };
 }
@@ -241,7 +262,8 @@ async function storeWorkflow(workflowData) {
       userEmail: workflowData.userEmail,
       status: workflowData.status,
       createdAt: workflowData.createdAt,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      webhook_url: workflowData.webhook_url // Store the webhook URL
     }
   };
   
