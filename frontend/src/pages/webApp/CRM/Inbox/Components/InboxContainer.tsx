@@ -1,17 +1,11 @@
-<<<<<<< HEAD:my-app/src/pages/webApp/Frontend/CRM/Inbox/Components/InboxContainer.tsx
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useAuth } from '../../../../../AuthContext';
-=======
-import React, { useState, useEffect, useMemo } from 'react';
-import { useAuth } from "@/pages/AuthContext";
->>>>>>> main:frontend/src/pages/webApp/CRM/Inbox/Components/InboxContainer.tsx
+import { useAuth } from "../../../../AuthContext";
 import ThreadList from './ThreadList';
 import MessageView from './MessageView';
 import ComposeModal from './ComposeModal';
-import TeamChat from './TeamChat';
 import LoadingScreen from '../../../components/LoadingScreen';
-import { discussionsService } from '../../../../services/discussionsService';
-import { getUserById } from '../../../../services/userService';
+import { discussionsService } from '../../../../../discussionsService';
+import { getUserById } from '../../../../../userService';
 import { Users, Plus } from 'lucide-react';
 
 interface Message {
