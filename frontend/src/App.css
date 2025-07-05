@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+.App {
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Centers content vertically */
+  align-items: center;     /* Centers content horizontally */
+  height: 100vh;           /* Full viewport height */
+  width: 100vw;            /* Full viewport width */
+  background-color: #222;
+  color: #ffffff;
+}
+
+.App h1 {
+  margin-bottom: 20px; /* Space between header and Solari Display */
+  font-size: 3rem;
+}

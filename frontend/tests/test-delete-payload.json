@@ -1,0 +1,8 @@
+{
+  "httpMethod": "DELETE",
+  "path": "/workflows",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"action\": \"delete_workflow\", \"userId\": \"f41814b8-d0a1-7041-ef1f-e1e5c2dafc86\", \"workflowId\": \"p_vQCx1vA\"}"
+} 

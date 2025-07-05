@@ -1,12 +1,12 @@
 .PHONY: build deploy clean
 
 clean:
-	@cd my-app && rm -rf build
+	@cd frontend && rm -rf build
 
 build: clean
-	@cd my-app && npm run build
+	@cd frontend && npm run build
 
 deploy: build
-	@cd my-app && firebase deploy
+	@cd frontend && firebase deploy
 
 all: deploy
