@@ -25,8 +25,23 @@ exports.handler = async (event) => {
     // Handle both Function URL and API Gateway event formats
     let userId, path;
     
-    if (event.rawPath) {
-      // Function URL format
+    console.log("DEBUG: event.queryStringParameters:", event.queryStringParameters);
+    console.log("DEBUG: event.queryStringParameters type:", typeof event.queryStringParameters);
+    console.log("DEBUG: event.queryStringParameters.userId:", event.queryStringParameters?.userId);
+    
+    // First check for query string parameters (most common case)
+    if (event.queryStringParameters && event.queryStringParameters.userId) {
+      // Query parameter format: ?userId=value
+      userId = event.queryStringParameters.userId;
+      path = event.rawPath || '/';
+      console.log("Using query parameter userId:", userId);
+    } else if (event.pathParameters && event.pathParameters.userId) {
+      // API Gateway format
+      userId = event.pathParameters.userId;
+      path = event.requestContext?.http?.path || event.rawPath;
+      console.log("Using path parameter userId:", userId);
+    } else if (event.rawPath && event.rawPath !== '/') {
+      // Function URL format with path
       path = event.rawPath;
       const pathSegments = path.split('/').filter(Boolean);
       
@@ -35,11 +50,8 @@ exports.handler = async (event) => {
       // Expected format: /users/{userId} or /users/{userId}/connections
       if (pathSegments.length >= 2 && pathSegments[0] === 'users') {
         userId = pathSegments[1];
+        console.log("Using path segment userId:", userId);
       }
-    } else if (event.pathParameters) {
-      // API Gateway format
-      userId = event.pathParameters.userId;
-      path = event.requestContext?.http?.path || event.rawPath;
     }
     
     console.log("Extracted userId:", userId);

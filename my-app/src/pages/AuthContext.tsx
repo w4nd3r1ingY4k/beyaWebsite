@@ -35,7 +35,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // helper to fetch your Dynamo record
 async function fetchUserRecord(sub: string): Promise<User> {
-  const res = await fetch(`https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod/users/${sub}`);
+  const res = await fetch(`https://qyb7x6hp2fhypw5gf7kjk3hf7a0hmoev.lambda-url.us-east-1.on.aws/?userId=${sub}`);
   if (!res.ok) throw new Error("Could not load user profile");
   return await res.json();
 }

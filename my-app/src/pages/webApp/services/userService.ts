@@ -21,7 +21,7 @@ export interface CreateUserPayload {
   }
   export async function getUserById(userId: string) {
     const res = await fetch(
-      `https://2p6sfcnq3rawezlsyhhrbeal2y0uejjp.lambda-url.us-east-1.on.aws/?userId=${userId}`,
+      `https://qyb7x6hp2fhypw5gf7kjk3hf7a0hmoev.lambda-url.us-east-1.on.aws/?userId=${userId}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
