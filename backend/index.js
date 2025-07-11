@@ -5,9 +5,9 @@ import express from "express";
 import { createBackendClient } from "@pipedream/sdk";
 import OpenAI from "openai";
 import cors from "cors";
-import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect.js';
-import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
-import { MultiServicePollingManager } from './multi-user-polling.js';
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect/connect.js';
+import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
+import { MultiServicePollingManager } from './services/multi-user-polling.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -1058,7 +1058,7 @@ app.post("/debug/gmail-credentials", async (req, res) => {
   }
 
   try {
-    const { GmailConnectService } = await import('./gmail-connect.js');
+    const { GmailConnectService } = await import('./connect/gmail-connect.js');
     const gmailService = new GmailConnectService();
     
     // Get raw accounts response like the Lambda function does
@@ -1121,7 +1121,7 @@ app.post("/debug/gmail-credentials-connect", async (req, res) => {
   }
 
   try {
-    const { GmailConnectService } = await import('./gmail-connect.js');
+    const { GmailConnectService } = await import('./connect/gmail-connect.js');
     const gmailService = new GmailConnectService();
     
     console.log(`🔍 Testing Connect-specific API for credentials`);
