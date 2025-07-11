@@ -4,7 +4,7 @@ import { BusinessCentralConnectService } from './business-central-connect.js';
 import { KlaviyoConnectService } from './klaviyo-connect.js';
 import { SquareConnectService } from './square-connect.js';
 import { GmailConnectService } from './gmail-connect.js';
-import { WhatsAppConnectService } from './whatsapp-connect.js';
+import { WhatsAppConnectService } from '../services/whatsapp-connect.js';
 
 // Load environment variables
 dotenv.config({ path: "./.env" });

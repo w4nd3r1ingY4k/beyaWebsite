@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { GmailConnectService } from './gmail-connect.js';
+import { GmailConnectService } from '../connect/gmail-connect.js';
 import AWS from 'aws-sdk';
 
 // Configure AWS
