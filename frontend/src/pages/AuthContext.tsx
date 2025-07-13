@@ -6,6 +6,7 @@ import {
   AuthenticationDetails,
   CognitoUserSession
 } from "amazon-cognito-identity-js";
+import { API_ENDPOINTS } from "../config/api";
 
 const poolData = {
     UserPoolId: "us-east-1_APKoKTm2c",
@@ -35,7 +36,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // helper to fetch your Dynamo record
 async function fetchUserRecord(sub: string): Promise<User> {
-  const res = await fetch(`https://qyb7x6hp2fhypw5gf7kjk3hf7a0hmoev.lambda-url.us-east-1.on.aws/?userId=${sub}`);
+  const res = await fetch(`${API_ENDPOINTS.GET_USER}/?userId=${sub}`);
   if (!res.ok) throw new Error("Could not load user profile");
   return await res.json();
 }
@@ -80,6 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         onSuccess: async (session) => {
           localStorage.setItem("id_token", session.getIdToken().getJwtToken());
           const payload = session.getIdToken().payload;
+          const email   = payload.email as string;
           const sub     = payload.sub as string;
 
           try {
@@ -88,8 +90,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(false);
             resolve();
           } catch (e) {
+            console.log("User profile not found, creating new record...");
+            // Create user record if it doesn't exist
+            try {
+              const createResponse = await fetch(API_ENDPOINTS.CREATE_USER, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'create',
+                  email: email,
+                  sub: sub,
+                  displayName: email.split('@')[0],
+                  connectedAccounts: {}
+                })
+              });
+              
+              if (createResponse.ok) {
+                // Now try to fetch the profile again
+                const profile = await fetchUserRecord(sub);
+                setUser(profile);
+              } else {
+                // Fallback to minimal user object
+                setUser({ email, userId: sub, subscriber_email: email, createdAt: "", lastLoginAt: "", companyId: null, timezone: null, displayName: null, connectedAccounts: {} });
+              }
+            } catch (createError) {
+              console.error("Failed to create user record:", createError);
+              // Fallback to minimal user object
+              setUser({ email, userId: sub, subscriber_email: email, createdAt: "", lastLoginAt: "", companyId: null, timezone: null, displayName: null, connectedAccounts: {} });
+            }
             setLoading(false);
-            reject(e);
+            resolve();
           }
         },
         onFailure: err => {
