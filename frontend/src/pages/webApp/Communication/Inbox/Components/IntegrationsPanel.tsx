@@ -4,6 +4,7 @@ import { useAuth } from "../../../../AuthContext";
 import { Info } from 'lucide-react';
 import config from '../../../../../config/api';
 import { API_ENDPOINTS } from '../../../../../config/api';
+import QRCodeModal from './QRCodeModal';
 
 // Import logos
 import gmailLogo from '../../../../../assets/images/logos/gmail logo.png';
@@ -161,6 +162,7 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
   const { user } = useAuth();
   const [selectedIntegration, setSelectedIntegration] = useState<Integration | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [qrModalOpen, setQrModalOpen] = useState(false);
   
   const [integrations, setIntegrations] = useState<Integration[]>([
     {
@@ -462,11 +464,57 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
         updateIntegration('hyros', true, 'Demo mode');
         
       } else if (integrationId === 'whatsapp-personal') {
-        // Placeholder for WhatsApp Personal integration
-        console.log('WhatsApp Personal integration not yet implemented');
-        alert('WhatsApp Personal integration coming soon! This is currently a UI placeholder.');
-        // For demo purposes, just update the UI state
-        updateIntegration('whatsapp-personal', true, 'Demo mode');
+        // OpenWA WhatsApp Personal integration
+        console.log('Starting OpenWA WhatsApp Personal integration...');
+        
+        try {
+          // Start OpenWA session directly on local service
+          const startResult = await safeFetch(`http://localhost:3001/start-session`, { userId });
+          
+          if (startResult.success) {
+            console.log('✅ OpenWA session started:', startResult.message);
+            updateIntegration('whatsapp-personal', true, 'Connecting...');
+            
+            // Show message about checking terminal
+            alert('✅ OpenWA session started!\n\n📱 Check your terminal for the QR code and scan it with your WhatsApp mobile app to connect.');
+            
+            // Poll for connection status
+            const pollConnection = async () => {
+              try {
+                const statusResponse = await fetch(`http://localhost:3001/session-status/${userId}`);
+                const statusData = await statusResponse.json();
+                
+                if (statusData.isConnected) {
+                  console.log('✅ OpenWA connected successfully');
+                  updateIntegration('whatsapp-personal', true, 'Connected');
+                  setQrModalOpen(false);
+                  return;
+                } else if (statusData.sessionData?.status === 'waiting_for_scan') {
+                  console.log('📱 Waiting for QR code scan...');
+                  updateIntegration('whatsapp-personal', true, 'Scan QR code');
+                  // Continue polling
+                  setTimeout(pollConnection, 2000);
+                } else {
+                  console.log('📱 OpenWA status:', statusData);
+                  setTimeout(pollConnection, 2000);
+                }
+              } catch (pollError) {
+                console.error('Error polling OpenWA status:', pollError);
+                setTimeout(pollConnection, 5000); // Retry after 5 seconds on error
+              }
+            };
+            
+            // Start polling after a short delay
+            setTimeout(pollConnection, 1000);
+            
+          } else {
+            throw new Error(startResult.error || 'Failed to start OpenWA session');
+          }
+        } catch (openwaError: any) {
+          console.error('OpenWA integration error:', openwaError);
+          alert(`OpenWA integration failed: ${openwaError.message}`);
+          updateIntegration('whatsapp-personal', false);
+        }
         
       } else {
         // Unknown integration type
@@ -517,8 +565,18 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
       // Placeholder for Hyros disconnection
       console.log('Disconnecting Hyros (demo mode)');
     } else if (integrationId === 'whatsapp-personal') {
-      // Placeholder for WhatsApp Personal disconnection
-      console.log('Disconnecting WhatsApp Personal (demo mode)');
+      // Disconnect OpenWA session
+      try {
+        console.log('Disconnecting OpenWA WhatsApp Personal session...');
+        const disconnectResponse = await fetch(`http://localhost:3001/disconnect/${user?.userId}`, {
+          method: 'POST'
+        });
+        const disconnectResult = await disconnectResponse.json();
+        console.log('✅ OpenWA session disconnected:', disconnectResult);
+      } catch (disconnectError: any) {
+        console.error('Error disconnecting OpenWA:', disconnectError);
+        // Continue with UI update even if disconnect fails
+      }
     }
     
     // TODO: call disconnect endpoint for other integrations
@@ -614,6 +672,13 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
           }}
         />
       )}
+
+      {/* QR Code Modal */}
+      <QRCodeModal
+        isOpen={qrModalOpen}
+        onClose={() => setQrModalOpen(false)}
+        userId={user?.userId || ''}
+      />
     </>
   );
 };

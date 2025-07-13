@@ -1,0 +1,32 @@
+{
+  "name": "beya-openwa-local",
+  "version": "1.0.0",
+  "description": "Local OpenWA service for Beya - handles WhatsApp Web integration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "@open-wa/wa-automate": "^4.60.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "node-fetch": "^3.3.2",
+    "qrcode-terminal": "^0.12.0",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  },
+  "keywords": [
+    "whatsapp",
+    "openwa",
+    "beya",
+    "automation"
+  ],
+  "author": "Beya Team",
+  "license": "MIT"
+}

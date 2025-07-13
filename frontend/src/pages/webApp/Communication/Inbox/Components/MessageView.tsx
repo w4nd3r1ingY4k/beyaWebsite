@@ -8,7 +8,7 @@ import { getUserById } from '../../../../../userService';
 import { discussionsService } from '../../../../../discussionsService';
 import { Reply } from 'lucide-react';
 import './MessageView.css';
-import { Flow, Message, Discussion } from '../Types';
+
 import { API_ENDPOINTS } from '../../../../../config/api';
 import DOMPurify from 'dompurify';
 
@@ -335,24 +335,10 @@ const MessageView: React.FC<MessageViewProps> = ({
         setEmailEditorState(EditorState.createEmpty());
         setReplySubject('');
       } else {
-        // Get recipient from flow or use the decoded threadId as fallback
-        let recipient = flow?.contactPhone || flow?.contactIdentifier || flow?.fromPhone || decodeURIComponent(selectedThreadId);
-        
-        // IMPORTANT: Extract actual phone number from flowId if needed
-        if (selectedThreadId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-          // If selectedThreadId is a UUID (flowId), look up the actual phone number
-          if (flow?.contactIdentifier || flow?.contactPhone || flow?.fromPhone) {
-            recipient = flow.contactIdentifier || flow.contactPhone || flow.fromPhone;
-            console.log(`🔄 Converted flowId ${selectedThreadId} to phone number ${recipient}`);
-          } else {
-            console.error('❌ Could not find phone number for flowId:', selectedThreadId);
-            throw new Error('Could not find phone number for this conversation');
-          }
-        }
-        
+        // For WhatsApp, pass the flowId (selectedThreadId) so routing logic can detect personal vs business
         await onSendMessage?.({
           channel: 'whatsapp',
-          to: recipient,
+          to: selectedThreadId, // Use flowId instead of extracted phone number
           content: replyText
         });
         
@@ -1962,7 +1948,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                             e.currentTarget.style.background = '#DE1785';
                           }}
                         >
-                          Reply to Customer
+                          Reply
                         </button>
                       </div>
                     )}
@@ -1988,7 +1974,7 @@ const MessageView: React.FC<MessageViewProps> = ({
             alignItems: 'center',
             marginBottom: 16 
           }}>
-            <h3 style={{ margin: 0, color: '#374151', fontSize: '16px', fontWeight: '600' }}>Reply to Customer</h3>
+            <h3 style={{ margin: 0, color: '#374151', fontSize: '16px', fontWeight: '600' }}>Reply</h3>
             <button
               onClick={() => {
                 setIsReplying(false);

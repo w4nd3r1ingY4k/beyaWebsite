@@ -3,7 +3,7 @@
 import { sendWhatsApp, sendWhatsAppTemplate } from '../lib/whatsapp.js';
 import { sendEmail, replyEmail } from '../lib/email.js';
 import { GmailMCPSender } from '../lib/gmail-mcp.js';
-import { generateOrGetFlowId, updateFlowMetadata } from '../lib/flowUtils.js';
+import { generateOrGetFlowId, generateOrGetEmailFlowId, updateFlowMetadata } from '../lib/flowUtils.js';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -373,10 +373,10 @@ export async function handler(event) {
         } catch (gmailError) {
           console.error('❌ Gmail MCP send failed, falling back to SES:', gmailError.message);
           // Fall back to SES
-      if (replyId) {
-        resp = await replyEmail(to, subject, text, html, replyId);
-      } else {
-        resp = await sendEmail(to, subject, text, html);
+          if (replyId) {
+            resp = await replyEmail(to, subject, text, html, replyId);
+          } else {
+            resp = await sendEmail(to, subject, text, html);
           }
         }
       } else {
@@ -397,7 +397,14 @@ export async function handler(event) {
     }
 
     // ─── 5) Generate or get unique flowId for this user+contact combination FIRST ───
-    const flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, userId, to);
+    let flowId;
+    if (channel === "email") {
+      // Use email-specific threading that considers subject lines
+      flowId = await generateOrGetEmailFlowId(docClient, FLOWS_TABLE, userId, to, subject, {});
+    } else {
+      // Use contact-based threading for other channels (WhatsApp, etc.)
+      flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, userId, to);
+    }
     
     // ─── 6) Persist outgoing message in Messages table using flowId as ThreadId ───
     const timestamp = Date.now();

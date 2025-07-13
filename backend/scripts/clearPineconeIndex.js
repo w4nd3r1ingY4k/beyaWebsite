@@ -2,8 +2,8 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const PINECONE_API_KEY = process.env.PINECONE_API_KEY;
-const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME;
+const PINECONE_API_KEY = process.env.PINECONE_API_KEY || "pcsk_2YWjDN_PCBaXQWCVfBeFQevAUrDFH9Bgtq6M1GjPNYEppbatA6SNxphAuF8sjFKURPuARt";
+const PINECONE_INDEX_NAME = process.env.PINECONE_INDEX_NAME || "beya-context";
 
 if (!PINECONE_API_KEY || !PINECONE_INDEX_NAME) {
   console.error('Missing Pinecone environment variables.');

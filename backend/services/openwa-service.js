@@ -1,486 +1,260 @@
 // openwa-service.js
 // OpenWA WhatsApp Web Integration Service
 
-import { create } from '@open-wa/wa-automate';
-import AWS from 'aws-sdk';
-import fetch from 'node-fetch';
-import { v4 as uuidv4 } from 'uuid';
+const { create, Client } = require('@open-wa/wa-automate');
+const QRCode = require('qrcode-terminal');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, GetCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
+const { v4: uuidv4 } = require('uuid');
 
-const dynamodb = new AWS.DynamoDB.DocumentClient({
-  region: process.env.AWS_REGION || 'us-east-1'
-});
+// Initialize DynamoDB client
+const dynamoClient = new DynamoDBClient({ region: 'us-east-1' });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
 
-const eventBridge = new AWS.EventBridge({
-  region: process.env.AWS_REGION || 'us-east-1'
-});
+const FLOWS_TABLE = 'Flows';
+const MESSAGES_TABLE = 'Messages';
 
-/**
- * OpenWA Service - Bridges WhatsApp Web automation with Beya infrastructure
- */
-export class OpenWAService {
+class OpenWAService {
   constructor() {
     this.client = null;
-    this.sessions = new Map(); // userId -> WhatsApp session
-    this.sessionTable = process.env.OPENWA_SESSIONS_TABLE || 'beya-openwa-sessions';
-    this.messageWebhookUrl = process.env.MESSAGE_WEBHOOK_URL || 'https://22y6e3kow4ozzkerpbd6shyxoi0hbcxx.lambda-url.us-east-1.on.aws/';
-    this.isInitialized = false;
+    this.isConnected = false;
+    this.userId = null;
+    this.sessionData = null;
   }
 
-  /**
-   * Initialize OpenWA service
-   */
-  async initialize() {
-    if (this.isInitialized) return;
-    
-    console.log('🚀 Initializing OpenWA service...');
-    
-    // Load existing sessions from database
-    await this.loadExistingSessions();
-    
-    this.isInitialized = true;
-    console.log('✅ OpenWA service initialized');
-  }
-
-  /**
-   * Create a new WhatsApp Web session for a user
-   * @param {string} userId - User ID
-   * @param {Object} options - Session options
-   * @returns {Object} Session details including QR code
-   */
-  async createSession(userId, options = {}) {
-    console.log(`📱 Creating OpenWA session for user ${userId}`);
-    
+  async startSession(userId) {
     try {
-      // Check if user already has a session
-      if (this.sessions.has(userId)) {
-        console.log(`⚠️ Session already exists for user ${userId}`);
-        return {
-          success: false,
-          error: 'Session already exists. Please disconnect first.'
-        };
-      }
+      this.userId = userId;
+      console.log(`Starting OpenWA session for user: ${userId}`);
 
-      // Create OpenWA client with custom session ID
-      const sessionId = `beya-${userId}-${Date.now()}`;
-      
-      const client = await create({
-        sessionId,
-        multiDevice: true, // Support for multi-device
-        authTimeout: 120, // 2 minutes for QR code scanning
-        qrTimeout: 120,
+      // Create OpenWA client with configuration
+      this.client = await create({
+        sessionId: `beya-${userId}`,
+        multiDevice: true,
+        authTimeout: 60,
         blockCrashLogs: true,
         disableSpins: true,
-        headless: true, // Run in headless mode
-        qrLogSkip: true,
+        headless: true,
+        hostNotificationLang: 'PT_BR',
         logConsole: false,
-        deleteSessionDataOnLogout: true,
-        // Custom user agent to appear more like regular WhatsApp Web
+        popup: false,
+        qrTimeout: 0,
+        restartOnCrash: true,
+        throwErrorOnTosBlock: false,
         useChrome: true,
-        chromiumArgs: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu'
-        ],
-        // Event handlers
-        qrCallback: async (qr) => {
-          console.log(`📱 QR Code generated for user ${userId}`);
-          await this.handleQRCode(userId, qr);
+        killProcessOnBrowserClose: true,
+        onLoadingScreen: () => {
+          console.log('Loading WhatsApp Web...');
         },
-        ...options
+        qrLogSkip: false,
+        qrCallback: (qr) => {
+          console.log('QR Code for WhatsApp Web:');
+          QRCode.generate(qr, { small: true });
+          
+          // Store QR code for frontend to display
+          this.sessionData = {
+            qrCode: qr,
+            status: 'waiting_for_scan',
+            timestamp: Date.now()
+          };
+        }
       });
 
-      // Set up message listeners
-      this.setupMessageListeners(client, userId);
+      // Set up event listeners
+      this.setupEventListeners();
 
-      // Store session
-      this.sessions.set(userId, {
-        client,
-        sessionId,
-        status: 'pending_auth',
-        createdAt: new Date().toISOString()
-      });
-
-      // Save session info to database
-      await this.saveSessionToDatabase(userId, sessionId, 'pending_auth');
-
-      // Wait for QR code
-      const qr = await client.getQRCode();
-
-      return {
-        success: true,
-        sessionId,
-        qrCode: qr,
-        status: 'pending_auth',
-        message: 'Please scan the QR code with WhatsApp'
-      };
+      console.log('OpenWA client created successfully');
+      return { success: true, message: 'Session started. Please scan QR code.' };
 
     } catch (error) {
-      console.error(`❌ Error creating OpenWA session for user ${userId}:`, error);
-      return {
-        success: false,
-        error: error.message
-      };
+      console.error('Error starting OpenWA session:', error);
+      return { success: false, error: error.message };
     }
   }
 
-  /**
-   * Set up message listeners for a WhatsApp client
-   */
-  setupMessageListeners(client, userId) {
-    // Listen for incoming messages
-    client.onMessage(async (message) => {
-      console.log(`📨 New message for user ${userId}:`, message.from, message.body);
-      await this.handleIncomingMessage(userId, message);
+  setupEventListeners() {
+    if (!this.client) return;
+
+    // Handle incoming messages
+    this.client.onMessage(async (message) => {
+      try {
+        await this.handleIncomingMessage(message);
+      } catch (error) {
+        console.error('Error handling incoming message:', error);
+      }
     });
 
-    // Listen for connection state changes
-    client.onStateChanged((state) => {
-      console.log(`📱 WhatsApp state changed for user ${userId}:`, state);
-      this.updateSessionStatus(userId, state);
-    });
-
-    // Listen for incoming calls
-    client.onIncomingCall(async (call) => {
-      console.log(`📞 Incoming call for user ${userId}:`, call);
-      // Auto-reject calls or notify user
-      await client.sendText(call.peerJid, 'Sorry, calls are not supported. Please send a message instead.');
-    });
-  }
-
-  /**
-   * Handle incoming WhatsApp message
-   */
-  async handleIncomingMessage(userId, message) {
-    try {
-      const {
-        from,
-        to,
-        body,
-        timestamp,
-        id: messageId,
-        type,
-        isGroupMsg,
-        chat,
-        sender
-      } = message;
-
-      // Skip group messages for now
-      if (isGroupMsg) {
-        console.log(`⏭️ Skipping group message for user ${userId}`);
-        return;
-      }
-
-      // Normalize phone numbers
-      const fromNumber = from.replace('@c.us', '');
-      const toNumber = to.replace('@c.us', '');
-
-      // Format message for our webhook (similar to WhatsApp Business API format)
-      const webhookPayload = {
-        userId,
-        serviceType: 'whatsapp-web',
-        source: 'openwa',
-        entry: [{
-          id: uuidv4(),
-          changes: [{
-            value: {
-              messaging_product: 'whatsapp',
-              metadata: {
-                display_phone_number: toNumber,
-                phone_number_id: `openwa_${userId}`
-              },
-              messages: [{
-                from: fromNumber,
-                id: messageId,
-                timestamp: Math.floor(timestamp / 1000).toString(),
-                type: 'text',
-                text: {
-                  body: body
-                }
-              }]
-            }
-          }]
-        }]
-      };
-
-      // Send to our standard WhatsApp receive webhook
-      const response = await fetch(this.messageWebhookUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': userId,
-          'X-Source': 'openwa',
-          'X-Service-Type': 'whatsapp-web'
-        },
-        body: JSON.stringify(webhookPayload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Webhook failed: ${response.status}`);
-      }
-
-      console.log(`✅ Message forwarded to webhook for user ${userId}`);
-
-      // Emit event to EventBridge
-      await this.emitMessageEvent(userId, 'whatsapp.received', {
-        messageId,
-        from: fromNumber,
-        to: toNumber,
-        body,
-        timestamp: new Date(timestamp).toISOString(),
-        provider: 'openwa'
-      });
-
-    } catch (error) {
-      console.error(`❌ Error handling incoming message for user ${userId}:`, error);
-    }
-  }
-
-  /**
-   * Send a WhatsApp message
-   */
-  async sendMessage(userId, to, content, options = {}) {
-    try {
-      const session = this.sessions.get(userId);
-      if (!session || session.status !== 'authenticated') {
-        throw new Error('No active WhatsApp session found');
-      }
-
-      const { client } = session;
+    // Handle connection state changes
+    this.client.onStateChanged((state) => {
+      console.log('WhatsApp state changed:', state);
       
-      // Format phone number for WhatsApp
-      const chatId = to.includes('@') ? to : `${to.replace(/\D/g, '')}@c.us`;
-
-      let result;
-      if (options.type === 'template') {
-        // OpenWA doesn't support templates - send as regular message
-        result = await client.sendText(chatId, content);
-      } else if (options.media) {
-        // Send media message
-        result = await client.sendImage(
-          chatId,
-          options.media.url || options.media.base64,
-          options.media.filename || 'image.jpg',
-          content
-        );
-      } else {
-        // Send text message
-        result = await client.sendText(chatId, content);
+      if (state === 'CONNECTED') {
+        this.isConnected = true;
+        this.sessionData = {
+          status: 'connected',
+          timestamp: Date.now()
+        };
+        console.log('WhatsApp connected successfully!');
+      } else if (state === 'DISCONNECTED') {
+        this.isConnected = false;
+        this.sessionData = {
+          status: 'disconnected',
+          timestamp: Date.now()
+        };
+        console.log('WhatsApp disconnected');
       }
+    });
 
-      console.log(`✅ Message sent via OpenWA for user ${userId}`);
-
-      // Emit event to EventBridge
-      await this.emitMessageEvent(userId, 'whatsapp.sent', {
-        messageId: result.id || uuidv4(),
-        to: to.replace(/\D/g, ''),
-        body: content,
-        timestamp: new Date().toISOString(),
-        provider: 'openwa'
-      });
-
-      return {
-        success: true,
-        messageId: result.id || result,
-        provider: 'openwa'
+    // Handle authentication success
+    this.client.onAuth(() => {
+      console.log('WhatsApp authenticated successfully');
+      this.sessionData = {
+        status: 'authenticated',
+        timestamp: Date.now()
       };
+    });
+  }
+
+  async handleIncomingMessage(message) {
+    try {
+      console.log('Received WhatsApp message:', message);
+
+      const phoneNumber = message.from.replace('@c.us', '');
+      const messageBody = message.body || '';
+      const timestamp = Date.now();
+      const messageId = message.id;
+
+      // Create or get flow for this contact
+      const flowId = await this.getOrCreateFlow(phoneNumber, messageBody);
+
+      // Save message to Messages table
+      await docClient.send(new PutCommand({
+        TableName: MESSAGES_TABLE,
+        Item: {
+          ThreadId: flowId,
+          Timestamp: timestamp,
+          MessageId: messageId,
+          Channel: 'whatsapp',
+          Direction: 'incoming',
+          Body: messageBody,
+          userId: this.userId,
+          ThreadIdTimestamp: `${flowId}#${timestamp}`,
+          IsUnread: true,
+          // OpenWA specific fields
+          FromNumber: phoneNumber,
+          MessageType: message.type || 'text',
+          ...(message.quotedMsgId && { QuotedMessageId: message.quotedMsgId })
+        }
+      }));
+
+      console.log(`Message saved: ${messageId} from ${phoneNumber}`);
 
     } catch (error) {
-      console.error(`❌ Error sending message via OpenWA for user ${userId}:`, error);
+      console.error('Error handling incoming message:', error);
+    }
+  }
+
+  async getOrCreateFlow(phoneNumber, firstMessage) {
+    try {
+      // Check if flow already exists
+      const existingFlow = await docClient.send(new GetCommand({
+        TableName: FLOWS_TABLE,
+        Key: {
+          userId: this.userId,
+          ContactIdentifier: phoneNumber
+        }
+      }));
+
+      if (existingFlow.Item) {
+        // Update existing flow
+        await docClient.send(new UpdateCommand({
+          TableName: FLOWS_TABLE,
+          Key: {
+            userId: this.userId,
+            ContactIdentifier: phoneNumber
+          },
+          UpdateExpression: 'SET lastMessageAt = :timestamp, lastMessage = :message',
+          ExpressionAttributeValues: {
+            ':timestamp': Date.now(),
+            ':message': firstMessage
+          }
+        }));
+        return existingFlow.Item.FlowId;
+      } else {
+        // Create new flow
+        const flowId = uuidv4();
+        await docClient.send(new PutCommand({
+          TableName: FLOWS_TABLE,
+          Item: {
+            userId: this.userId,
+            ContactIdentifier: phoneNumber,
+            FlowId: flowId,
+            Channel: 'whatsapp',
+            lastMessageAt: Date.now(),
+            lastMessage: firstMessage,
+            createdAt: Date.now()
+          }
+        }));
+        return flowId;
+      }
+    } catch (error) {
+      console.error('Error getting/creating flow:', error);
       throw error;
     }
   }
 
-  /**
-   * Get session status
-   */
-  async getSessionStatus(userId) {
-    const session = this.sessions.get(userId);
-    if (!session) {
-      return {
-        connected: false,
-        status: 'not_found'
-      };
-    }
-
+  async sendMessage(phoneNumber, message) {
     try {
-      const { client, status } = session;
-      const connectionState = await client.getConnectionState();
+      if (!this.client || !this.isConnected) {
+        throw new Error('WhatsApp not connected');
+      }
+
+      const chatId = `${phoneNumber}@c.us`;
+      const result = await this.client.sendText(chatId, message);
       
-      return {
-        connected: connectionState === 'CONNECTED',
-        status,
-        connectionState,
-        sessionId: session.sessionId,
-        createdAt: session.createdAt
-      };
+      console.log('Message sent successfully:', result);
+      return { success: true, messageId: result };
+
     } catch (error) {
-      return {
-        connected: false,
-        status: 'error',
-        error: error.message
-      };
+      console.error('Error sending message:', error);
+      return { success: false, error: error.message };
     }
   }
 
-  /**
-   * Disconnect a session
-   */
-  async disconnectSession(userId) {
+  getSessionStatus() {
+    return {
+      isConnected: this.isConnected,
+      sessionData: this.sessionData,
+      userId: this.userId
+    };
+  }
+
+  async disconnect() {
     try {
-      const session = this.sessions.get(userId);
-      if (!session) {
-        return { success: true, message: 'No session found' };
+      if (this.client) {
+        await this.client.kill();
+        this.client = null;
       }
-
-      const { client } = session;
-      await client.logout();
-      
-      this.sessions.delete(userId);
-      await this.removeSessionFromDatabase(userId);
-
-      console.log(`✅ OpenWA session disconnected for user ${userId}`);
-
-      return {
-        success: true,
-        message: 'WhatsApp session disconnected successfully'
-      };
-
+      this.isConnected = false;
+      this.sessionData = null;
+      console.log('OpenWA session disconnected');
     } catch (error) {
-      console.error(`❌ Error disconnecting OpenWA session for user ${userId}:`, error);
-      return {
-        success: false,
-        error: error.message
-      };
-    }
-  }
-
-  /**
-   * Handle QR code generation
-   */
-  async handleQRCode(userId, qr) {
-    // Store QR code in database or send to frontend via WebSocket
-    await dynamodb.update({
-      TableName: this.sessionTable,
-      Key: { userId },
-      UpdateExpression: 'SET qrCode = :qr, qrGeneratedAt = :timestamp',
-      ExpressionAttributeValues: {
-        ':qr': qr,
-        ':timestamp': new Date().toISOString()
-      }
-    }).promise();
-
-    // TODO: Emit QR code event to frontend via WebSocket
-    console.log(`📱 QR code stored for user ${userId}`);
-  }
-
-  /**
-   * Update session status
-   */
-  async updateSessionStatus(userId, state) {
-    const session = this.sessions.get(userId);
-    if (!session) return;
-
-    let status = 'unknown';
-    switch (state) {
-      case 'CONNECTED':
-        status = 'authenticated';
-        break;
-      case 'OPENING':
-      case 'PAIRING':
-        status = 'pending_auth';
-        break;
-      case 'TIMEOUT':
-        status = 'timeout';
-        break;
-      case 'CONFLICT':
-      case 'UNLAUNCHED':
-      case 'PROXYBLOCK':
-        status = 'error';
-        break;
-    }
-
-    session.status = status;
-    await this.saveSessionToDatabase(userId, session.sessionId, status);
-  }
-
-  /**
-   * Load existing sessions from database
-   */
-  async loadExistingSessions() {
-    try {
-      const result = await dynamodb.scan({
-        TableName: this.sessionTable,
-        FilterExpression: '#status = :status',
-        ExpressionAttributeNames: {
-          '#status': 'status'
-        },
-        ExpressionAttributeValues: {
-          ':status': 'authenticated'
-        }
-      }).promise();
-
-      console.log(`📱 Found ${result.Items.length} existing OpenWA sessions to restore`);
-
-      // TODO: Implement session restoration
-      // This would require saving session data and restoring it
-
-    } catch (error) {
-      console.error('❌ Error loading existing sessions:', error);
-    }
-  }
-
-  /**
-   * Save session to database
-   */
-  async saveSessionToDatabase(userId, sessionId, status) {
-    await dynamodb.put({
-      TableName: this.sessionTable,
-      Item: {
-        userId,
-        sessionId,
-        status,
-        provider: 'openwa',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    }).promise();
-  }
-
-  /**
-   * Remove session from database
-   */
-  async removeSessionFromDatabase(userId) {
-    await dynamodb.delete({
-      TableName: this.sessionTable,
-      Key: { userId }
-    }).promise();
-  }
-
-  /**
-   * Emit message event to EventBridge
-   */
-  async emitMessageEvent(userId, eventType, data) {
-    try {
-      await eventBridge.putEvents({
-        Entries: [{
-          Source: 'beya-openwa',
-          DetailType: eventType,
-          Detail: JSON.stringify({
-            userId,
-            timestamp: new Date().toISOString(),
-            ...data
-          })
-        }]
-      }).promise();
-    } catch (error) {
-      console.error('❌ Error emitting event to EventBridge:', error);
+      console.error('Error disconnecting OpenWA:', error);
     }
   }
 }
 
-// Export singleton instance
-export const openWAService = new OpenWAService(); 
+// Singleton instance
+let openWAInstance = null;
+
+function getOpenWAInstance() {
+  if (!openWAInstance) {
+    openWAInstance = new OpenWAService();
+  }
+  return openWAInstance;
+}
+
+module.exports = {
+  OpenWAService,
+  getOpenWAInstance
+}; 

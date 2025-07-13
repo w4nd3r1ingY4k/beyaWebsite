@@ -7,7 +7,7 @@ interface Props {
   onSend: (messageData: any) => void;
   mode: 'new' | 'reply';
   replyToId?: string;
-  initialChannel?: 'email' | 'whatsapp' | 'discussion';
+  initialChannel?: 'email' | 'whatsapp' | 'whatsapp-personal' | 'discussion';
   onCreateDiscussion?: (discussionData: any) => void;
 }
 
@@ -283,6 +283,25 @@ const ComposeModal: React.FC<Props> = ({
                 </button>
                 <button
                   type="button"
+                  onClick={() => setChannel('whatsapp-personal')}
+                  style={{
+                    padding: '8px 16px',
+                    background: channel === 'whatsapp-personal' ? '#de1785' : '#f3f4f6',
+                    color: channel === 'whatsapp-personal' ? '#fff' : '#374151',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  💬 Personal WhatsApp
+                </button>
+                <button
+                  type="button"
                   onClick={() => setChannel('discussion')}
                   style={{
                     padding: '8px 16px',
@@ -475,8 +494,23 @@ const ComposeModal: React.FC<Props> = ({
               </>
             )}
 
+            {/* Personal WhatsApp Note */}
+            {channel === 'whatsapp-personal' && (
+              <div style={{
+                marginBottom: '16px',
+                padding: '12px',
+                background: '#f0f9ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '6px',
+                fontSize: '14px',
+                color: '#1e40af'
+              }}>
+                📱 <strong>Personal WhatsApp:</strong> This will send via your connected WhatsApp Web session. Templates are not available for personal accounts.
+              </div>
+            )}
+
             {/* Message Content */}
-            {(!showTemplateSelector || channel !== 'whatsapp') && (
+            {(!showTemplateSelector || (channel !== 'whatsapp' && channel !== 'whatsapp-personal')) && (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <label style={{
                   display: 'block',
@@ -539,7 +573,7 @@ const ComposeModal: React.FC<Props> = ({
               disabled={
                 isLoading || 
                 (channel === 'discussion' && (!discussionTitle.trim() || !content.trim())) ||
-                (channel !== 'discussion' && (!(content.trim() || (channel === 'whatsapp' && showTemplateSelector)))) || 
+                (channel !== 'discussion' && !content.trim() && !(channel === 'whatsapp' && showTemplateSelector)) || 
                 (mode === 'new' && channel !== 'discussion' && !to.trim())
               }
               style={{
