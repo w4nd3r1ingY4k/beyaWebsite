@@ -127,6 +127,7 @@ async function persistEmailMessage(messageData) {
       Body:      textBody || "(no content)",
       Headers:   cleanHeaders,
       Provider:  provider,  // Track which email provider received this
+      IsUnread:  true,      // Mark incoming messages as unread by default
       // ✅ ADD GSI FIELDS FOR USER ISOLATION
       userId:    ownerUserId,
       ThreadIdTimestamp: `${flowId}#${ts}`  // Use flowId for consistency
@@ -184,7 +185,7 @@ async function persistEmailMessage(messageData) {
     try {
       const getSummary = await docClient.send(new GetCommand({
         TableName: MSG_TABLE,
-        Key: { ThreadId: fromAddress, MessageId: 'THREAD_SUMMARY' }
+        Key: { ThreadId: flowId, Timestamp: 0 } // Use flowId and special timestamp for summary
       }));
       threadSummary = getSummary.Item || null;
     } catch (err) {
@@ -201,7 +202,8 @@ async function persistEmailMessage(messageData) {
     await docClient.send(new PutCommand({
       TableName: MSG_TABLE,
       Item: {
-        ThreadId: fromAddress,
+        ThreadId: flowId, // Use flowId instead of fromAddress
+        Timestamp: 0, // Use special timestamp for summary record
         MessageId: 'THREAD_SUMMARY',
         LastMessageTimestamp: ts,
         Participants: [fromAddress, toAddress],

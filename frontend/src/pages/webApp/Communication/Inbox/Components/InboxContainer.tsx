@@ -544,12 +544,37 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       if (flow?.contactIdentifier) {
         actualRecipient = flow.contactIdentifier;
         console.log(`🔄 Converted flowId ${to} to phone number ${actualRecipient}`);
+        
+        // Check if this is a personal WhatsApp flow (has Channel: 'whatsapp')
+        if (flow.Channel === 'whatsapp') {
+          console.log('📱 Detected personal WhatsApp flow, routing to local OpenWA service');
+          
+          // Route to local OpenWA service
+          const res = await fetch(`http://localhost:3001/send-message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              userId: user!.userId,
+              phoneNumber: actualRecipient,
+              message: body
+            }),
+          });
+          
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`OpenWA service error: ${errorText}`);
+          }
+          
+          return res.json();
+        }
       } else {
         console.error('❌ Could not find contact identifier for flowId:', to);
         throw new Error('Could not find phone number for this conversation');
       }
     }
     
+    // Default to business WhatsApp API for non-personal flows
+    console.log('📱 Routing to business WhatsApp API');
     const payload = { to: actualRecipient, text: body, userId: user!.userId };
     console.log('WhatsApp payload:', payload);
     console.log('User object:', user);
@@ -646,6 +671,26 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           // Regular WhatsApp message
           await sendWhatsAppMessage(recipient, messageData.content);
         }
+      } else if (messageData.channel === 'whatsapp-personal') {
+        // Personal WhatsApp - route directly to local OpenWA service
+        console.log('📱 Sending personal WhatsApp message via OpenWA service');
+        
+        const res = await fetch(`http://localhost:3001/send-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            userId: user!.userId,
+            phoneNumber: recipient,
+            message: messageData.content
+          }),
+        });
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(`OpenWA service error: ${errorText}`);
+        }
+        
+        await res.json();
       } else {
         await sendEmailMessage(
           recipient,

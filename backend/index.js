@@ -9,10 +9,10 @@ import express from "express";
 import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
-import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect.js';
-import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './semantic-search.js';
-import { MultiServicePollingManager } from './multi-user-polling.js';
-import { normalizeNumber } from './normalizePhone.js';
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect/connect.js';
+import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
+import { MultiServicePollingManager } from './services/multi-user-polling.js';
+import { normalizeNumber } from './services/normalizePhone.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -1017,7 +1017,7 @@ app.post("/whatsapp/setup-webhooks", async (req, res) => {
     console.log(`📱 Setting up WhatsApp webhooks for user ${userId}`);
     
     // Get WhatsApp credentials from Pipedream
-    const { WhatsAppConnectService } = await import('./whatsapp-connect.js');
+    const { WhatsAppConnectService } = await import('./services/whatsapp-connect.js');
     const whatsappService = new WhatsAppConnectService();
     const credentials = await whatsappService.getCredentials(userId);
     
@@ -1387,18 +1387,28 @@ app.post("/api/gmail/setup-watch", async (req, res) => {
 
 // Setup integration polling for any service (Gmail, WhatsApp, Slack, etc.)
 app.post("/api/integrations/setup-polling", async (req, res) => {
-  const { userId, serviceType, webhookUrl, pollingIntervalMs } = req.body;
+  const { userId, serviceType, pollingIntervalMs } = req.body;
+  let { webhookUrl } = req.body; // Changed to let so it can be reassigned
+  
+  // DEBUG: Log the received parameters
+  console.log('🔍 DEBUG setup-polling received:');
+  console.log('  userId:', userId, typeof userId);
+  console.log('  serviceType:', serviceType, typeof serviceType);
+  console.log('  webhookUrl:', webhookUrl, typeof webhookUrl);
+  console.log('  webhookUrl truthiness:', !!webhookUrl);
+  console.log('  condition (!webhookUrl):', !webhookUrl);
+  console.log('  full req.body:', JSON.stringify(req.body, null, 2));
   
   if (!userId || !serviceType || !webhookUrl) {
     return res.status(400).json({ error: "userId, serviceType, and webhookUrl are required" });
   }
 
   try {
-    // For Gmail, also create the Pipedream workflow via Lambda
-    if (serviceType === 'gmail') {
+    // For Gmail, only create the Pipedream workflow if no webhookUrl is provided
+    if (serviceType === 'gmail' && !webhookUrl) {
       console.log(`🔧 Creating Pipedream workflow for Gmail user ${userId}`);
       
-      const lambdaUrl = 'https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/';
+      const lambdaUrl = 'https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws/';
       
       const workflowResponse = await fetch(lambdaUrl, {
         method: 'POST',
@@ -1417,6 +1427,13 @@ app.post("/api/integrations/setup-polling", async (req, res) => {
       
       const workflowData = await workflowResponse.json();
       console.log(`✅ Pipedream workflow created: ${workflowData.workflow?.workflowId}`);
+      
+      // Use the webhook URL from the created workflow
+      webhookUrl = workflowData.workflow?.webhook_url || workflowData.workflow?.webhookUrl;
+      
+      if (!webhookUrl) {
+        throw new Error('No webhook URL returned from workflow creation');
+      }
     }
     
     // Start the polling
@@ -1471,7 +1488,7 @@ app.post("/api/integrations/stop-polling", async (req, res) => {
     if (serviceType === 'gmail') {
       console.log(`🗑️ Deleting Pipedream workflow for Gmail user ${userId}`);
       
-      const lambdaUrl = 'https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/';
+      const lambdaUrl = 'https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws/';
       
       try {
         const workflowResponse = await fetch(lambdaUrl, {
@@ -1615,7 +1632,7 @@ app.post("/api/gmail/complete-setup", async (req, res) => {
     // Step 1: Create Pipedream workflow
     console.log(`🔧 Step 1: Creating Pipedream workflow for user ${userId}`);
     
-    const workflowResponse = await fetch('https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/', {
+    const workflowResponse = await fetch('https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1969,6 +1986,134 @@ app.post("/api/v1/suggest-reply", async (req, res) => {
     return res.status(500).json({ 
       error: error.message || "Reply suggestion failed",
       details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
+
+// OpenWA Local Service Proxy Endpoints
+const OPENWA_LOCAL_URL = process.env.OPENWA_LOCAL_URL || 'http://localhost:3001';
+
+// Start OpenWA session
+app.post("/openwa/start-session", async (req, res) => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    console.log(`📱 Starting OpenWA session for user: ${userId}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/start-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to start OpenWA session');
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error starting OpenWA session:', error);
+    res.status(500).json({ 
+      error: 'Failed to start OpenWA session',
+      message: error.message 
+    });
+  }
+});
+
+// Get OpenWA session status
+app.get("/openwa/session-status/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`📱 Getting OpenWA session status for user: ${userId}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/session-status/${userId}`);
+    const result = await response.json();
+    
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error getting OpenWA session status:', error);
+    res.status(500).json({ 
+      error: 'Failed to get session status',
+      message: error.message 
+    });
+  }
+});
+
+// Send message via OpenWA
+app.post("/openwa/send-message", async (req, res) => {
+  try {
+    const { userId, phoneNumber, message } = req.body;
+    
+    if (!userId || !phoneNumber || !message) {
+      return res.status(400).json({ 
+        error: 'userId, phoneNumber, and message are required' 
+      });
+    }
+
+    console.log(`📱 Sending OpenWA message from user ${userId} to ${phoneNumber}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/send-message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, phoneNumber, message })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to send message');
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error sending OpenWA message:', error);
+    res.status(500).json({ 
+      error: 'Failed to send message',
+      message: error.message 
+    });
+  }
+});
+
+// Disconnect OpenWA session
+app.post("/openwa/disconnect/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`📱 Disconnecting OpenWA session for user: ${userId}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/disconnect/${userId}`, {
+      method: 'POST'
+    });
+
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error disconnecting OpenWA session:', error);
+    res.status(500).json({ 
+      error: 'Failed to disconnect session',
+      message: error.message 
+    });
+  }
+});
+
+// Check OpenWA local service health
+app.get("/openwa/health", async (req, res) => {
+  try {
+    const response = await fetch(`${OPENWA_LOCAL_URL}/health`);
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    console.error('❌ OpenWA local service not available:', error);
+    res.status(503).json({ 
+      error: 'OpenWA local service unavailable',
+      message: error.message 
     });
   }
 });

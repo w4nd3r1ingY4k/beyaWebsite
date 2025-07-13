@@ -227,61 +227,102 @@ const ThreadList: React.FC<Props> = ({
         flowId: f.flowId,
         contactIdentifier: f.contactIdentifier,
         contactEmail: f.contactEmail,
-        fromEmail: f.fromEmail
+        fromEmail: f.fromEmail,
+        Channel: f.Channel,
+        subject: f.subject,
+        threadingType: f.threadingType
       })));
       
       baseFlows = baseFlows.filter(f => {
         if (selectedAccountFilter.type === 'gmail') {
-          // Filter for Gmail messages - check various email fields
-          const flowEmail = f.contactIdentifier || f.contactEmail || f.fromEmail;
-          
           // DEBUG: Log the flow data for Gmail filtering
           console.log('🔍 Gmail filter check for flow:', {
             flowId: f.flowId,
+            contactId: f.contactId,
             contactIdentifier: f.contactIdentifier,
             contactEmail: f.contactEmail,
             fromEmail: f.fromEmail,
-            combinedFlowEmail: flowEmail,
+            Channel: f.Channel,
+            subject: f.subject,
+            threadingType: f.threadingType,
             selectedAccountEmail: selectedAccountFilter.accountEmail,
+            selectedAccountId: selectedAccountFilter.accountId,
             isLegacyEmailFlow: f.flowId && f.flowId.includes('@')
           });
           
+          // First check if this is an email flow at all
+          const isEmailFlow = 
+            // Check contactIdentifier for email pattern
+            (f.contactIdentifier && f.contactIdentifier.includes('@')) ||
+            // Check contactEmail field
+            (f.contactEmail && f.contactEmail.includes('@')) ||
+            // Check fromEmail field  
+            (f.fromEmail && f.fromEmail.includes('@')) ||
+            // BACKWARD COMPATIBILITY: Check if flowId itself is an email
+            (f.flowId && f.flowId.includes('@'));
+          
+          if (!isEmailFlow) {
+            console.log('❌ Not an email flow:', f.flowId);
+            return false;
+          }
+          
+          // For specific Gmail account filtering
           if (selectedAccountFilter.accountEmail && selectedAccountFilter.accountEmail !== 'SHOW_ALL_EMAILS') {
-            // Check direct match for specific email
-            if (flowEmail === selectedAccountFilter.accountEmail) {
-              console.log('✅ Direct email match:', flowEmail);
-              return true;
+            // For Gmail, the flow belongs to the account if:
+            // 1. The flow's contactId (owner) matches the user who owns the Gmail account
+            // 2. The Gmail account email matches the expected account
+            
+                         // Find the Gmail account connection for this user
+             const gmailAccount = userConnections?.gmail?.accounts?.find((account: any) => 
+               account.id === selectedAccountFilter.accountId
+             );
+            
+            if (gmailAccount) {
+              // Check if this flow belongs to the user who owns this Gmail account
+              // The Gmail account email should match the selected account email
+              if (gmailAccount.email === selectedAccountFilter.accountEmail && f.contactId === userId) {
+                console.log('✅ Gmail account match - flow belongs to user with this Gmail account:', f.flowId);
+                return true;
+              }
             }
+            
             // BACKWARD COMPATIBILITY: Check if flowId itself is the email
             if (f.flowId && f.flowId.includes('@') && f.flowId === selectedAccountFilter.accountEmail) {
               console.log('✅ Legacy flowId email match:', f.flowId);
               return true;
             }
-            console.log('❌ No email match for flow:', f.flowId);
+            
+            console.log('❌ No Gmail account match for flow:', f.flowId);
             return false;
           }
           
-          // Show ALL emails - check if it's any email (contains @)
-          const isEmailFlow = (flowEmail && flowEmail.includes('@')) || (f.flowId && f.flowId.includes('@'));
-          console.log('🔍 Show all emails check:', { flowId: f.flowId, isEmailFlow, flowEmail, isLegacyEmail: f.flowId && f.flowId.includes('@') });
-          
-          if (isEmailFlow) {
-            console.log('✅ Email flow found:', f.flowId);
-            return true;
-          }
-          
-          console.log('❌ Not an email flow:', f.flowId);
-          return false;
+          // Show ALL emails - we already checked isEmailFlow above
+          console.log('✅ Email flow found (show all):', f.flowId);
+          return true;
         } else if (selectedAccountFilter.type === 'whatsapp') {
           // Filter for WhatsApp messages - check phone fields INCLUDING contactIdentifier
-          const flowPhone = f.contactIdentifier || f.contactPhone || f.fromPhone;
-          if (flowPhone && (flowPhone.startsWith('+') || /^\d+$/.test(flowPhone))) {
+          const flowIdentifier = f.contactIdentifier || f.contactPhone || f.fromPhone;
+          
+          // Check for individual WhatsApp contacts (phone numbers)
+          if (flowIdentifier && (flowIdentifier.startsWith('+') || /^\d+$/.test(flowIdentifier))) {
             return true;
           }
+          
+          // Check for WhatsApp group chats (format: numbers@g.us)
+          if (flowIdentifier && flowIdentifier.endsWith('@g.us')) {
+            return true;
+          }
+          
+          // Check if Channel is explicitly set to 'whatsapp'
+          if (f.Channel === 'whatsapp') {
+            return true;
+          }
+          
           // BACKWARD COMPATIBILITY: Check if flowId looks like a phone number
           if (f.flowId && (f.flowId.startsWith('+') || /^\d{10,}$/.test(f.flowId))) {
             return true;
           }
+          
           return false;
         }
         return true;
@@ -500,6 +541,13 @@ const ThreadList: React.FC<Props> = ({
     
     // First priority: Use the new contactIdentifier field
     if (flow?.contactIdentifier) {
+      // Handle WhatsApp group chats specially
+      if (flow.contactIdentifier.endsWith('@g.us')) {
+        // Extract the group ID and format it nicely
+        const groupId = flow.contactIdentifier.replace('@g.us', '');
+        return `WhatsApp Group (${groupId})`;
+      }
+      
       const formatted = formatEmailAddress(flow.contactIdentifier);
       console.log('ThreadList - Using contactIdentifier:', flow.contactIdentifier, '→', formatted);
       return formatted;

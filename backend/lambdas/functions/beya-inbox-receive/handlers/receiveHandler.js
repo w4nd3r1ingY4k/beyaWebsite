@@ -100,6 +100,7 @@ export async function handler(event) {
           Channel:   'whatsapp',
           Direction: 'incoming',
           Body:      textBody,
+          IsUnread:  true,         // Mark incoming WhatsApp messages as unread
           userId:    ownerUserId,  // Required for User-Messages-Index GSI hash key
           ThreadIdTimestamp: `${flowId}#${timestamp}` // Use flowId for consistency
         },
