@@ -1,7 +1,7 @@
 import React from 'react';
 import { ReactComponent as HomeIcon } from './Assets/Icons/HomeIcon.svg';
-import { ReactComponent as CRMIcon } from './Assets/Icons/CRMIcon.svg';
-import { ReactComponent as DataIcon } from './Assets/Icons/DataIcon.svg';
+import { ReactComponent as CommunicationIcon } from './Assets/Icons/CommunicationIcon.svg';
+import { ReactComponent as AutomationIcon } from './Assets/Icons/AutomationIcon.svg';
 import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.svg';
 import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from './Assets/Icons/CommerceIcon.svg';
@@ -35,9 +35,9 @@ const PADDING = 30;
 const icons: IconItem[] = [
     { id: 'home', Component: HomeIcon, label: 'Home' },
     { 
-      id: 'crm', 
-      Component: CRMIcon, 
-      label: 'CRM',
+      id: 'communication', 
+      Component: CommunicationIcon, 
+      label: 'Communication',
       submenu: [
         { id: 'contacts', label: 'Contacts' },
         { id: 'inbox', label: 'Inbox' },
@@ -45,10 +45,20 @@ const icons: IconItem[] = [
         { id: 'tickets', label: 'Tickets' }
       ]
     },
+    { 
+      id: 'commerce', 
+      Component: CommerceIcon, 
+      label: 'Commerce',
+      submenu: [
+        { id: 'payments', label: 'Payments' },
+        { id: 'products', label: 'Products' },
+        { id: 'orders', label: 'Orders' },
+        { id: 'website', label: 'Website' }
+      ]
+    },
     { id: 'marketing', Component: MarketingIcon, label: 'Marketing' },
     { id: 'logistics', Component: LogisticsIcon, label: 'Logistics' },
-    { id: 'commerce', Component: CommerceIcon, label: 'Commerce' },
-    { id: 'data', Component: DataIcon, label: 'Data' },
+    { id: 'automation', Component: AutomationIcon, label: 'Automation' },
     { id: 'settings', Component: SettingsIcon, label: 'Settings' },
 ];
 

@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import ChatInputBar from './ChatInputBar';
+import { API_ENDPOINTS } from '../../../config/api';
 
 type MessageType = 'user' | 'assistant';
 
@@ -102,10 +103,10 @@ const Homer: React.FC = () => {
 
   // The system prompt is now managed by the backend's "Presenter" AI.
 
-  // Call backend (Express on localhost:2074)
+  // Call backend via API Gateway
   const callOpenAI = async (userMessage: string): Promise<string> => {
     try {
-              const response = await fetch("http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074/workflow", {
+      const response = await fetch(API_ENDPOINTS.WORKFLOW, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

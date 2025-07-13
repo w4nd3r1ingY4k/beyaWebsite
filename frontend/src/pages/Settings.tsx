@@ -65,21 +65,18 @@ const SettingsPage = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#FAFAFA',
-      padding: '40px 20px',
+      backgroundColor: '#FFFFFF',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{
-        maxWidth: '800px',
-        margin: '0 auto',
+        width: '100%',
+        minHeight: '100vh',
         backgroundColor: '#FFFFFF',
-        borderRadius: '12px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{
-          padding: '32px',
+          padding: '32px 40px',
           borderBottom: '1px solid #F0F0F0',
           display: 'flex',
           justifyContent: 'space-between',
@@ -155,7 +152,7 @@ const SettingsPage = () => {
         <div style={{
           display: 'flex',
           borderBottom: '1px solid #F0F0F0',
-          padding: '0 32px'
+          padding: '0 40px'
         }}>
           <button
             onClick={() => setActiveTab('contact')}
@@ -211,7 +208,7 @@ const SettingsPage = () => {
         </div>
 
         {/* Content */}
-        <div style={{ padding: '32px' }}>
+        <div style={{ padding: '32px 40px' }}>
           {/* Contact Tab */}
           {activeTab === 'contact' && (
             <div>

@@ -4,17 +4,23 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SideMenu } from './SideMenu';
 import { ReactComponent as HomeIcon } from './Assets/Icons/HomeIcon.svg';
-import { ReactComponent as CRMIcon } from './Assets/Icons/CRMIcon.svg';
-import { ReactComponent as DataIcon } from './Assets/Icons/DataIcon.svg';
-import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.svg';
-import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from './Assets/Icons/CommerceIcon.svg';
-import InboxHome from './CRM/Inbox/Home';
-import ContactsCRM from './CRM/Contacts/Home';
-import CalendarPage from './CRM/Schedule/ScheduleHome';
+import { ReactComponent as CommunicationIcon } from './Assets/Icons/CommunicationIcon.svg';
+import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
+import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.svg';
+import { ReactComponent as AutomationIcon } from './Assets/Icons/AutomationIcon.svg';
+import { ReactComponent as SettingsIcon } from './Assets/Icons/SettingsIcon.svg';
+import InboxHome from './Communication/Inbox/Home';
+import ContactsCRM from './Communication/Contacts/Home';
+import CalendarPage from './Communication/Schedule/ScheduleHome';
+import TicketsHome from './Communication/Tickets/TicketsHome';
+import PaymentsHome from './Commerce/Payments/PaymentsHome';
+import ProductsHome from './Commerce/Products/ProductsHome';
+import OrdersHome from './Commerce/Orders/OrdersHome';
+import WebsiteHome from './Commerce/Website/WebsiteHome';
 import { useAuth } from "../AuthContext";
-import IntegrationsPanel from './CRM/Inbox/Components/IntegrationsPanel';
-import CommandBChat from './CRM/Inbox/Components/CommandBChat';
+import IntegrationsPanel from './Communication/Inbox/Components/IntegrationsPanel';
+import CommandBChat from './Communication/Inbox/Components/CommandBChat';
 import LoadingScreen from './components/LoadingScreen';
 import HomeDashboard from './Home/index';
 
@@ -24,12 +30,12 @@ const PADDING = 100;
 
 const icons = [
   { id: 'home',      Component: HomeIcon,    label: 'Home' },
-  { id: 'crm',       Component: CRMIcon,     label: 'CRM' },
+  { id: 'communication', Component: CommunicationIcon, label: 'Communication' },
   { id: 'marketing', Component: MarketingIcon,label: 'Marketing' },
   { id: 'logistics', Component: LogisticsIcon,label: 'Logistics' },
   { id: 'commerce',  Component: CommerceIcon, label: 'Commerce' },
-  { id: 'data',      Component: DataIcon,     label: 'Data' },
-  { id: 'settings',  Component: DataIcon,     label: 'Settings' },
+  { id: 'automation', Component: AutomationIcon, label: 'Automation' },
+  { id: 'settings',  Component: SettingsIcon, label: 'Settings' },
 ] as const;
 
 const Homes: React.FC = () => {
@@ -148,7 +154,7 @@ const navigate = useNavigate();
       return <HomeDashboard />;
     }
 
-    if (activeIcon === 'crm') {
+    if (activeIcon === 'communication') {
       switch (activeSubmenu) {
         case 'inbox':
           return <InboxHome onOpenAIChat={handleOpenAIChat} />;
@@ -156,11 +162,33 @@ const navigate = useNavigate();
           return <ContactsCRM />;
         case 'schedule':
           return <CalendarPage />;
+        case 'tickets':
+          return <TicketsHome />;
         default:
           return (
             <div style={{ marginTop: 30 }}>
-              <h2>CRM Dashboard</h2>
-              <p>Select something from the CRM menu</p>
+              <h2>Communication Dashboard</h2>
+              <p>Select something from the Communication menu</p>
+            </div>
+          );
+      }
+    }
+
+    if (activeIcon === 'commerce') {
+      switch (activeSubmenu) {
+        case 'payments':
+          return <PaymentsHome />;
+        case 'products':
+          return <ProductsHome />;
+        case 'orders':
+          return <OrdersHome />;
+        case 'website':
+          return <WebsiteHome />;
+        default:
+          return (
+            <div style={{ marginTop: 30 }}>
+              <h2>Commerce Dashboard</h2>
+              <p>Select something from the Commerce menu</p>
             </div>
           );
       }
