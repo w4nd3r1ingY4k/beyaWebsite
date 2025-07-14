@@ -164,9 +164,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
       
       setFlows(updatedFlows);
-      // Deduplicate thread IDs using Set to prevent duplicates
-      const uniqueThreadIds: string[] = Array.from(new Set(threadsList));
-      setThreads(uniqueThreadIds);
+      // Use flow IDs from the flows response instead of the threads endpoint
+      // This ensures all flows are shown, not just those with messages in the GSI
+      const flowIds: string[] = updatedFlows.map((f: any) => f.flowId);
+      setThreads(flowIds);
       
       // Preload last messages for all flows for better preview
       if (!fromPolling && updatedFlows.length > 0) {
@@ -2118,7 +2119,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         )}
 
         {/* Right-side action buttons - only show for inbox view when a thread is selected */}
-        {(currentView === 'inbox' && selectedThreadId) && (
+        {((currentView === 'inbox' && selectedThreadId) || (currentView === 'discussions' && selectedDiscussionId)) && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {/* Department dropdown */}
             <div style={{ position: 'relative' }} ref={departmentDropdownRef}>
@@ -2137,7 +2138,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                   color: '#374151',
                 }}
               >
-                {currentFlow?.primaryTag?.charAt(0).toUpperCase() + currentFlow?.primaryTag?.slice(1) || 'Department'}
+                {currentView === 'discussions' 
+                  ? (discussions.find(d => d.discussionId === selectedDiscussionId)?.primaryTag?.charAt(0).toUpperCase() + discussions.find(d => d.discussionId === selectedDiscussionId)?.primaryTag?.slice(1) || 'Department')
+                  : (currentFlow?.primaryTag?.charAt(0).toUpperCase() + currentFlow?.primaryTag?.slice(1) || 'Department')
+                }
                 <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
                   <path d="M5 8l5 5 5-5" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -2180,7 +2184,9 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                     {primaryTagOptions
                       .filter(dept => dept.toLowerCase().includes(departmentSearch.toLowerCase()))
                       .map(dept => {
-                        const currentDept = currentFlow?.primaryTag;
+                        const currentDept = currentView === 'discussions' 
+                          ? discussions.find(d => d.discussionId === selectedDiscussionId)?.primaryTag
+                          : currentFlow?.primaryTag;
                         const isSelected = currentDept === dept;
                         
                         return (
@@ -2255,7 +2261,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                   color: '#374151',
                 }}
               >
-                {currentFlow?.status?.charAt(0).toUpperCase() + currentFlow?.status?.slice(1) || 'Select Status'}
+                {currentView === 'discussions' 
+                  ? (discussions.find(d => d.discussionId === selectedDiscussionId)?.status?.charAt(0).toUpperCase() + discussions.find(d => d.discussionId === selectedDiscussionId)?.status?.slice(1) || 'Select Status')
+                  : (currentFlow?.status?.charAt(0).toUpperCase() + currentFlow?.status?.slice(1) || 'Select Status')
+                }
                 <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
                   <path d="M5 8l5 5 5-5" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -2275,13 +2284,19 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                   }}
                 >
                   {(['open', 'waiting', 'resolved', 'overdue'] as const).map(s => {
-                    const currentStatus = currentFlow?.status;
+                    const currentStatus = currentView === 'discussions' 
+                      ? discussions.find(d => d.discussionId === selectedDiscussionId)?.status
+                      : currentFlow?.status;
                     
                     return (
                       <div
                         key={s}
                         onClick={() => {
-                          handleStatusSelect(s);
+                          if (currentView === 'discussions') {
+                            handleDiscussionStatusSelect(s);
+                          } else {
+                            handleStatusSelect(s);
+                          }
                         }}
                         style={{
                           padding: '8px 12px',

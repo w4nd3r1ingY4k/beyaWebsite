@@ -1350,9 +1350,8 @@ const ThreadList: React.FC<Props> = ({
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
-                      }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            alignItems: 'center'
+          }}>
                 {/* Search Button */}
                 <button
                   onClick={() => {
@@ -1362,14 +1361,16 @@ const ThreadList: React.FC<Props> = ({
                     }
                   }}
                   style={{
-                    padding: '8px',
+                    padding: '8px 12px',
                     background: 'transparent',
                     border: '1px solid #e5e7eb',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    color: '#6b7280',
                     transition: 'all 0.18s'
                   }}
                 >
@@ -1378,7 +1379,7 @@ const ThreadList: React.FC<Props> = ({
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#6b7280"
+                    stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1386,9 +1387,10 @@ const ThreadList: React.FC<Props> = ({
                     <circle cx="11" cy="11" r="8"></circle>
                     <path d="m21 21-4.35-4.35"></path>
                   </svg>
+                  Search
                 </button>
 
-                {/* Sort Toggle Button */}
+                {/* Sort Toggle Button - Centered */}
                 <button
                   onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
                   style={{
@@ -1410,7 +1412,6 @@ const ThreadList: React.FC<Props> = ({
                   </span>
                   {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
                 </button>
-
                 {/* Tag Filter Dropdown */}
                 <div style={{ position: 'relative' }} ref={tagDropdownRef}>
               <button
@@ -1544,13 +1545,12 @@ const ThreadList: React.FC<Props> = ({
                 </div>
               )}
             </div>
-            </div>
           </div>
 
           {/* Collapsible Search Input */}
           {showSearchInput && (
             <div style={{
-              padding: '0 16px 16px 16px',
+              padding: '10px 0 16px 0',
               borderBottom: '1px solid #e5e7eb'
             }}>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>

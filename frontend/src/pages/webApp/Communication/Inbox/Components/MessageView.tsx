@@ -213,6 +213,8 @@ const MessageView: React.FC<MessageViewProps> = ({
   const emailEditorRef = useRef<Editor | null>(null);
   const primaryTagDropdownRef = useRef<HTMLDivElement>(null);
   const secondaryTagDropdownRef = useRef<HTMLDivElement>(null);
+  const messageScrollContainerRef = useRef<HTMLDivElement>(null);
+  const messageScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Predefined tag options - separated into primary and secondary
   const primaryTagOptions = ['sales', 'logistics', 'support'];
@@ -261,6 +263,15 @@ const MessageView: React.FC<MessageViewProps> = ({
   useEffect(() => {
     setLocalFlow(flow);
   }, [flow]);
+
+  // Cleanup message scroll timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (messageScrollTimeoutRef.current) {
+        clearTimeout(messageScrollTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Effect to handle clicking outside dropdowns
   useEffect(() => {
@@ -1187,6 +1198,25 @@ const MessageView: React.FC<MessageViewProps> = ({
     }
   };
 
+  // Handle message scroll events to show/hide scrollbar
+  const handleMessageScroll = () => {
+    const container = messageScrollContainerRef.current;
+    if (!container) return;
+
+    // Show scrollbar immediately
+    container.classList.add('scrolling');
+
+    // Clear existing timeout
+    if (messageScrollTimeoutRef.current) {
+      clearTimeout(messageScrollTimeoutRef.current);
+    }
+
+    // Hide scrollbar after 500ms of no scrolling
+    messageScrollTimeoutRef.current = setTimeout(() => {
+      container.classList.remove('scrolling');
+    }, 500);
+  };
+
   // Handle resize start
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1508,13 +1538,44 @@ const MessageView: React.FC<MessageViewProps> = ({
 
   // Regular inbox view
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: selectedThreadId ? 'calc(100% - 60px)' : '100%', // Adjust height when margin is applied
-      marginTop: selectedThreadId ? '60px' : '0', // Add top margin when status bar is visible
-      background: '#FBF7F7' // Match the overall background color scheme
-    }}>
+    <>
+      {/* Custom scrollbar styles for messages */}
+      <style>{`
+        .message-custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .message-custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .message-custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(222, 23, 133, 0.3);
+          border-radius: 2px;
+          min-height: 40px;
+          opacity: 0;
+          transition: opacity 0.2s ease;
+        }
+        .message-custom-scrollbar.scrolling::-webkit-scrollbar-thumb {
+          opacity: 1;
+        }
+        .message-custom-scrollbar.scrolling::-webkit-scrollbar-thumb:hover {
+          background: #C91476;
+        }
+        .message-custom-scrollbar {
+          scrollbar-width: none;
+        }
+        .message-custom-scrollbar.scrolling {
+          scrollbar-width: thin;
+          scrollbar-color: #DE1785 transparent;
+        }
+      `}</style>
+      
+      <div style={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: selectedThreadId ? 'calc(100% - 60px)' : '100%', // Adjust height when margin is applied
+        marginTop: selectedThreadId ? '60px' : '0', // Add top margin when status bar is visible
+        background: '#FBF7F7' // Match the overall background color scheme
+      }}>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px' }}>
         {!selectedThreadId ? (
@@ -1833,12 +1894,17 @@ const MessageView: React.FC<MessageViewProps> = ({
             </div>
 
             {/* Messages container - Now scrollable */}
-            <div style={{
-              flex: 1,
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              paddingTop: '16px'
-            }}>
+            <div 
+              ref={messageScrollContainerRef}
+              onScroll={handleMessageScroll}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                paddingTop: '16px'
+              }}
+              className="message-custom-scrollbar"
+            >
               {normalizedMessages.map(chat => {
                 const isActive = chat.id === activeMessageId;
 
@@ -2514,6 +2580,7 @@ const MessageView: React.FC<MessageViewProps> = ({
 
 
     </div>
+    </>
   );
 };
 

@@ -6,7 +6,12 @@ module.exports = {
     "./public/index.html",
   ],
   theme: {
-    extend: {},
+    extend: {
+      fontFamily: {
+        'sans': ['AEONIK Trial'],
+        'aeonik': ['AEONIK Trial'],
+      },
+    },
   },
   plugins: [],
 };

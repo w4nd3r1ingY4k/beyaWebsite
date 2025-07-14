@@ -435,16 +435,29 @@ export async function handler(event) {
         MessageId: resp?.messageId || resp?.MessageId || resp?.messages?.[0]?.id || 'whatsapp-sent'
       };
     } else {
-      messageItem.Result = { MessageId: resp?.MessageId || resp };
+      // Handle both Gmail MCP response and SES response
+      messageItem.Result = { 
+        MessageId: resp?.messageId || resp?.MessageId || resp?.id || resp || 'email-sent'
+      };
       if (replyId) {
         messageItem.InReplyTo = replyId;
       }
     }
 
+    console.log('📝 About to store message in database:', {
+      TableName: MSG_TABLE,
+      MessageId: messageItem.MessageId,
+      ThreadId: messageItem.ThreadId,
+      Channel: messageItem.Channel,
+      Direction: messageItem.Direction
+    });
+    
     await docClient.send(new PutCommand({
       TableName: MSG_TABLE,
       Item:      messageItem
     }));
+    
+    console.log('✅ Message stored successfully in database');
 
     // ─── 7) Update per-user Flow in Flows table ───────────────────────────────
     // flowId was already generated above, just update metadata
