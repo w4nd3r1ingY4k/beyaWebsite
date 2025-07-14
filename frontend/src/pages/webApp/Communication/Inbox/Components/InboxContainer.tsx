@@ -51,6 +51,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   const [discussions, setDiscussions] = useState<any[]>([]);
   const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
   const [discussionMessages, setDiscussionMessages] = useState<any[]>([]);
+  const [discussionsLoading, setDiscussionsLoading] = useState(false);
 
   // Participants state
   const [participantNames, setParticipantNames] = useState<{[userId: string]: string}>({});
@@ -60,6 +61,11 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'waiting' | 'resolved' | 'overdue'>('all');
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  
+  // Department dropdown state
+  const [showDepartmentDropdown, setShowDepartmentDropdown] = useState(false);
+  const [departmentSearch, setDepartmentSearch] = useState('');
+  const departmentDropdownRef = useRef<HTMLDivElement>(null);
   
   // New filter for discussions
   const [viewFilter, setViewFilter] = useState<'all' | 'shared-with-me' | 'shared-by-me' | 'deleted'>('all');
@@ -72,6 +78,9 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
 
   // API Base URL
   const apiBase = API_ENDPOINTS.INBOX_API_BASE;
+  
+  // Department options
+  const primaryTagOptions = ['sales', 'logistics', 'support'];
 
   // Current flow
   const currentFlow = useMemo(() => {
@@ -159,28 +168,81 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       const uniqueThreadIds: string[] = Array.from(new Set(threadsList));
       setThreads(uniqueThreadIds);
       
-      // Preload last messages for the 5 most recent threads for better preview
+      // Preload last messages for all flows for better preview
       if (!fromPolling && updatedFlows.length > 0) {
-        const recentFlows = updatedFlows
-          .sort((a: any, b: any) => {
-            const dateA = new Date(a.lastUpdated || a.createdAt || a.timestamp || 0);
-            const dateB = new Date(b.lastUpdated || b.createdAt || b.timestamp || 0);
-            return dateB.getTime() - dateA.getTime();
-          })
-          .slice(0, 5); // Get top 5 most recent
+        console.log('🔄 Preloading last messages for all flows...');
         
-        // Preload messages for these recent threads
-        recentFlows.forEach(async (flow: any) => {
-          try {
-            const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(flow.flowId)}?userId=${encodeURIComponent(user!.userId)}`);
-            if (response.ok) {
-              const data = await response.json();
-              // We could store these in a cache, but for now just preload to prime the Lambda
+        // Process flows in batches to avoid overwhelming the API
+        const batchSize = 10;
+        for (let i = 0; i < updatedFlows.length; i += batchSize) {
+          const batch = updatedFlows.slice(i, i + batchSize);
+          
+          // Process batch in parallel
+          const batchPromises = batch.map(async (flow: any) => {
+            try {
+              const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(flow.flowId)}?userId=${encodeURIComponent(user!.userId)}`);
+              if (response.ok) {
+                const data = await response.json();
+                const messagesArray = data.messages || [];
+                
+                if (messagesArray.length > 0) {
+                  // Sort messages by timestamp to get the true last message
+                  const sortedMessages = [...messagesArray].sort((a, b) => {
+                    const timestampA = a.Timestamp || a.timestamp || 0;
+                    const timestampB = b.Timestamp || b.timestamp || 0;
+                    return timestampB - timestampA; // Most recent first
+                  });
+                  
+                  const lastMessage = sortedMessages[0];
+                  let messageContent = lastMessage.Body || lastMessage.Text || lastMessage.body || lastMessage.text || '';
+                  
+                  // For email messages, prefer subject if body is empty or too long
+                  if (lastMessage.Channel === 'email' || lastMessage.channel === 'email') {
+                    const subject = lastMessage.Subject || lastMessage.subject || '';
+                    if (subject && (!messageContent || messageContent.length > 100)) {
+                      messageContent = subject;
+                    } else if (messageContent.length > 100) {
+                      messageContent = messageContent.substring(0, 100) + '...';
+                    }
+                  }
+                  
+                  // Add direction indicator for clarity
+                  if (messageContent.trim()) {
+                    const direction = lastMessage.Direction || lastMessage.direction || 'unknown';
+                    const indicator = direction === 'outgoing' ? '➤ ' : '← ';
+                    const finalContent = `${indicator}${messageContent.trim()}`;
+                    
+                    return { flowId: flow.flowId, lastMessage: finalContent };
+                  }
+                }
+              }
+            } catch (err) {
+              // Silent fail for preloading
             }
-          } catch (err) {
-            // Silent fail for preloading
+            return null;
+          });
+          
+          // Wait for batch to complete
+          const batchResults = await Promise.all(batchPromises);
+          
+          // Update flows with the results
+          const validResults = batchResults.filter(result => result !== null);
+          if (validResults.length > 0) {
+            setFlows(prevFlows => 
+              prevFlows.map(flow => {
+                const result = validResults.find(r => r.flowId === flow.flowId);
+                return result ? { ...flow, lastMessage: result.lastMessage } : flow;
+              })
+            );
           }
-        });
+          
+          // Small delay between batches to be respectful to the API
+          if (i + batchSize < updatedFlows.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+        
+        console.log('✅ Finished preloading last messages');
       }
       
       // Load discussions using the existing function
@@ -205,7 +267,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     
     try {
       if (!fromPolling) {
-        setLoading(true);
+        setDiscussionsLoading(true);
         setError(null);
       }
       
@@ -265,7 +327,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
     } finally {
       if (!fromPolling) {
-        setLoading(false);
+        setDiscussionsLoading(false);
       }
     }
   };
@@ -309,7 +371,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         if (lastMessage.Channel === 'email' || lastMessage.channel === 'email') {
           const subject = lastMessage.Subject || lastMessage.subject || '';
           if (subject && (!messageContent || messageContent.length > 100)) {
-            messageContent = `📧 ${subject}`;
+            messageContent = subject;
           } else if (messageContent.length > 100) {
             messageContent = messageContent.substring(0, 100) + '...';
           }
@@ -713,7 +775,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         
         // For email, show subject if available
         if (messageData.channel === 'email' && messageData.subject) {
-          content = `📧 ${messageData.subject}`;
+          content = messageData.subject;
         }
         
         // Add outgoing indicator since this is a sent message
@@ -1604,6 +1666,56 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     }
   };
 
+  // Handle department selection
+  const handleDepartmentSelect = async (department: string) => {
+    const targetFlow = currentView === 'discussions' 
+      ? discussions.find(d => d.discussionId === selectedDiscussionId)
+      : currentFlow;
+
+    if (!targetFlow) {
+      alert('No conversation selected');
+      return;
+    }
+
+    try {
+      const flowId = targetFlow.flowId || targetFlow.discussionId;
+      const newPrimaryTag = department === '' ? undefined : department;
+      
+      // Update the flow
+      const updated = await updateFlow(flowId, { 
+        primaryTag: newPrimaryTag
+      });
+
+      // Update local state
+      if (currentView === 'discussions') {
+        setDiscussions(discussions.map(d => 
+          d.discussionId === selectedDiscussionId ? { ...d, primaryTag: newPrimaryTag } : d
+        ));
+      } else {
+        setFlows(flows.map(f => 
+          f.flowId === selectedThreadId ? { ...f, primaryTag: newPrimaryTag } : f
+        ));
+      }
+
+      setShowDepartmentDropdown(false);
+      setDepartmentSearch('');
+    } catch (error) {
+      console.error('Error updating department:', error);
+      alert('Failed to update department');
+    }
+  };
+
+  // Handle clicking outside dropdowns
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (departmentDropdownRef.current && !departmentDropdownRef.current.contains(e.target as Node)) {
+        setShowDepartmentDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (loading) {
     return (
       <LoadingScreen 
@@ -1708,6 +1820,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                 borderRadius: '4px',
                 position: 'relative',
                 outline: 'none',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
               }}
             >
               <span style={{ position: 'relative', zIndex: 1 }}>
@@ -1744,6 +1860,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                   borderRadius: '4px',
                   position: 'relative',
                   outline: 'none',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none'
                 }}
               >
                 <span style={{ position: 'relative', zIndex: 1 }}>
@@ -1767,6 +1887,9 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                 )}
               </button>
             ))}
+            
+
+
           </div>
         ) : (
           <div style={{
@@ -1778,7 +1901,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
             <button
               onClick={() => setStatusFilter('all')}
               style={{
-                background: statusFilter === 'all' ? '#f3f4f6' : 'transparent',
+                background: 'transparent',
                 border: 'none',
                 padding: '6px 12px',
                 cursor: 'pointer',
@@ -1787,6 +1910,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                 borderRadius: '4px',
                 position: 'relative',
                 outline: 'none',
+                userSelect: 'none',
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
               }}
             >
               <span style={{ position: 'relative', zIndex: 1 }}>
@@ -1846,6 +1973,9 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                 )}
               </button>
             ))}
+            
+
+
             
             {/* Participants Display & Share */}
             {(selectedThreadId || selectedDiscussionId) && (() => {
@@ -1955,39 +2085,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                         <Plus size={14} style={{ color: '#6b7280' }} />
                       </button>
                     </>
-                  ) : (
-                    // Show share button when there are no participants
-                    <button
-                      onClick={handleAddParticipant}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 12px',
-                        border: '1px solid #e5e7eb',
-                        borderRadius: '6px',
-                        backgroundColor: '#f9fafb',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        fontSize: '14px',
-                        color: '#6b7280'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f3f4f6';
-                        e.currentTarget.style.borderColor = '#d1d5db';
-                        e.currentTarget.style.color = '#374151';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = '#f9fafb';
-                        e.currentTarget.style.borderColor = '#e5e7eb';
-                        e.currentTarget.style.color = '#6b7280';
-                      }}
-                      title="Share conversation"
-                    >
-                      <Users size={16} />
-                      <span style={{ fontWeight: '500' }}>Share</span>
-                    </button>
-                  )}
+                  ) : null}
                 </div>
               );
             })()}
@@ -2020,8 +2118,126 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         )}
 
         {/* Right-side action buttons - only show for inbox view when a thread is selected */}
-        {((currentView === 'inbox' && selectedThreadId) || (currentView === 'discussions' && selectedDiscussionId)) && (
+        {(currentView === 'inbox' && selectedThreadId) && (
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {/* Department dropdown */}
+            <div style={{ position: 'relative' }} ref={departmentDropdownRef}>
+              <button
+                onClick={() => setShowDepartmentDropdown(!showDepartmentDropdown)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #d1d5db',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '14px',
+                  color: '#374151',
+                }}
+              >
+                {currentFlow?.primaryTag?.charAt(0).toUpperCase() + currentFlow?.primaryTag?.slice(1) || 'Department'}
+                <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 8l5 5 5-5" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              
+              {showDepartmentDropdown && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: '0px',
+                    marginTop: '4px',
+                    background: '#fff',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    padding: '8px',
+                    minWidth: '160px',
+                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                    zIndex: 1000,
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={departmentSearch}
+                    onChange={e => setDepartmentSearch(e.target.value)}
+                    placeholder="Search departments..."
+                    style={{
+                      width: '100%',
+                      padding: '6px 8px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      marginBottom: '8px',
+                    }}
+                  />
+                  <div style={{ marginBottom: '4px', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
+                    Department (choose one):
+                  </div>
+                  <div style={{ height: '100%', overflowY: 'auto' }}>
+                    {primaryTagOptions
+                      .filter(dept => dept.toLowerCase().includes(departmentSearch.toLowerCase()))
+                      .map(dept => {
+                        const currentDept = currentFlow?.primaryTag;
+                        const isSelected = currentDept === dept;
+                        
+                        return (
+                          <div
+                            key={dept}
+                            onClick={() => handleDepartmentSelect(dept)}
+                            style={{
+                              padding: '6px 8px',
+                              cursor: 'pointer',
+                              borderRadius: '4px',
+                              fontSize: '14px',
+                              color: isSelected ? '#DE1785' : '#374151',
+                              background: isSelected ? '#FDE7F1' : 'transparent',
+                              transition: 'all 0.2s',
+                              fontWeight: isSelected ? '500' : '400'
+                            }}
+                            onMouseEnter={e => {
+                              if (isSelected) {
+                                e.currentTarget.style.background = '#FBB6CE';
+                                e.currentTarget.style.color = '#BE185D';
+                              } else {
+                                e.currentTarget.style.background = '#f3f4f6';
+                              }
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.background = isSelected ? '#FDE7F1' : 'transparent';
+                              e.currentTarget.style.color = isSelected ? '#DE1785' : '#374151';
+                            }}
+                          >
+                            {dept.charAt(0).toUpperCase() + dept.slice(1)}
+                          </div>
+                        );
+                      })}
+                    {/* Clear department option */}
+                    <div
+                      onClick={() => handleDepartmentSelect('')}
+                      style={{
+                        padding: '6px 8px',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        fontSize: '14px',
+                        color: '#374151',
+                        background: 'transparent',
+                        transition: 'background 0.2s',
+                        marginTop: '4px',
+                        borderTop: '1px solid #eee'
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      Clear department
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Status dropdown */}
             <div style={{ position: 'relative' }}>
               <button
@@ -2039,10 +2255,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                   color: '#374151',
                 }}
               >
-                {currentView === 'discussions' 
-                  ? (discussions.find(d => d.discussionId === selectedDiscussionId)?.status?.charAt(0).toUpperCase() + discussions.find(d => d.discussionId === selectedDiscussionId)?.status?.slice(1) || 'Select Status')
-                  : (currentFlow?.status?.charAt(0).toUpperCase() + currentFlow?.status?.slice(1) || 'Select Status')
-                }
+                {currentFlow?.status?.charAt(0).toUpperCase() + currentFlow?.status?.slice(1) || 'Select Status'}
                 <svg width="12" height="12" viewBox="0 0 20 20" fill="none">
                   <path d="M5 8l5 5 5-5" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
@@ -2062,19 +2275,13 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                   }}
                 >
                   {(['open', 'waiting', 'resolved', 'overdue'] as const).map(s => {
-                    const currentStatus = currentView === 'discussions' 
-                      ? discussions.find(d => d.discussionId === selectedDiscussionId)?.status
-                      : currentFlow?.status;
+                    const currentStatus = currentFlow?.status;
                     
                     return (
                       <div
                         key={s}
                         onClick={() => {
-                          if (currentView === 'discussions') {
-                            handleDiscussionStatusSelect(s);
-                          } else {
-                            handleStatusSelect(s);
-                          }
+                          handleStatusSelect(s);
                         }}
                         style={{
                           padding: '8px 12px',
@@ -2114,6 +2321,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
               )}
             </div>
 
+            
             {/* Set Reminder button */}
             <button 
               onClick={() => setShowReminderModal(true)}

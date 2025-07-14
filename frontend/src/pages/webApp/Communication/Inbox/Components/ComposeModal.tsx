@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Mail, MessageCircle, Users, Send, X } from 'lucide-react';
 import WhatsAppTemplateSelector from './WhatsAppTemplateSelector';
 
 interface Props {
@@ -188,7 +189,7 @@ const ComposeModal: React.FC<Props> = ({
           borderRadius: '12px',
           width: '100%',
           maxWidth: '600px',
-          maxHeight: '80vh',
+          height: '750px',
           display: 'flex',
           flexDirection: 'column',
           boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
@@ -197,17 +198,19 @@ const ComposeModal: React.FC<Props> = ({
       >
         {/* Header */}
         <div style={{
-          padding: '20px 24px',
-          borderBottom: '1px solid #e5e7eb',
+          padding: '24px 24px 20px 24px',
+          borderBottom: '1px solid #f1f5f9',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center'
+          alignItems: 'center',
+          backgroundColor: '#FFFBFA'
         }}>
           <h2 style={{
             margin: 0,
-            fontSize: '18px',
+            fontSize: '20px',
             fontWeight: '600',
-            color: '#111827'
+            color: '#1e293b',
+            letterSpacing: '-0.025em'
           }}>
             {mode === 'new' ? 'Compose Message' : 'Reply'}
           </h2>
@@ -217,107 +220,162 @@ const ComposeModal: React.FC<Props> = ({
             style={{
               background: 'transparent',
               border: 'none',
-              fontSize: '24px',
               cursor: 'pointer',
-              color: '#6b7280',
-              padding: '4px'
+              color: '#64748b',
+              padding: '6px',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#f1f5f9';
+              e.currentTarget.style.color = '#334155';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.color = '#64748b';
             }}
           >
-            ×
+            <X size={18} />
           </button>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ 
+            padding: '24px 24px 20px 24px', 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '20px'
+          }}>
             
             {/* Channel Selection */}
             <div>
               <label style={{
                 display: 'block',
                 fontSize: '14px',
-                fontWeight: '500',
+                fontWeight: '600',
                 color: '#374151',
-                marginBottom: '6px'
+                marginBottom: '12px',
+                letterSpacing: '-0.025em'
               }}>
                 Channel
               </label>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'nowrap' }}>
                 <button
                   type="button"
                   onClick={() => setChannel('email')}
                   style={{
-                    padding: '8px 16px',
-                    background: channel === 'email' ? '#de1785' : '#f3f4f6',
-                    color: channel === 'email' ? '#fff' : '#374151',
-                    border: 'none',
-                    borderRadius: '6px',
+                    flex: 1,
+                    padding: '10px 12px',
+                    background: channel === 'email' ? '#fce7f3' : '#ffffff',
+                    color: channel === 'email' ? '#de1785' : '#475569',
+                    border: channel === 'email' ? '1px solid #de1785' : '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     fontSize: '14px',
                     fontWeight: '500',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: channel === 'email' ? '0 1px 2px rgba(222, 23, 133, 0.1)' : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                    minWidth: 0
                   }}
                 >
-                  ✉️ Email
+                  <img 
+                    src="/assets/icons/gmail-logo.png" 
+                    alt="Gmail" 
+                    style={{ width: '16px', height: '16px', objectFit: 'contain' }}
+                  />
+                  Email
                 </button>
                 <button
                   type="button"
                   onClick={() => setChannel('whatsapp')}
                   style={{
-                    padding: '8px 16px',
-                    background: channel === 'whatsapp' ? '#de1785' : '#f3f4f6',
-                    color: channel === 'whatsapp' ? '#fff' : '#374151',
-                    border: 'none',
-                    borderRadius: '6px',
+                    flex: 1,
+                    padding: '10px 12px',
+                    background: channel === 'whatsapp' ? '#fce7f3' : '#ffffff',
+                    color: channel === 'whatsapp' ? '#de1785' : '#475569',
+                    border: channel === 'whatsapp' ? '1px solid #de1785' : '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     fontSize: '14px',
                     fontWeight: '500',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: channel === 'whatsapp' ? '0 1px 2px rgba(222, 23, 133, 0.1)' : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                    minWidth: 0
                   }}
                 >
-                  💬 WhatsApp
+                  <img 
+                    src="/assets/icons/whatsapp-logo.png" 
+                    alt="WhatsApp" 
+                    style={{ width: '16px', height: '16px', objectFit: 'contain' }}
+                  />
+                  WhatsApp
                 </button>
                 <button
                   type="button"
                   onClick={() => setChannel('whatsapp-personal')}
                   style={{
-                    padding: '8px 16px',
-                    background: channel === 'whatsapp-personal' ? '#de1785' : '#f3f4f6',
-                    color: channel === 'whatsapp-personal' ? '#fff' : '#374151',
-                    border: 'none',
-                    borderRadius: '6px',
+                    flex: 1,
+                    padding: '10px 8px',
+                    background: channel === 'whatsapp-personal' ? '#fce7f3' : '#ffffff',
+                    color: channel === 'whatsapp-personal' ? '#de1785' : '#475569',
+                    border: channel === 'whatsapp-personal' ? '1px solid #de1785' : '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     cursor: 'pointer',
-                    fontSize: '14px',
+                    fontSize: '13px',
                     fontWeight: '500',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    justifyContent: 'center',
+                    gap: '4px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: channel === 'whatsapp-personal' ? '0 1px 2px rgba(222, 23, 133, 0.1)' : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                    minWidth: 0
                   }}
                 >
-                  💬 Personal WhatsApp
+                  <img 
+                    src="/assets/icons/whatsapp-logo.png" 
+                    alt="Personal WhatsApp" 
+                    style={{ width: '14px', height: '14px', objectFit: 'contain' }}
+                  />
+                  Personal WhatsApp
                 </button>
                 <button
                   type="button"
                   onClick={() => setChannel('discussion')}
                   style={{
-                    padding: '8px 16px',
-                    background: channel === 'discussion' ? '#de1785' : '#f3f4f6',
-                    color: channel === 'discussion' ? '#fff' : '#374151',
-                    border: 'none',
-                    borderRadius: '6px',
+                    flex: 1,
+                    padding: '10px 12px',
+                    background: channel === 'discussion' ? '#fce7f3' : '#ffffff',
+                    color: channel === 'discussion' ? '#de1785' : '#475569',
+                    border: channel === 'discussion' ? '1px solid #de1785' : '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     cursor: 'pointer',
                     fontSize: '14px',
                     fontWeight: '500',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px'
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: channel === 'discussion' ? '0 1px 2px rgba(222, 23, 133, 0.1)' : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                    minWidth: 0
                   }}
                 >
-                  🗣️ Discussion
+                  <Users size={16} />
+                  Discussion
                 </button>
               </div>
             </div>
@@ -328,9 +386,10 @@ const ComposeModal: React.FC<Props> = ({
                 <label style={{
                   display: 'block',
                   fontSize: '14px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   color: '#374151',
-                  marginBottom: '6px'
+                  marginBottom: '8px',
+                  letterSpacing: '-0.025em'
                 }}>
                   Discussion Title
                 </label>
@@ -342,11 +401,22 @@ const ComposeModal: React.FC<Props> = ({
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
+                    padding: '12px 16px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     fontSize: '14px',
-                    outline: 'none'
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    transition: 'border-color 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#de1785';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(222, 23, 133, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
                   }}
                 />
               </div>
@@ -358,9 +428,10 @@ const ComposeModal: React.FC<Props> = ({
                 <label style={{
                   display: 'block',
                   fontSize: '14px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   color: '#374151',
-                  marginBottom: '6px'
+                  marginBottom: '8px',
+                  letterSpacing: '-0.025em'
                 }}>
                   Participants (optional)
                 </label>
@@ -371,17 +442,28 @@ const ComposeModal: React.FC<Props> = ({
                   placeholder="Enter participant emails, separated by commas"
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
+                    padding: '12px 16px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     fontSize: '14px',
-                    outline: 'none'
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    transition: 'border-color 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#de1785';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(222, 23, 133, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
                   }}
                 />
                 <div style={{
-                  marginTop: '4px',
+                  marginTop: '6px',
                   fontSize: '12px',
-                  color: '#6b7280'
+                  color: '#64748b'
                 }}>
                   Example: user1@example.com, user2@example.com
                 </div>
@@ -394,9 +476,10 @@ const ComposeModal: React.FC<Props> = ({
                 <label style={{
                   display: 'block',
                   fontSize: '14px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   color: '#374151',
-                  marginBottom: '6px'
+                  marginBottom: '8px',
+                  letterSpacing: '-0.025em'
                 }}>
                   To {channel === 'email' ? '(Email)' : '(Phone Number)'}
                 </label>
@@ -408,11 +491,22 @@ const ComposeModal: React.FC<Props> = ({
                   required
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
+                    padding: '12px 16px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     fontSize: '14px',
-                    outline: 'none'
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    transition: 'border-color 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#de1785';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(222, 23, 133, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
                   }}
                 />
               </div>
@@ -424,9 +518,10 @@ const ComposeModal: React.FC<Props> = ({
                 <label style={{
                   display: 'block',
                   fontSize: '14px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   color: '#374151',
-                  marginBottom: '6px'
+                  marginBottom: '8px',
+                  letterSpacing: '-0.025em'
                 }}>
                   Subject
                 </label>
@@ -437,11 +532,22 @@ const ComposeModal: React.FC<Props> = ({
                   placeholder="Enter email subject"
                   style={{
                     width: '100%',
-                    padding: '10px 12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
+                    padding: '12px 16px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     fontSize: '14px',
-                    outline: 'none'
+                    outline: 'none',
+                    backgroundColor: '#ffffff',
+                    transition: 'border-color 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#de1785';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(222, 23, 133, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
                   }}
                 />
               </div>
@@ -455,39 +561,42 @@ const ComposeModal: React.FC<Props> = ({
                   isVisible={showTemplateSelector}
                 />
                 
-                <div style={{ marginBottom: '16px' }}>
+                <div style={{ marginBottom: '20px' }}>
                   <button
                     type="button"
                     onClick={() => setShowTemplateSelector(!showTemplateSelector)}
                     style={{
-                      background: showTemplateSelector ? '#f0f0f0' : '#fff',
-                      color: showTemplateSelector ? '#DE1785' : '#666',
-                      border: '1px solid #e0e0e0',
-                      padding: '8px 16px',
-                      borderRadius: '6px',
+                      background: showTemplateSelector ? '#f8fafc' : '#ffffff',
+                      color: showTemplateSelector ? '#de1785' : '#475569',
+                      border: '1px solid #e2e8f0',
+                      padding: '10px 16px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
                       fontSize: '14px',
                       fontWeight: '500',
-                      transition: 'all 0.2s',
+                      transition: 'all 0.2s ease',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px'
+                      gap: '8px',
+                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
                     }}
                   >
-                    📱 {showTemplateSelector ? 'Hide Templates' : 'Use Template'}
+                    <MessageCircle size={16} />
+                    {showTemplateSelector ? 'Hide Templates' : 'Use Template'}
                   </button>
                   
                   {showTemplateSelector && (
                     <div style={{
-                      marginTop: '8px',
-                      padding: '8px 12px',
-                      background: '#f8f9fa',
-                      border: '1px solid #e9ecef',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      color: '#6c757d'
+                      marginTop: '12px',
+                      padding: '12px 16px',
+                      background: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      color: '#64748b',
+                      lineHeight: '1.5'
                     }}>
-                      💡 Select a template below to send a formatted WhatsApp message, or close templates to type a custom message.
+                      Select a template below to send a formatted WhatsApp message, or close templates to type a custom message.
                     </div>
                   )}
                 </div>
@@ -497,27 +606,29 @@ const ComposeModal: React.FC<Props> = ({
             {/* Personal WhatsApp Note */}
             {channel === 'whatsapp-personal' && (
               <div style={{
-                marginBottom: '16px',
-                padding: '12px',
+                marginBottom: '20px',
+                padding: '16px',
                 background: '#f0f9ff',
                 border: '1px solid #bfdbfe',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 fontSize: '14px',
-                color: '#1e40af'
+                color: '#1e40af',
+                lineHeight: '1.5'
               }}>
-                📱 <strong>Personal WhatsApp:</strong> This will send via your connected WhatsApp Web session. Templates are not available for personal accounts.
+                <strong>Personal WhatsApp:</strong> This will send via your connected WhatsApp Web session. Templates are not available for personal accounts.
               </div>
             )}
 
             {/* Message Content */}
             {(!showTemplateSelector || (channel !== 'whatsapp' && channel !== 'whatsapp-personal')) && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: '120px' }}>
                 <label style={{
                   display: 'block',
                   fontSize: '14px',
-                  fontWeight: '500',
+                  fontWeight: '600',
                   color: '#374151',
-                  marginBottom: '6px'
+                  marginBottom: '8px',
+                  letterSpacing: '-0.025em'
                 }}>
                   {channel === 'discussion' ? 'Initial Message' : 'Message'}
                 </label>
@@ -529,13 +640,26 @@ const ComposeModal: React.FC<Props> = ({
                   style={{
                     flex: 1,
                     minHeight: '120px',
-                    padding: '12px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px',
+                    maxHeight: '200px',
+                    padding: '16px',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '8px',
                     fontSize: '14px',
                     outline: 'none',
                     resize: 'vertical',
-                    fontFamily: 'inherit'
+                    fontFamily: 'inherit',
+                    backgroundColor: '#ffffff',
+                    transition: 'border-color 0.2s ease',
+                    boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                    lineHeight: '1.5'
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = '#de1785';
+                    e.target.style.boxShadow = '0 0 0 3px rgba(222, 23, 133, 0.1)';
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = '#e2e8f0';
+                    e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
                   }}
                 />
               </div>
@@ -545,24 +669,39 @@ const ComposeModal: React.FC<Props> = ({
           {/* Footer */}
           <div style={{
             padding: '20px 24px',
-            borderTop: '1px solid #e5e7eb',
+            borderTop: '1px solid #f1f5f9',
             display: 'flex',
             justifyContent: 'flex-end',
-            gap: '12px'
+            gap: '12px',
+            backgroundColor: '#FFFBFA',
+            flexShrink: 0
           }}>
             <button
               type="button"
               onClick={onClose}
               disabled={isLoading}
               style={{
-                padding: '8px 16px',
+                padding: '10px 20px',
                 background: 'transparent',
-                color: '#6b7280',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                cursor: 'pointer',
+                color: '#64748b',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
-                fontWeight: '500'
+                fontWeight: '500',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading) {
+                  e.currentTarget.style.backgroundColor = '#f8fafc';
+                  e.currentTarget.style.borderColor = '#cbd5e1';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isLoading) {
+                  e.currentTarget.style.backgroundColor = 'transparent';
+                  e.currentTarget.style.borderColor = '#e2e8f0';
+                }
               }}
             >
               Cancel
@@ -577,17 +716,29 @@ const ComposeModal: React.FC<Props> = ({
                 (mode === 'new' && channel !== 'discussion' && !to.trim())
               }
               style={{
-                padding: '8px 16px',
+                padding: '10px 20px',
                 background: isLoading ? '#9ca3af' : '#de1785',
                 color: '#fff',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
                 cursor: isLoading ? 'not-allowed' : 'pointer',
                 fontSize: '14px',
                 fontWeight: '500',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '6px'
+                gap: '8px',
+                transition: 'all 0.2s ease',
+                boxShadow: isLoading ? 'none' : '0 1px 2px rgba(222, 23, 133, 0.1)'
+              }}
+              onMouseEnter={(e) => {
+                if (!isLoading) {
+                  e.currentTarget.style.backgroundColor = '#c1166a';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isLoading) {
+                  e.currentTarget.style.backgroundColor = '#de1785';
+                }
               }}
             >
               {isLoading ? (
@@ -604,7 +755,17 @@ const ComposeModal: React.FC<Props> = ({
                 </>
               ) : (
                 <>
-                  {channel === 'discussion' ? '🗣️ Create Discussion' : '📤 Send'}
+                  {channel === 'discussion' ? (
+                    <>
+                      <Users size={16} />
+                      Create Discussion
+                    </>
+                  ) : (
+                    <>
+                      <Send size={16} />
+                      Send
+                    </>
+                  )}
                 </>
               )}
             </button>

@@ -114,7 +114,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
         activeIndex * (ICON_SIZE + GAP + activeIndex * getIndexMultiplier(activeIndex)) +
         ICON_SIZE / 2;
     
-    const spineX = 30 + ICON_SIZE + OFFSET_X;
+    const spineX = 38 + ICON_SIZE + OFFSET_X;
     
     const bulgeYSpan = ICON_SIZE * 2; // adjust 1.1-1.4 for tightness
     const bulgeStartY = centerY - bulgeYSpan / 1.6;
@@ -163,7 +163,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
     ].join(' ');
 
   return (
-    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative', marginRight: 48 }}>
+    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative' }}>
     <div style={{ zIndex: 1, position: 'absolute', top: 0, left: spineX }}>
         <svg
             width={svgWidth}

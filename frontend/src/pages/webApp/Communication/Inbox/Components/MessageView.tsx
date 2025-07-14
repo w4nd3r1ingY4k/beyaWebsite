@@ -12,6 +12,76 @@ import './MessageView.css';
 import { API_ENDPOINTS } from '../../../../../config/api';
 import DOMPurify from 'dompurify';
 
+/**
+ * Detect if a string is Base64 encoded
+ */
+const isBase64 = (str: string): boolean => {
+  // Basic checks
+  if (typeof str !== 'string' || str.length === 0) return false;
+  if (str.length % 4 !== 0) return false;
+  
+  // Character set check
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+  if (!base64Regex.test(str)) return false;
+  
+  // Try to decode
+  try {
+    const decoded = atob(str);
+    const reencoded = btoa(decoded);
+    return reencoded === str;
+  } catch (err) {
+    return false;
+  }
+};
+
+/**
+ * Process message body to detect and handle Base64 content
+ */
+const processMessageBody = (messageBody: string): { body: string; isBase64: boolean; contentType: string | null; originalBase64?: string; decodedSize?: number } => {
+  if (!messageBody || typeof messageBody !== 'string') {
+    return { body: messageBody, isBase64: false, contentType: null };
+  }
+
+  // Check if the message body is Base64 encoded
+  if (isBase64(messageBody)) {
+    try {
+      const decoded = atob(messageBody);
+      const uint8Array = new Uint8Array(decoded.length);
+      for (let i = 0; i < decoded.length; i++) {
+        uint8Array[i] = decoded.charCodeAt(i);
+      }
+      
+      // Detect content type based on file signature
+      let contentType = 'unknown';
+      if (uint8Array.length > 4) {
+        const header = uint8Array.slice(0, 4);
+        if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) {
+          contentType = 'image/jpeg';
+        } else if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+          contentType = 'image/png';
+        } else if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) {
+          contentType = 'image/gif';
+        } else if (new TextDecoder().decode(header.slice(0, 4)) === 'RIFF') {
+          contentType = 'video/webm'; // or audio/wav, would need more detection
+        }
+      }
+
+      return {
+        body: `[${contentType.toUpperCase()} ATTACHMENT - ${Math.round(uint8Array.length / 1024)}KB]`,
+        isBase64: true,
+        contentType: contentType,
+        originalBase64: messageBody,
+        decodedSize: uint8Array.length
+      };
+    } catch (err) {
+      console.error('Error processing Base64 content:', err);
+      return { body: messageBody, isBase64: false, contentType: null };
+    }
+  }
+
+  return { body: messageBody, isBase64: false, contentType: null };
+};
+
 interface APIMessage {
   MessageId?: string;
   Body?: string;
@@ -153,6 +223,12 @@ const MessageView: React.FC<MessageViewProps> = ({
   // Discussion message state
   const [discussionMessageInput, setDiscussionMessageInput] = useState('');
   const [subscriberEmail, setSubscriberEmail] = useState('');
+  
+  // Team discussion panel resize state
+  const [discussionPanelHeight, setDiscussionPanelHeight] = useState(250); // Default height
+  const [isResizing, setIsResizing] = useState(false);
+  const [startY, setStartY] = useState(0);
+  const [startHeight, setStartHeight] = useState(0);
 
   useEffect(() => {
     if (selectedThreadId) {
@@ -199,6 +275,31 @@ const MessageView: React.FC<MessageViewProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Effect to handle resize mouse events
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const deltaY = startY - e.clientY; // Inverted because we want dragging up to increase height
+      const newHeight = Math.max(250, Math.min(600, startHeight + deltaY)); // Min 250px (default), max 600px
+      setDiscussionPanelHeight(newHeight);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, startY, startHeight]);
 
   const loadTeamMessages = async (threadId: string) => {
     try {
@@ -273,6 +374,62 @@ const MessageView: React.FC<MessageViewProps> = ({
       }
       return part;
     });
+  }
+
+  // Function to render Base64 content with preview
+  function renderBase64Content(message: any) {
+    if (!message.isBase64 || !message.originalBase64) {
+      return linkifyWithImages(message.body);
+    }
+
+    const isImage = message.contentType && message.contentType.startsWith('image/');
+    
+    if (isImage) {
+      const dataUrl = `data:${message.contentType};base64,${message.originalBase64}`;
+      return (
+        <div style={{ margin: '8px 0' }}>
+          <img
+            src={dataUrl}
+            alt="Base64 Image"
+            style={{
+              maxWidth: '100%',
+              maxHeight: '300px',
+              borderRadius: '8px',
+              objectFit: 'cover',
+              border: '1px solid #e5e7eb'
+            }}
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const errorDiv = document.createElement('div');
+              errorDiv.style.color = '#dc2626';
+              errorDiv.style.fontSize = '14px';
+              errorDiv.style.fontStyle = 'italic';
+              errorDiv.textContent = 'Failed to load Base64 image';
+              target.parentNode?.appendChild(errorDiv);
+            }}
+          />
+        </div>
+      );
+    } else {
+      // For non-image Base64 content, show the attachment info
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '12px',
+          background: '#fef3c7',
+          borderRadius: '6px',
+          border: '1px solid #fbbf24'
+        }}>
+          <span style={{ fontSize: '16px' }}>📄</span>
+          <span style={{ fontSize: '14px', color: '#92400e', fontWeight: '500' }}>
+            {message.body}
+          </span>
+        </div>
+      );
+    }
   }
 
   // COMMENTED OUT - Original send reply functionality
@@ -865,9 +1022,13 @@ const MessageView: React.FC<MessageViewProps> = ({
       msg.Body.includes('<style')
     );
 
+    // Process message body for Base64 detection
+    const rawBody = msg.Body || msg.Text || '';
+    const processedMessage = processMessageBody(rawBody);
+
     return {
       id: msg.MessageId || `${msg.Timestamp || Date.now()}`,
-      body: isHtmlContent ? (msg.Snippet || 'HTML Email') : (msg.Body || msg.Text || ''),
+      body: isHtmlContent ? (msg.Snippet || 'HTML Email') : processedMessage.body,
       htmlBody: isHtmlContent ? msg.Body : (msg.HtmlBody || ''),
       direction: msg.Direction || 'incoming',
       timestamp: formatTimestamp(msg.Timestamp),
@@ -875,7 +1036,7 @@ const MessageView: React.FC<MessageViewProps> = ({
       threadId: msg.ThreadId || '',
       senderName: msg.Direction === 'incoming' ? getContactName() : 'You',
       subject: msg.Subject || '',
-      text: isHtmlContent ? (msg.Snippet || 'HTML Email') : (msg.Body || msg.Text || ''),
+      text: isHtmlContent ? (msg.Snippet || 'HTML Email') : processedMessage.body,
       sender: msg.FromAddress,
       recipient: msg.ToAddress,
       flowId: msg.FlowId,
@@ -892,6 +1053,11 @@ const MessageView: React.FC<MessageViewProps> = ({
       status: msg.Status || 'active',
       createdAt: msg.CreatedAt,
       updatedAt: msg.UpdatedAt,
+      // Add Base64 metadata
+      isBase64: processedMessage.isBase64,
+      contentType: processedMessage.contentType,
+      originalBase64: processedMessage.originalBase64,
+      decodedSize: processedMessage.decodedSize
     };
   };
 
@@ -1019,6 +1185,14 @@ const MessageView: React.FC<MessageViewProps> = ({
       e.preventDefault();
       handleDiscussionSend();
     }
+  };
+
+  // Handle resize start
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    setStartY(e.clientY);
+    setStartHeight(discussionPanelHeight);
   };
 
   // Polling is handled by the parent InboxContainer component
@@ -1368,139 +1542,30 @@ const MessageView: React.FC<MessageViewProps> = ({
               display: 'flex',
               justifyContent: 'flex-end',
               alignItems: 'center',
-              padding: '0px 0',
-              gap: '32px',
+              padding: '0 16px',
+              gap: '8px',
               position: 'sticky',
               top: 0,
               backgroundColor: '#FBF7F7',
               zIndex: 10,
               marginBottom: '10px'
             }}>
-              {/* Primary Tag dropdown */}
-              <div style={{ position: 'relative' }} ref={primaryTagDropdownRef}>
-                <button
-                  onClick={() => setShowPrimaryTagDropdown(!showPrimaryTagDropdown)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid #d1d5db',
-                    padding: '6px 12px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    color: '#374151',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                  }}
-                >
-                  Primary
-                  {/* Display primary tag */}
-                  {localFlow?.primaryTag && (
-                    <span
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePrimaryTagSelect('');
-                      }}
-                      style={{
-                        background: '#2563eb',
-                        color: '#fff',
-                        padding: '2px 6px',
-                        borderRadius: '3px',
-                        fontSize: '12px',
-                        marginLeft: '4px',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '3px',
-                        transition: 'background 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#1d4ed8';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = '#2563eb';
-                      }}
-                    >
-                      {localFlow.primaryTag.charAt(0).toUpperCase() + localFlow.primaryTag.slice(1)}
-                      <span style={{ fontSize: '10px', fontWeight: 'bold' }}>×</span>
-                    </span>
-                  )}
-                </button>
-                {showPrimaryTagDropdown && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      right: 0,
-                      marginTop: '4px',
-                      background: '#fff',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      padding: '8px',
-                      minWidth: '160px',
-                      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                      zIndex: 1000,
-                    }}
-                  >
-                    <div style={{ marginBottom: '4px', fontSize: '12px', color: '#6b7280', fontWeight: '500' }}>
-                      Department (choose one):
-                    </div>
-                    {primaryTagOptions.map(tag => {
-                      const isSelected = localFlow?.primaryTag === tag;
-                      return (
-                        <div
-                          key={tag}
-                          onClick={() => handlePrimaryTagSelect(tag)}
-                          style={{
-                            padding: '6px 8px',
-                            cursor: 'pointer',
-                            borderRadius: '4px',
-                            fontSize: '14px',
-                            color: isSelected ? '#2563eb' : '#374151',
-                            background: isSelected ? '#dbeafe' : 'transparent',
-                            transition: 'all 0.2s',
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            fontWeight: isSelected ? '500' : '400'
-                          }}
-                          onMouseEnter={e => {
-                            if (isSelected) {
-                              e.currentTarget.style.background = '#bfdbfe';
-                            } else {
-                              e.currentTarget.style.background = '#f3f4f6';
-                            }
-                          }}
-                          onMouseLeave={e => {
-                            e.currentTarget.style.background = isSelected ? '#dbeafe' : 'transparent';
-                          }}
-                        >
-                          <span>{tag.charAt(0).toUpperCase() + tag.slice(1)}</span>
-                          {isSelected && (
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: '#2563eb' }}>✓</span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
               {/* Secondary Tags dropdown */}
               <div style={{ position: 'relative' }} ref={secondaryTagDropdownRef}>
                 <button
                   onClick={() => setShowSecondaryTagDropdown(!showSecondaryTagDropdown)}
                   style={{
-                    background: 'transparent',
-                    border: '1px solid #d1d5db',
-                    padding: '6px 12px',
-                    cursor: 'pointer',
-                    fontSize: '14px',
-                    color: '#374151',
-                    borderRadius: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
+                    padding: "8px 12px",
+                    background: "transparent",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    color: "#6b7280",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    transition: "all 0.18s"
                   }}
                 >
                   Tags
@@ -1691,29 +1756,41 @@ const MessageView: React.FC<MessageViewProps> = ({
 
               {/* Delete/Restore Actions */}
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                {/* Share button */}
+                <button
+                  onClick={() => {
+                    if (onShare && selectedThreadId) {
+                      onShare(selectedThreadId);
+                    }
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    background: "transparent",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    color: "#6b7280",
+                    transition: "all 0.18s"
+                  }}
+                >
+                  Share
+                </button>
+
                 {localFlow && Array.isArray(localFlow.secondaryTags) && localFlow.secondaryTags.includes('deleted') ? (
                   // Show restore and hard delete buttons for deleted items
                   <>
                     <button
                       onClick={handleRestore}
                       style={{
-                        padding: '6px 12px',
-                        fontSize: '12px',
-                        border: '1px solid #10b981',
-                        background: 'transparent',
-                        color: '#10b981',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        fontWeight: '500'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#10b981';
-                        e.currentTarget.style.color = '#fff';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = '#10b981';
+                        padding: "8px 12px",
+                        background: "transparent",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        transition: "all 0.18s"
                       }}
                     >
                       Restore
@@ -1721,23 +1798,14 @@ const MessageView: React.FC<MessageViewProps> = ({
                     <button
                       onClick={handleHardDelete}
                       style={{
-                        padding: '6px 12px',
-                        fontSize: '12px',
-                        border: '1px solid #ef4444',
-                        background: 'transparent',
-                        color: '#ef4444',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        fontWeight: '500'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#ef4444';
-                        e.currentTarget.style.color = '#fff';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = '#ef4444';
+                        padding: "8px 12px",
+                        background: "transparent",
+                        border: "1px solid #e5e7eb",
+                        borderRadius: "6px",
+                        cursor: "pointer",
+                        fontSize: "12px",
+                        color: "#6b7280",
+                        transition: "all 0.18s"
                       }}
                     >
                       Delete Forever
@@ -1748,23 +1816,14 @@ const MessageView: React.FC<MessageViewProps> = ({
                   <button
                     onClick={handleSoftDelete}
                     style={{
-                      padding: '6px 12px',
-                      fontSize: '12px',
-                      border: '1px solid #6b7280',
-                      background: 'transparent',
-                      color: '#6b7280',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      fontWeight: '500'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#6b7280';
-                      e.currentTarget.style.color = '#fff';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
-                      e.currentTarget.style.color = '#6b7280';
+                      padding: "8px 12px",
+                      background: "transparent",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                      color: "#6b7280",
+                      transition: "all 0.18s"
                     }}
                   >
                     Delete
@@ -1791,8 +1850,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                     }}
                     style={{
                       boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
-                      width: '100%',
-                      maxWidth: '100%',
+                      width: 'calc(100% - 16px)',
+                      maxWidth: 'calc(100% - 16px)',
                       margin: '0 auto 16px auto',
                       padding: 16,
                       paddingBottom: 20,
@@ -1809,7 +1868,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                       transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                      e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.08)';
                       setHoveredMessageId(chat.id);
                     }}
                     onMouseLeave={(e) => {
@@ -1846,40 +1905,45 @@ const MessageView: React.FC<MessageViewProps> = ({
                         </div>
                       )}
                       
-                      {/* Show reply button when hovering and not active */}
-                      {hoveredMessageId === chat.id && !isActive && selectedThreadId && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setActiveMessageId(chat.id);
-                            setIsReplying(true);
-                          }}
-                          style={{
-                            background: '#FDE7F1', // Light pink background same as secondary tag
-                            color: '#DE1785', // Beya pink for the icon
-                            border: 'none',
-                            borderRadius: '50%',
-                            width: '28px',
-                            height: '28px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                            margin: 'auto 0' // Better vertical centering
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#fce7f3';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#FDE7F1';
-                          }}
-                          title="Reply to this message"
-                        >
-                          <Reply size={14} />
-                        </button>
-                      )}
                     </div>
+                    
+                    {/* Show reply button when hovering and not active - positioned absolutely */}
+                    {hoveredMessageId === chat.id && !isActive && selectedThreadId && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMessageId(chat.id);
+                          setIsReplying(true);
+                        }}
+                        style={{
+                          background: '#FDE7F1', // Light pink background same as secondary tag
+                          color: '#DE1785', // Beya pink for the icon
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '36px',
+                          height: '36px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                          position: 'absolute',
+                          right: '16px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          zIndex: 10
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#fce7f3';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#FDE7F1';
+                        }}
+                        title="Reply to this message"
+                      >
+                        <Reply size={16} />
+                      </button>
+                    )}
                     
                     {chat.subject && (
                       <p style={{ 
@@ -1911,7 +1975,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                       {chat.htmlBody ? (
                         <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(chat.htmlBody) }} />
                       ) : (
-                        linkifyWithImages(chat.body)
+                        renderBase64Content(chat)
                       )}
                     </div>
 
@@ -1964,7 +2028,7 @@ const MessageView: React.FC<MessageViewProps> = ({
       {isReplying && (
         <div style={{
           padding: '16px',
-          background: '#fff',
+          background: '#FFFBFA',
           borderTop: '1px solid #e5e7eb',
           borderBottom: '1px solid #e5e7eb'
         }}>
@@ -2139,7 +2203,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                 <button
                   onClick={() => setShowTemplateSelector(!showTemplateSelector)}
                   style={{
-                    background: showTemplateSelector ? '#f0f0f0' : '#fff',
+                    background: showTemplateSelector ? '#f0f0f0' : '#FFFBFA',
                     color: showTemplateSelector ? '#DE1785' : '#666',
                     border: '1px solid #e0e0e0',
                     padding: '8px 16px',
@@ -2168,7 +2232,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                   border: '1px solid #d1d5db',
                   borderRadius: 8,
                   marginBottom: 16,
-                  background: '#fff',
+                  background: '#FFFBFA',
                   fontSize: '14px',
                   resize: 'vertical',
                   boxSizing: 'border-box',
@@ -2224,19 +2288,42 @@ const MessageView: React.FC<MessageViewProps> = ({
         </div>
       )}
 
+      {/* Resize Handle */}
+      <div 
+        style={{
+          height: '8px',
+          cursor: 'ns-resize',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: 'transparent'
+        }}
+        onMouseDown={handleResizeStart}
+      >
+        <div style={{
+          width: '40px',
+          height: '3px',
+          backgroundColor: isResizing ? '#de1785' : '#9ca3af',
+          borderRadius: '2px',
+          transition: isResizing ? 'none' : 'background-color 0.2s ease'
+        }} />
+      </div>
+
       <div style={{ 
         padding: 16, 
         backgroundColor: '#FBF7F7', // Match the thread list background
-        minHeight: '250px'
+        height: `${discussionPanelHeight}px`,
+        display: 'flex',
+        flexDirection: 'column'
       }}>
         {/* Team Discussion Header */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          marginBottom: '12px'
+          marginBottom: '12px',
+          flexShrink: 0
         }}>
-          <span style={{ fontSize: '16px' }}>🏢</span>
           <h3 style={{
             margin: 0,
             fontSize: '14px',
@@ -2258,7 +2345,7 @@ const MessageView: React.FC<MessageViewProps> = ({
         </div>
 
         <div style={{
-          height: 150,
+          flex: 1,
           overflowY: 'auto',
           marginBottom: 16,
           padding: '12px',
@@ -2267,7 +2354,8 @@ const MessageView: React.FC<MessageViewProps> = ({
           border: 'none', // Remove border
           display: 'flex',
           flexDirection: 'column',
-          gap: '8px'
+          gap: '8px',
+          minHeight: '100px' // Ensure minimum height for messages
         }}>
           {!selectedThreadId ? (
             <div style={{
@@ -2360,7 +2448,8 @@ const MessageView: React.FC<MessageViewProps> = ({
           <div style={{
             display: 'flex',
             gap: '8px',
-            alignItems: 'flex-end'
+            alignItems: 'center',
+            flexShrink: 0
           }}>
             <textarea
               value={teamChatInput}
@@ -2415,7 +2504,8 @@ const MessageView: React.FC<MessageViewProps> = ({
             textAlign: 'center',
             color: '#6b7280',
             fontSize: '14px',
-            padding: '20px'
+            padding: '20px',
+            flexShrink: 0
           }}>
             Select a conversation to start team discussion
           </div>

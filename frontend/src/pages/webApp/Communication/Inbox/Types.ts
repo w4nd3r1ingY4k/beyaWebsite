@@ -12,6 +12,9 @@ export interface Message {
   timestamp: string;     // ISO date
   isClosed: boolean;     // conversation status
   originalMessageId: string; // ID from original provider (e.g. WhatsApp, email)
+  // Base64 attachment metadata
+  isBase64?: boolean;    // whether the original body was Base64 encoded
+  contentType?: string;  // detected content type for Base64 content
 }
 
   /** ISO-8601 timestamp in UTC, e.g. “2025-05-22T14:11:07.123Z” */
