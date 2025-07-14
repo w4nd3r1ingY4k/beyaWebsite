@@ -13,9 +13,17 @@ interface CommandBChatProps {
   onClose: () => void;
   initialMessage?: string | null;
   width?: number;
+  disableCmdBShortcut?: boolean;
 }
 
-const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, width = 280 }) => {
+interface ProactiveInsight {
+  id: string;
+  type: string;
+  message: string;
+  timestamp: string;
+}
+
+const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, width = 280, disableCmdBShortcut = false }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
@@ -144,6 +152,37 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
     organizingSequence();
   }, [initialMessage]);
 
+  // Add after organizingSequence, before useEffect for auto-focus
+  // Add proactive insights state
+  const [proactiveInsights, setProactiveInsights] = useState<ProactiveInsight[]>([]);
+
+  // Fetch proactive insights when chat opens
+  useEffect(() => {
+    const fetchInsights = async () => {
+      if (!user?.userId) return;
+      try {
+        const res = await fetch(`http://localhost:2074/api/v1/proactive-insights?userId=${user.userId}`);
+        const data = await res.json();
+        if (data.insights) {
+          setProactiveInsights(data.insights);
+          // Add each insight as an assistant message at the top (if not already present)
+          setMessages(prev => [
+            ...data.insights.map((insight: ProactiveInsight) => ({
+              id: `insight-${insight.id}`,
+              content: insight.message,
+              sender: 'assistant',
+              timestamp: new Date(insight.timestamp),
+            })),
+            ...prev
+          ]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch proactive insights', err);
+      }
+    };
+    fetchInsights();
+  }, [user?.userId]);
+
   // Auto-focus input when organizing is complete (with delay to prevent scroll)
   useEffect(() => {
     if (!isOrganizing) {
@@ -169,15 +208,19 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
 
   // Handle keyboard shortcuts
   useEffect(() => {
+    if (disableCmdBShortcut) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        onClose();
+      }
       if (e.key === 'Escape') {
         onClose();
       }
     };
-
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
+  }, [onClose, disableCmdBShortcut]);
 
   // Helper function to get conversation history for context
   const getConversationHistory = () => {
@@ -191,7 +234,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
       }));
   };
 
-  // NEW: Real API integration with semantic search
+  // Enhanced API integration with context-aware insights
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
@@ -208,7 +251,12 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
     setIsTyping(true);
 
     try {
-      // Call your semantic search API
+      // Get current context (what page/section user is on)
+      const currentContext = window.location.pathname.includes('/inbox') ? 'inbox-viewing' : 
+                            window.location.pathname.includes('/crm') ? 'crm-section' : 
+                            'general-navigation';
+
+      // Call enhanced semantic search API with context awareness
       const response = await fetch(`${API_BASE}/api/v1/query-with-ai`, {
         method: 'POST',
         headers: { 
@@ -219,7 +267,9 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
           userId: user?.userId || null,
           responseType: 'auto',
           topK: 5,
-          conversationHistory: getConversationHistory()
+          conversationHistory: getConversationHistory(),
+          currentContext: currentContext,
+          enhancedMode: true // Enable enhanced context-aware mode
         })
       });
 
@@ -246,8 +296,16 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
         startTypewriter(assistantMessage.id, responseText);
       }, 100);
 
+      // Log enhanced context usage
+      if (data.searchMetadata?.enhancedMode) {
+        console.log('🔍 Enhanced context mode used:', {
+          contextUsed: data.searchMetadata.contextUsed,
+          totalResults: data.searchMetadata.totalResults
+        });
+      }
+
     } catch (error) {
-      console.error('❌ API call failed:', error);
+      console.error('❌ Enhanced API call failed:', error);
       
       // Show error message to user
       const errorMessage: Message = {
@@ -262,7 +320,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
       
       // Start typewriter effect with error message
       setTimeout(() => {
-        const errorText = 'Sorry, I\'m having trouble connecting to the context engine right now. Please make sure the backend server is running on port 2074 and try again.';
+        const errorText = 'Sorry, I\'m having trouble connecting to the enhanced context engine right now. Please try again.';
         startTypewriter(errorMessage.id, errorText);
       }, 100);
     }
@@ -329,361 +387,337 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
         flexDirection: 'column',
         overflow: 'hidden',
         position: 'relative',
-        flexShrink: 0
+        flexShrink: 0,
+        marginTop: 24, // Add top margin to prevent cut-off
       }}>
-      {/* Header */}
-      <div style={{
-        padding: '16px',
-        borderBottom: '1px solid #f0f0f0',
-        background: '#FBF7F7',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>🤖</span>
-          <div>
-            <h3 style={{
-              margin: 0,
-              fontSize: '16px',
-              fontWeight: '600',
-              color: '#111827'
-            }}>
-              Chat with B
-            </h3>
-            <p style={{
-              margin: 0,
-              fontSize: '12px',
-              color: '#6b7280'
-            }}>
-              Context-aware AI assistant
-            </p>
-            <p style={{
-              margin: '2px 0 0 0',
-              fontSize: '10px',
-              color: '#9ca3af'
-            }}>
-              Memory: {getConversationHistory().length}/{MAX_CONVERSATION_HISTORY} messages
-            </p>
+        <div style={{
+          padding: '16px',
+          borderBottom: '1px solid #f0f0f0',
+          background: '#FBF7F7',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '18px' }}>🤖</span>
+            <div>
+              <h3 style={{
+                margin: 0,
+                fontWeight: '600',
+                color: '#111827'
+              }}>
+                Chat with B
+              </h3>
+              <p style={{
+                margin: 0,
+                fontSize: '12px',
+                color: '#6b7280'
+              }}>
+                Context-aware AI assistant
+              </p>
+              <p style={{
+                margin: '2px 0 0 0',
+                fontSize: '10px',
+                color: '#9ca3af'
+              }}>
+                Memory: {getConversationHistory().length}/{MAX_CONVERSATION_HISTORY} message
+              </p>
+            </div>
           </div>
         </div>
-          
-        <button
-          onClick={onClose}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px',
-            borderRadius: '4px',
-            color: '#6b7280',
-            fontSize: '14px'
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f3f4f6';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent';
-          }}
-          title="Back to Integrations (Cmd+B)"
-        >
-          ✕
-        </button>
-      </div>
+        {/* Messages Area */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          padding: '8px',
+          background: '#FFFBFA',
+          minHeight: 0,
+          scrollBehavior: 'smooth'
+        }}>
+          {messages.map(message => {
+            const isThinking = message.content.includes('...');
+            const isTypewriter = typewriterStates[message.id] !== undefined;
+            const displayContent = isTypewriter ? typewriterStates[message.id] : message.content;
+            
+            // Don't render if it's an empty message waiting for typewriter
+            if (message.content === '' && !isTypewriter) {
+              return null;
+            }
+            
+            let messageOpacity = 1;
+            if (message.isGhost) {
+              messageOpacity = 0.3;
+            } else if (isThinking) {
+              messageOpacity = 0.6;
+            }
+            
+            return (
+              <div
+                key={message.id}
+                style={{
+                  marginBottom: '12px',
+                  display: 'flex',
+                  justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
+                  opacity: messageOpacity,
+                  transition: isThinking ? 'opacity 1s ease-in' : 'opacity 0.5s ease',
+                  animation: isThinking ? 'fadeIn 1s ease-in' : 'none'
+                }}
+              >
+                {message.sender === 'user' ? (
+                  <div
+                    style={{
+                      maxWidth: '90%',
+                      padding: '8px 12px',
+                      borderRadius: '12px',
+                      background: '#DE1785',
+                      color: '#fff',
+                      fontSize: '12px',
+                      lineHeight: '1.4',
+                      wordWrap: 'break-word'
+                    }}
+                  >
+                    {message.content}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      maxWidth: '90%',
+                      padding: '8px 12px',
+                      borderRadius: '12px',
+                      background: '#c4c9cf',
+                      fontSize: '12px',
+                      lineHeight: '1.4',
+                      wordWrap: 'break-word'
+                    }}
+                  >
+                    {displayContent}
+                    {isTypewriter && displayContent.length < message.content.length && (
+                      <span style={{
+                        opacity: 0.7,
+                        animation: 'blink 1s infinite'
+                      }}>|</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+            
+          {isTyping && (
+            <div style={{
+              marginBottom: '12px',
+              display: 'flex',
+              justifyContent: 'flex-start'
+            }}>
+              <div style={{
+                padding: '8px 12px',
+                borderRadius: '12px',
+                background: '#f3f4f6',
+                color: '#6b7280',
+                fontSize: '12px'
+              }}>
+                Searching your email history...
+              </div>
+            </div>
+          )}
+            
+            <div ref={messagesEndRef} />
+          </div>
 
-      {/* Messages Area */}
-      <div style={{
-        flex: 1,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        padding: '8px',
-        background: '#FFFBFA',
-        minHeight: 0,
-        scrollBehavior: 'smooth'
-      }}>
-        {messages.map(message => {
-          const isThinking = message.content.includes('...');
-          const isTypewriter = typewriterStates[message.id] !== undefined;
-          const displayContent = isTypewriter ? typewriterStates[message.id] : message.content;
-          
-          // Don't render if it's an empty message waiting for typewriter
-          if (message.content === '' && !isTypewriter) {
-            return null;
-          }
-          
-          let messageOpacity = 1;
-          if (message.isGhost) {
-            messageOpacity = 0.3;
-          } else if (isThinking) {
-            messageOpacity = 0.6;
-          }
-          
-          return (
-            <div
-              key={message.id}
+        {/* Input Area */}
+        <div style={{
+          padding: '12px 12px 8px 12px',
+          borderTop: '1px solid #f0f0f0',
+          background: '#FBF7F7',
+          flexShrink: 0
+        }}>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder={isOrganizing ? "AI is organizing..." : "Ask about your emails, customers, patterns..."}
+              disabled={isOrganizing}
               style={{
-                marginBottom: '12px',
-                display: 'flex',
-                justifyContent: message.sender === 'user' ? 'flex-end' : 'flex-start',
-                opacity: messageOpacity,
-                transition: isThinking ? 'opacity 1s ease-in' : 'opacity 0.5s ease',
-                animation: isThinking ? 'fadeIn 1s ease-in' : 'none'
+                width: '100%',
+                padding: '8px 12px',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                fontSize: '12px',
+                outline: 'none',
+                background: isOrganizing ? '#f9fafb' : '#FFFBFA',
+                boxSizing: 'border-box',
+                color: isOrganizing ? '#9ca3af' : '#111827',
+                cursor: isOrganizing ? 'not-allowed' : 'text'
+              }}
+              onFocus={(e) => {
+                if (!isOrganizing) {
+                  e.target.style.borderColor = '#DE1785';
+                  e.target.style.boxShadow = '0 0 0 1px #DE1785';
+                }
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#e5e7eb';
+                e.target.style.boxShadow = 'none';
+              }}
+            />
+            <button
+              onClick={handleSendMessage} // UPDATED: Now calls real API
+              disabled={!inputValue.trim() || isOrganizing}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                background: (inputValue.trim() && !isOrganizing) ? '#DE1785' : '#e5e7eb',
+                color: (inputValue.trim() && !isOrganizing) ? '#fff' : '#9ca3af',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: (inputValue.trim() && !isOrganizing) ? 'pointer' : 'not-allowed',
+                fontSize: '12px',
+                fontWeight: '500',
+                transition: 'background 0.2s ease'
               }}
             >
-              {message.sender === 'user' ? (
-                <div
-                  style={{
-                    maxWidth: '90%',
-                    padding: '8px 12px',
-                    borderRadius: '12px',
-                    background: '#DE1785',
-                    color: '#fff',
-                    fontSize: '12px',
-                    lineHeight: '1.4',
-                    wordWrap: 'break-word'
-                  }}
-                >
-                  {message.content}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    maxWidth: '90%',
-                    padding: '8px 12px',
-                    borderRadius: '12px',
-                    background: '#c4c9cf',
-                    fontSize: '12px',
-                    lineHeight: '1.4',
-                    wordWrap: 'break-word'
-                  }}
-                >
-                  {displayContent}
-                  {isTypewriter && displayContent.length < message.content.length && (
-                    <span style={{
-                      opacity: 0.7,
-                      animation: 'blink 1s infinite'
-                    }}>|</span>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+              {isOrganizing ? 'Organizing...' : 'Send'}
+            </button>
+          </div>
           
-        {isTyping && (
+          <p style={{
+            margin: '6px 0 0 0',
+            fontSize: '10px',
+            color: '#9ca3af',
+            textAlign: 'center'
+          }}>
+            Enter to send • Cmd+B to toggle
+          </p>
+        </div>
+
+        {/* Tonality Analysis Modal */}
+        {showTonalityModal && (
           <div style={{
-            marginBottom: '12px',
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
             display: 'flex',
-            justifyContent: 'flex-start'
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
           }}>
             <div style={{
-              padding: '8px 12px',
+              background: '#fff',
               borderRadius: '12px',
-              background: '#f3f4f6',
-              color: '#6b7280',
-              fontSize: '12px'
+              padding: '24px',
+              maxWidth: `${Math.min(400, width - 40)}px`,
+              width: '90%',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
+              border: '1px solid #e5e7eb'
             }}>
-              Searching your email history...
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+                marginBottom: '16px'
+              }}>
+                <span style={{ fontSize: '24px' }}>🤖</span>
+                <div>
+                  <h3 style={{
+                    margin: 0,
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: '#111827'
+                  }}>
+                    B has something to say about this message
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginTop: '4px'
+                  }}>
+                    <span style={{
+                      background: '#fbbf24',
+                      color: '#92400e',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: '500'
+                    }}>
+                      Alert: Medium
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div style={{
+                background: '#fff7ed',
+                border: '1px solid #fed7aa',
+                borderRadius: '8px',
+                padding: '12px',
+                marginBottom: '16px'
+              }}>
+                <p style={{
+                  margin: 0,
+                  fontSize: '14px',
+                  color: '#9a3412',
+                  lineHeight: '1.4'
+                }}>
+                  This message appears much more casual than your previous correspondence. Consider adjusting the tone to maintain professional consistency.
+                </p>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '8px',
+                justifyContent: 'flex-end'
+              }}>
+                <button
+                  onClick={() => setShowTonalityModal(false)}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#f3f4f6',
+                    color: '#374151',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowTonalityModal(false);
+                    handleSendMessage(); // Proceed with sending the message
+                  }}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#DE1785',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '500'
+                  }}
+                >
+                  Send Anyway
+                </button>
+              </div>
             </div>
           </div>
         )}
-          
-          <div ref={messagesEndRef} />
-        </div>
-
-      {/* Input Area */}
-      <div style={{
-        padding: '12px 12px 8px 12px',
-        borderTop: '1px solid #f0f0f0',
-        background: '#FBF7F7',
-        flexShrink: 0
-      }}>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px'
-        }}>
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder={isOrganizing ? "AI is organizing..." : "Ask about your emails, customers, patterns..."}
-            disabled={isOrganizing}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              fontSize: '12px',
-              outline: 'none',
-              background: isOrganizing ? '#f9fafb' : '#FFFBFA',
-              boxSizing: 'border-box',
-              color: isOrganizing ? '#9ca3af' : '#111827',
-              cursor: isOrganizing ? 'not-allowed' : 'text'
-            }}
-            onFocus={(e) => {
-              if (!isOrganizing) {
-                e.target.style.borderColor = '#DE1785';
-                e.target.style.boxShadow = '0 0 0 1px #DE1785';
-              }
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#e5e7eb';
-              e.target.style.boxShadow = 'none';
-            }}
-          />
-          <button
-            onClick={handleSendMessage} // UPDATED: Now calls real API
-            disabled={!inputValue.trim() || isOrganizing}
-            style={{
-              width: '100%',
-              padding: '8px 12px',
-              background: (inputValue.trim() && !isOrganizing) ? '#DE1785' : '#e5e7eb',
-              color: (inputValue.trim() && !isOrganizing) ? '#fff' : '#9ca3af',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: (inputValue.trim() && !isOrganizing) ? 'pointer' : 'not-allowed',
-              fontSize: '12px',
-              fontWeight: '500',
-              transition: 'background 0.2s ease'
-            }}
-          >
-            {isOrganizing ? 'Organizing...' : 'Send'}
-          </button>
-        </div>
-        
-        <p style={{
-          margin: '6px 0 0 0',
-          fontSize: '10px',
-          color: '#9ca3af',
-          textAlign: 'center'
-        }}>
-          Enter to send • Cmd+B to toggle
-        </p>
       </div>
-
-      {/* Tonality Analysis Modal */}
-      {showTonalityModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            background: '#fff',
-            borderRadius: '12px',
-            padding: '24px',
-            maxWidth: `${Math.min(400, width - 40)}px`,
-            width: '90%',
-            boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
-            border: '1px solid #e5e7eb'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              marginBottom: '16px'
-            }}>
-              <span style={{ fontSize: '24px' }}>🤖</span>
-              <div>
-                <h3 style={{
-                  margin: 0,
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: '#111827'
-                }}>
-                  B has something to say about this message
-                </h3>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  marginTop: '4px'
-                }}>
-                  <span style={{
-                    background: '#fbbf24',
-                    color: '#92400e',
-                    padding: '2px 8px',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                    fontWeight: '500'
-                  }}>
-                    Alert: Medium
-                  </span>
-                </div>
-              </div>
-            </div>
-            
-            <div style={{
-              background: '#fff7ed',
-              border: '1px solid #fed7aa',
-              borderRadius: '8px',
-              padding: '12px',
-              marginBottom: '16px'
-            }}>
-              <p style={{
-                margin: 0,
-                fontSize: '14px',
-                color: '#9a3412',
-                lineHeight: '1.4'
-              }}>
-                This message appears much more casual than your previous correspondence. Consider adjusting the tone to maintain professional consistency.
-              </p>
-            </div>
-
-            <div style={{
-              display: 'flex',
-              gap: '8px',
-              justifyContent: 'flex-end'
-            }}>
-              <button
-                onClick={() => setShowTonalityModal(false)}
-                style={{
-                  padding: '8px 16px',
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowTonalityModal(false);
-                  handleSendMessage(); // Proceed with sending the message
-                }}
-                style={{
-                  padding: '8px 16px',
-                  background: '#DE1785',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  fontSize: '14px',
-                  fontWeight: '500'
-                }}
-              >
-                Send Anyway
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
     </>
   );
 };

@@ -1835,3 +1835,37 @@ server.on('close', () => {
 setInterval(() => {
   // Do nothing, just keep the event loop alive
 }, 10000);
+
+// ===== PROACTIVE INSIGHTS ENDPOINT =====
+
+/**
+ * Basic proactive insights endpoint
+ * Returns a list of hardcoded insights for now
+ * TODO: Replace with real logic using semantic-search.js
+ */
+app.get("/api/v1/proactive-insights", async (req, res) => {
+  const { userId = null } = req.query;
+  // In a real implementation, use userId to fetch personalized insights
+  // For now, return a static set of example insights
+  const insights = [
+    {
+      id: "insight-1",
+      type: "followup",
+      message: "You haven't followed up with customer X in 5 days.",
+      timestamp: new Date().toISOString(),
+    },
+    {
+      id: "insight-2",
+      type: "reply",
+      message: "Customer Y replied to your last email.",
+      timestamp: new Date().toISOString(),
+    },
+    {
+      id: "insight-3",
+      type: "noresponse",
+      message: "There are 3 threads with no response.",
+      timestamp: new Date().toISOString(),
+    },
+  ];
+  res.json({ userId, insights });
+});

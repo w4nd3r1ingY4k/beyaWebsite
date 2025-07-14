@@ -239,7 +239,8 @@ const navigate = useNavigate();
           backgroundColor: '#fff',
           flexShrink: 0,
           height: '100vh',
-          overflow: 'hidden',
+          overflowY: 'auto', // Make sidebar scrollable
+          overflowX: 'hidden',
           margin: 0,
           padding: 0
         }}>
