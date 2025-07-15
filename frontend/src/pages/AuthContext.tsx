@@ -3,8 +3,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   CognitoUserPool,
   CognitoUser,
-  AuthenticationDetails,
-  CognitoUserSession
+  AuthenticationDetails
 } from "amazon-cognito-identity-js";
 
 const poolData = {

@@ -1,7 +1,6 @@
-import CommandBChat from '../../webApp/CRM/inbox/components/CommandBChat';
+import CommandBChat from '../../webApp/CRM/Inbox/Components/CommandBChat';
 
 const Homer: React.FC = () => {
-  // Render a large CommandBChat instance for the home/chat page
   return (
     <div style={{
       width: '100%',

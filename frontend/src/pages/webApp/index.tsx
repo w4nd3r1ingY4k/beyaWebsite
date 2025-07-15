@@ -9,12 +9,12 @@ import { ReactComponent as DataIcon } from './assets/icons/DataIcon.svg';
 import { ReactComponent as LogisticsIcon } from './assets/icons/LogisticsIcon.svg';
 import { ReactComponent as MarketingIcon } from './assets/icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from './assets/icons/CommerceIcon.svg';
-import InboxHome from './CRM/inbox/Home';
-import ContactsCRM from './CRM/contacts/Home';
-import CalendarPage from './CRM/schedule/ScheduleHome';
+import InboxHome from './CRM/Inbox/Home';
+import ContactsCRM from './CRM/Contacts/Home';
+import CalendarPage from './CRM/Schedule/ScheduleHome';
 import { useAuth } from "@/pages/AuthContext";
-import IntegrationsPanel from './CRM/inbox/components/IntegrationsPanel';
-import CommandBChat from './CRM/inbox/components/CommandBChat';
+import IntegrationsPanel from './CRM/Inbox/Components/IntegrationsPanel';
+import CommandBChat from './CRM/Inbox/Components/CommandBChat';
 import LoadingScreen from './components/LoadingScreen';
 import HomeDashboard from './home/index';
 
