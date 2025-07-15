@@ -90,7 +90,6 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
 
     const activeIndex = icons.findIndex(i => i.id === activeIcon);
     const getIndexMultiplier = (index: number) => {
-        console.log(index);
       if (index === 1) return 2;
       if (index === 2) return 2;
       if (index === 3) return 1.3;

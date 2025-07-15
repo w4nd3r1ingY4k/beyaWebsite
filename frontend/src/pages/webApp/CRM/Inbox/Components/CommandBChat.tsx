@@ -361,81 +361,90 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
     <>
       <style>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-          }
-          to {
-            opacity: 0.6;
+          from { opacity: 0; }
+          to { opacity: 0.6; }
+        }
+        @keyframes blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
+        }
+        .commandbchat-container {
+          width: 100%;
+          max-width: 600px;
+          min-width: 0;
+          height: 100%;
+          background: #FFFBFA;
+          border-left: 1px solid #e5e7eb;
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+          position: relative;
+          flex-shrink: 0;
+          margin-top: 24px;
+        }
+        @media (max-width: 700px) {
+          .commandbchat-container {
+            max-width: 100vw;
+            margin-top: 8px;
+            border-left: none;
+            border-radius: 0;
           }
         }
-        
-        @keyframes blink {
-          0%, 50% {
-            opacity: 1;
+        .commandbchat-header {
+          padding: 16px;
+          border-bottom: 1px solid #f0f0f0;
+          background: #FBF7F7;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-shrink: 0;
+        }
+        @media (max-width: 500px) {
+          .commandbchat-header {
+            padding: 10px;
           }
-          51%, 100% {
-            opacity: 0;
+        }
+        .commandbchat-messages {
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding: 8px;
+          background: #FFFBFA;
+          min-height: 0;
+          scroll-behavior: smooth;
+        }
+        @media (max-width: 500px) {
+          .commandbchat-messages {
+            padding: 4px;
+          }
+        }
+        .commandbchat-input {
+          padding: 12px 12px 8px 12px;
+          border-top: 1px solid #f0f0f0;
+          background: #FBF7F7;
+          flex-shrink: 0;
+        }
+        @media (max-width: 500px) {
+          .commandbchat-input {
+            padding: 8px 4px 4px 4px;
           }
         }
       `}</style>
-      <div style={{
-        width: `${width}px`,
-        height: '100%',
-        background: '#FFFBFA',
-        borderLeft: '1px solid #e5e7eb',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        position: 'relative',
-        flexShrink: 0,
-        marginTop: 24, // Add top margin to prevent cut-off
-      }}>
-        <div style={{
-          padding: '16px',
-          borderBottom: '1px solid #f0f0f0',
-          background: '#FBF7F7',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0
-        }}>
+      <div className="commandbchat-container">
+        <div className="commandbchat-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '18px' }}>🤖</span>
             <div>
-              <h3 style={{
-                margin: 0,
-                fontWeight: '600',
-                color: '#111827'
-              }}>
-                Chat with B
-              </h3>
-              <p style={{
-                margin: 0,
-                fontSize: '12px',
-                color: '#6b7280'
-              }}>
-                Context-aware AI assistant
-              </p>
-              <p style={{
-                margin: '2px 0 0 0',
-                fontSize: '10px',
-                color: '#9ca3af'
-              }}>
+              <h3 style={{ margin: 0, fontWeight: '600', color: '#111827' }}>Chat with B</h3>
+              <p style={{ margin: 0, fontSize: '12px', color: '#6b7280' }}>Context-aware AI assistant</p>
+              <p style={{ margin: '2px 0 0 0', fontSize: '10px', color: '#9ca3af' }}>
                 Memory: {getConversationHistory().length}/{MAX_CONVERSATION_HISTORY} message
               </p>
             </div>
           </div>
         </div>
         {/* Messages Area */}
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          padding: '8px',
-          background: '#FFFBFA',
-          minHeight: 0,
-          scrollBehavior: 'smooth'
-        }}>
+        <div className="commandbchat-messages">
           {messages.map(message => {
             const isThinking = message.content.includes('...');
             const isTypewriter = typewriterStates[message.id] !== undefined;
@@ -527,12 +536,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
           </div>
 
         {/* Input Area */}
-        <div style={{
-          padding: '12px 12px 8px 12px',
-          borderTop: '1px solid #f0f0f0',
-          background: '#FBF7F7',
-          flexShrink: 0
-        }}>
+        <div className="commandbchat-input">
           <div style={{
             display: 'flex',
             flexDirection: 'column',
