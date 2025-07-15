@@ -1395,9 +1395,11 @@ const MessageView: React.FC<MessageViewProps> = ({
                         alignItems: 'flex-start',
                         gap: '12px',
                         padding: '16px',
-                        background: '#fff',
+                        background: '#FEFCFC',
                         borderRadius: '12px',
-                        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+                        border: '1px solid rgba(229, 231, 235, 0.3)',
+                        marginBottom: '8px'
                       }}
                     >
                       <div style={{
@@ -1454,7 +1456,7 @@ const MessageView: React.FC<MessageViewProps> = ({
             <div style={{
               padding: '20px',
               borderTop: '1px solid #e5e7eb',
-              background: '#fff'
+              background: 'transparent'
             }}>
               <div style={{
                 display: 'flex',
@@ -1483,7 +1485,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                       resize: 'none',
                       outline: 'none',
                       fontFamily: 'inherit',
-                      lineHeight: '1.5'
+                      lineHeight: '1.5',
+                      background: 'transparent'
                     }}
                   />
                 </div>
@@ -1607,7 +1610,7 @@ const MessageView: React.FC<MessageViewProps> = ({
               gap: '8px',
               position: 'sticky',
               top: 0,
-              backgroundColor: '#FBF7F7',
+              backgroundColor: 'transparent',
               zIndex: 10,
               marginBottom: '10px'
             }}>

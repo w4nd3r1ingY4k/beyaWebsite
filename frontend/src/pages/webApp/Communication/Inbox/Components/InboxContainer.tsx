@@ -1137,10 +1137,21 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       // Convert datetime to ISO timestamp for scheduling
       const scheduledTime = new Date(reminderData.datetime).toISOString();
       
+      // Debug user object
+      console.log('User object for reminder:', user);
+      
+      if (!user!.email) {
+        alert('User email not found. Please refresh the page and try again.');
+        return;
+      }
+      
+      const userEmail = user!.email;
+      console.log('Using user email:', userEmail);
+      
       const payload = {
         threadId: selectedThreadId,
         userId: user!.userId,
-        userEmail: user!.email, // User's email for sending reminder to themselves
+        userEmail: userEmail, // User's email for sending reminder to themselves
         reminderType: reminderData.type,
         scheduledTime: scheduledTime,
         note: reminderData.note || '',
@@ -1148,6 +1159,25 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         contactEmail: currentFlow.fromEmail || currentFlow.fromPhone || 'Unknown Contact'
       };
 
+      // Validate all required fields are present
+      const requiredFields = {
+        threadId: payload.threadId,
+        userId: payload.userId,
+        userEmail: payload.userEmail,
+        reminderType: payload.reminderType,
+        scheduledTime: payload.scheduledTime
+      };
+      
+      const missingFields = Object.entries(requiredFields)
+        .filter(([key, value]) => !value)
+        .map(([key]) => key);
+      
+      if (missingFields.length > 0) {
+        alert(`Missing required fields: ${missingFields.join(', ')}`);
+        console.error('Missing fields:', missingFields, 'Payload:', payload);
+        return;
+      }
+      
       console.log('Setting reminder with payload:', payload);
       
       // Call API to store reminder and schedule it
