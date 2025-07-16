@@ -1,8 +1,5 @@
 import React from "react";
-import { HeroSectionProps } from "../ComponentTypes";
-
-const desktop = require("../pages/webApp/Assets/Media/desktop.png");
-const mobile = require("../pages/webApp/Assets/Media/mobile.png");
+import { HeroSectionProps } from "../types/componentTypes";
 
 export const HeroSection: React.FC<HeroSectionProps> = () => {
   const systemFontStack =
@@ -169,7 +166,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               }}
             >
               <img
-                src={desktop}
+                src="/assets/landingPage/desktop.png"
                 alt="Desktop app preview"
                 style={{
                   width: "800px",
@@ -195,7 +192,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               }}
             >
               <img
-                src={mobile}
+                src="/assets/landingPage/mobile.png"
                 alt="Mobile app preview"
                 style={{
                   width: "250px", // iPhone scale (larger)
@@ -303,7 +300,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               }}
             >
               <img
-                src="/assets/landing_page/safiyaa.webp"
+                src="/assets/landingPage/safiyaa.webp"
                 alt="Safiyaa logo"
                 style={{ maxHeight: '2.5rem', maxWidth: '7rem', objectFit: 'contain', filter: 'none' }}
               />

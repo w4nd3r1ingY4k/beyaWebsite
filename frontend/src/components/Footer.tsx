@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { FooterProps } from "../ComponentTypes";
+import { FooterProps } from "../types/componentTypes";
 import { NewsletterForm } from "./NewsletterForm";
 import { FaFacebookF, FaTwitter, FaInstagram, FaLinkedinIn, FaEnvelope } from "react-icons/fa";
 
