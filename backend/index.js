@@ -2128,6 +2128,364 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
+// Add these routes after the existing routes, before the PORT definition
+
+// Business Central API routes
+app.post("/api/business-central/token", async (req, res) => {
+  const { tenantId, clientId, clientSecret } = req.body;
+  
+  if (!tenantId || !clientId || !clientSecret) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
+
+  try {
+    const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+    
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+    params.append('scope', 'https://api.businesscentral.dynamics.com/.default');
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+
+    if (!response.ok) {
+      throw new Error(`Token request failed: ${response.status}`);
+    }
+
+    const tokenData = await response.json();
+    return res.status(200).json(tokenData);
+
+  } catch (error) {
+    console.error("Business Central token error:", error);
+    return res.status(500).json({ 
+      error: "Failed to get Business Central token",
+      details: error.message
+    });
+  }
+});
+
+app.get("/api/business-central/companies", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+
+  try {
+    const companiesUrl = "https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/safiyaaPublisher/safiyaGroup/v1.0/companies";
+    
+    const response = await fetch(companiesUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central companies error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central companies",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Sales Orders endpoint
+app.get("/api/business-central/sales-orders", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const salesOrdersUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesOrders`;
+    
+    const response = await fetch(salesOrdersUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central sales orders error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central sales orders",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Sales Invoices endpoint (for actual revenue data)
+app.get("/api/business-central/sales-invoices", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const salesInvoicesUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesInvoices`;
+    
+    const response = await fetch(salesInvoicesUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central sales invoices error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central sales invoices",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Company Revenue endpoint - aggregates all revenue data
+app.get("/api/business-central/revenue", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const authHeaders = {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json'
+    };
+
+    // Fetch multiple revenue-related endpoints in parallel
+    const [salesInvoicesRes, salesOrdersRes, itemsRes] = await Promise.all([
+      fetch(`https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesInvoices`, { headers: authHeaders }),
+      fetch(`https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesOrders`, { headers: authHeaders }),
+      fetch(`https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/items`, { headers: authHeaders })
+    ]);
+
+    const [salesInvoicesData, salesOrdersData, itemsData] = await Promise.all([
+      salesInvoicesRes.ok ? salesInvoicesRes.json() : { value: [] },
+      salesOrdersRes.ok ? salesOrdersRes.json() : { value: [] },
+      itemsRes.ok ? itemsRes.json() : { value: [] }
+    ]);
+
+    // Calculate revenue metrics
+    const salesInvoices = salesInvoicesData.value || [];
+    const salesOrders = salesOrdersData.value || [];
+    const items = itemsData.value || [];
+
+    // Calculate total revenue from invoices (actual completed sales)
+    const totalInvoiceRevenue = salesInvoices.reduce((total, invoice) => {
+      return total + (invoice.totalAmountIncludingTax || invoice.totalAmountExcludingTax || 0);
+    }, 0);
+
+    // Calculate pending revenue from orders (future revenue)
+    const pendingOrderRevenue = salesOrders.reduce((total, order) => {
+      return total + (order.totalAmountIncludingTax || order.totalAmountExcludingTax || 0);
+    }, 0);
+
+    // Revenue metrics
+    const revenueMetrics = {
+      totalRevenue: totalInvoiceRevenue,
+      pendingRevenue: pendingOrderRevenue,
+      totalSalesInvoices: salesInvoices.length,
+      totalSalesOrders: salesOrders.length,
+      totalProducts: items.length,
+      
+      // Recent invoices (last 5)
+      recentInvoices: salesInvoices.slice(-5).map(invoice => ({
+        id: invoice.id,
+        number: invoice.number,
+        customerName: invoice.customerName,
+        amount: invoice.totalAmountIncludingTax || invoice.totalAmountExcludingTax,
+        currency: invoice.currencyCode,
+        date: invoice.invoiceDate || invoice.documentDate,
+        status: invoice.status
+      })),
+
+      // Product performance (items with sales data if available)
+      topProducts: items.slice(0, 5).map(item => ({
+        id: item.id,
+        number: item.number,
+        displayName: item.displayName,
+        unitPrice: item.unitPrice,
+        inventory: item.inventory
+      }))
+    };
+
+    return res.status(200).json(revenueMetrics);
+
+  } catch (error) {
+    console.error("Business Central revenue error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central revenue data",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Items (Products) endpoint
+app.get("/api/business-central/items", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const itemsUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/items`;
+    
+    const response = await fetch(itemsUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central items error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central items",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Customers endpoint
+app.get("/api/business-central/customers", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const customersUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/customers`;
+    
+    const response = await fetch(customersUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central customers error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central customers",
+      details: error.message
+    });
+  }
+});
+
+// Hyros API routes
+app.post("/api/hyros/journeys", async (req, res) => {
+  const { apiKey, fromDate, toDate, pageSize, pageId, ids, emails } = req.body;
+  
+  if (!apiKey) {
+    return res.status(400).json({ error: "API key is required" });
+  }
+
+  try {
+    // Build the query parameters
+    const params = new URLSearchParams();
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+    if (pageSize) params.append('pageSize', pageSize.toString());
+    if (pageId !== undefined) params.append('pageId', pageId.toString());
+    
+    // For demo purposes, use the sample IDs and emails if none provided
+    const defaultIds = "8ce3695840d2aa5548e00914aa1cb9ecb9a750ad14db16ade5a633bf756fd305,a823d3fcf322d5ac4185deea1e3337dcb076802f74af431b46e214861a7e90b7";
+    const defaultEmails = "evandunnagan@yahoo.com,assoom1000@gmail.com";
+    
+    if (ids || !ids) params.append('ids', ids || defaultIds);
+    if (emails || !emails) params.append('emails', emails || defaultEmails);
+
+    const url = `https://api.hyros.com/v1/api/v1.0/leads/journey?${params.toString()}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'API-Key': apiKey,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Hyros API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Hyros journeys error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Hyros journey data",
+      details: error.message
+    });
+  }
+});
+
 const PORT = process.env.PORT || 2074;
 
 const server = app.listen(PORT, () => {

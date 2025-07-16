@@ -14,6 +14,8 @@ const docClient = new AWS.DynamoDB.DocumentClient();
 // The DynamoDB table name should be configured in your Lambda’s environment variables
 const TABLE = process.env.FLOWS_TABLE;
 
+// CORS is now handled by Lambda Function URL configuration
+
 exports.handler = async function(event) {
   // 1) CORS Preflight (OPTIONS)  — typically Function URL CORS settings handle the headers.
   //    We simply return 200 for OPTIONS to allow the client to proceed.

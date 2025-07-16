@@ -116,7 +116,6 @@ const TeamChat: React.FC<Props> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '16px' }}>🏢</span>
           <h3 style={{
             margin: 0,
             fontSize: '14px',

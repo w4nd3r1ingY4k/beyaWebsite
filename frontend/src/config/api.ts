@@ -8,7 +8,7 @@ interface APIConfig {
 }
 
 // Force production URLs for testing (set to true to test production endpoints locally)
-const FORCE_PRODUCTION_URLS = true;
+const FORCE_PRODUCTION_URLS = false;
 
 // Detect environment
 const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';

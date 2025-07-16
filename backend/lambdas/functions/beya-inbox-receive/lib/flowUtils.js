@@ -1,5 +1,6 @@
 import { DynamoDBDocumentClient, QueryCommand, ScanCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 
 /**
  * Normalize email subject for threading comparison
@@ -18,16 +19,17 @@ function normalizeSubject(subject) {
 }
 
 /**
- * Generate or retrieve a unique flowId for email threading based on contact + subject
+ * Generate or retrieve a unique flowId for email threading based on participants + subject
  * @param {DynamoDBDocumentClient} docClient - DynamoDB document client
  * @param {string} flowsTable - Name of the Flows table
  * @param {string} userId - User ID (contactId in the table)
- * @param {string} contactIdentifier - Email address
+ * @param {string} contactIdentifier - Primary contact email address
  * @param {string} subject - Email subject line
- * @param {Object} headers - Email headers (for reply detection)
+ * @param {Object} options - Options object with headers, participants, etc.
  * @returns {Promise<string>} - Unique flowId
  */
-export async function generateOrGetEmailFlowId(docClient, flowsTable, userId, contactIdentifier, subject, headers = {}) {
+export async function generateOrGetEmailFlowId(docClient, flowsTable, userId, contactIdentifier, subject, options = {}) {
+  const { headers = {}, participants = [], cc = [], bcc = [], messageId = null } = options;
   // Convert Gmail headers array to object for easier lookup
   let headerMap = {};
   if (Array.isArray(headers)) {
@@ -90,8 +92,21 @@ export async function generateOrGetEmailFlowId(docClient, flowsTable, userId, co
   const normalizedSubject = normalizeSubject(subject);
   console.log(`📧 Normalized subject: "${subject}" → "${normalizedSubject}"`);
   
-  // Create a composite key for email threading: contact + subject
-  const threadingKey = `${contactIdentifier}#${normalizedSubject}`;
+  // Extract participants from headers if not provided
+  let allParticipants = participants;
+  if (participants.length === 0 && Object.keys(headers).length > 0) {
+    const extracted = extractEmailParticipants(headers);
+    allParticipants = extracted.all;
+  }
+  
+  // If still no participants, fall back to single contact
+  if (allParticipants.length === 0) {
+    allParticipants = [contactIdentifier];
+  }
+  
+  // Create a composite key for email threading: participants + subject
+  const threadingKey = generateParticipantThreadingKey(allParticipants, normalizedSubject);
+  console.log(`📧 Threading key: ${threadingKey} for participants: [${allParticipants.join(', ')}]`);
   
   // Search for existing flow with this user + threading key
   const queryParams = {
@@ -120,13 +135,28 @@ export async function generateOrGetEmailFlowId(docClient, flowsTable, userId, co
     
     // Create the flow record with the new flowId and threading key
     const timestamp = Date.now();
+    
+    // Build participant history for this message
+    const participantHistory = {};
+    if (messageId) {
+      participantHistory[messageId] = {
+        To: participants.includes(contactIdentifier) ? [contactIdentifier] : [],
+        CC: cc || [],
+        BCC: bcc || [],
+        timestamp: timestamp
+      };
+    }
+    
     await docClient.send(new PutCommand({
       TableName: flowsTable,
       Item: {
         contactId: userId,
         flowId: newFlowId,
-        contactIdentifier: contactIdentifier,
-        threadingKey: threadingKey, // New field for email threading
+        contactIdentifier: contactIdentifier, // Primary contact for display
+        primaryContact: contactIdentifier, // Main contact for threading
+        participants: allParticipants, // All participants in conversation
+        participantHistory: participantHistory, // Track participant changes
+        threadingKey: threadingKey, // Enhanced threading key
         subject: subject, // Store original subject
         normalizedSubject: normalizedSubject, // Store normalized subject for debugging
         createdAt: timestamp,
@@ -134,7 +164,7 @@ export async function generateOrGetEmailFlowId(docClient, flowsTable, userId, co
         messageCount: 0,
         tags: ['all'],
         status: 'open',
-        threadingType: 'email-subject' // Track how this thread was created
+        threadingType: allParticipants.length > 1 ? 'email-participants' : 'email-subject'
       },
       ConditionExpression: 'attribute_not_exists(flowId)' // Prevent duplicates
     }));
@@ -217,10 +247,13 @@ export async function generateOrGetFlowId(docClient, flowsTable, userId, contact
         return retryResult.Items[0].flowId;
       }
     }
-    console.error('❌ Error in generateOrGetFlowId:', error);
-    throw error;
-  }
+      console.error('❌ Error in generateOrGetFlowId:', error);
+  throw error;
 }
+}
+
+// Export helper functions for use in other modules
+export { parseEmailList, extractEmailAddress, generateParticipantThreadingKey, extractEmailParticipants };
 
 /**
  * Update flow metadata (message count, last message timestamp)
@@ -251,4 +284,77 @@ export async function updateFlowMetadata(docClient, flowsTable, userId, flowId, 
     console.error('❌ Error updating flow metadata:', error);
     throw error;
   }
+} 
+
+// =============================================================================
+// HELPER FUNCTIONS FOR CC/BCC SUPPORT
+// =============================================================================
+
+/**
+ * Parse comma-separated email list into array of clean email addresses
+ * @param {string} emailString - Comma-separated email string
+ * @returns {string[]} Array of clean email addresses
+ */
+function parseEmailList(emailString) {
+  if (!emailString) return [];
+  return emailString
+    .split(',')
+    .map(email => extractEmailAddress(email.trim()))
+    .filter(Boolean);
+}
+
+/**
+ * Extract email address from various formats
+ * @param {string} emailString - Email in format "Name <email>" or "email"
+ * @returns {string|null} Clean email address
+ */
+function extractEmailAddress(emailString) {
+  if (!emailString) return null;
+  
+  // Handle formats like "Name <email@domain.com>" or just "email@domain.com"
+  const match = emailString.match(/<([^>]+)>/) || emailString.match(/([^\s<>]+@[^\s<>]+)/);
+  return match ? match[1].toLowerCase().trim() : emailString.toLowerCase().trim();
+}
+
+/**
+ * Generate threading key for multi-participant emails
+ * @param {string[]} participants - Array of email addresses
+ * @param {string} subject - Normalized subject
+ * @returns {string} Threading key
+ */
+function generateParticipantThreadingKey(participants, subject) {
+  if (!participants || participants.length === 0) {
+    return `single:#${subject}`;
+  }
+  
+  // Sort participants for consistent hashing
+  const sorted = [...participants].sort();
+  const participantString = sorted.join(',');
+  const hash = crypto.createHash('md5').update(participantString).digest('hex').substring(0, 8);
+  
+  return `participants:${hash}#${subject}`;
+}
+
+/**
+ * Extract all participants from email headers
+ * @param {Object} headers - Email headers object
+ * @returns {Object} Object with participant arrays
+ */
+function extractEmailParticipants(headers) {
+  const fromAddress = extractEmailAddress(headers['From'] || headers['from']);
+  const toAddresses = parseEmailList(headers['To'] || headers['to']);
+  const ccAddresses = parseEmailList(headers['Cc'] || headers['CC'] || headers['cc']);
+  const bccAddresses = parseEmailList(headers['Bcc'] || headers['BCC'] || headers['bcc']);
+  
+  // Combine all participants (excluding BCC for threading - they're invisible)
+  const allParticipants = [fromAddress, ...toAddresses, ...ccAddresses].filter(Boolean);
+  
+  return {
+    from: fromAddress,
+    to: toAddresses,
+    cc: ccAddresses,
+    bcc: bccAddresses,
+    all: allParticipants,
+    primary: fromAddress || (toAddresses.length > 0 ? toAddresses[0] : null)
+  };
 } 

@@ -7,8 +7,8 @@ import {
   GetCommand
 } from "@aws-sdk/lib-dynamodb";
 import { EventBridgeClient, PutRuleCommand, PutTargetsCommand } from "@aws-sdk/client-eventbridge";
-import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import { v4 as uuidv4 } from "uuid";
+import fetch from 'node-fetch';
 
 const REGION = process.env.AWS_REGION;
 const REMINDERS_TABLE = process.env.REMINDERS_TABLE;
@@ -21,7 +21,6 @@ if (!REGION || !REMINDERS_TABLE) {
 const ddbClient = new DynamoDBClient({ region: REGION });
 const docClient = DynamoDBDocumentClient.from(ddbClient);
 const eventBridgeClient = new EventBridgeClient({ region: REGION });
-const sesClient = new SESClient({ region: REGION });
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -78,12 +77,16 @@ async function createReminder(event) {
     threadId,
     userId,
     userEmail,
+    recipientEmail, // Optional: if not provided, defaults to userEmail
     reminderType,
     scheduledTime,
     note = "",
     threadTitle = "Conversation",
     contactEmail = ""
   } = body;
+  
+  // Use recipientEmail if provided, otherwise fall back to userEmail
+  const finalRecipientEmail = recipientEmail || userEmail;
 
   // Validate required fields
   if (!threadId || !userId || !userEmail || !reminderType || !scheduledTime) {
@@ -330,6 +333,7 @@ async function sendScheduledReminder(event) {
 
 async function sendReminderEmail(reminder) {
   const {
+    userID,
     userEmail,
     reminderType,
     threadTitle,
@@ -406,29 +410,32 @@ View conversation: https://usebeya.com/inbox
 This reminder was automatically sent by Beya
   `;
 
-  const params = {
-    Source: 'notifications@usebeya.com', // Make sure this is verified in SES
-    Destination: {
-      ToAddresses: [userEmail]
-    },
-    Message: {
-      Subject: {
-        Data: subject,
-        Charset: 'UTF-8'
-      },
-      Body: {
-        Html: {
-          Data: htmlBody,
-          Charset: 'UTF-8'
-        },
-        Text: {
-          Data: textBody,
-          Charset: 'UTF-8'
-        }
-      }
-    }
+  // Use the inbox send API to send email from user to themselves
+  const INBOX_SEND_URL = 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/send/email';
+  
+  const payload = {
+    to: userEmail,
+    subject: subject,
+    text: textBody,
+    html: htmlBody,
+    userId: userID
   };
 
-  await sesClient.send(new SendEmailCommand(params));
-  console.log(`📧 Reminder email sent to ${userEmail}`);
+  console.log(`📧 Sending reminder email via inbox API to ${userEmail} for user ${userID}`);
+
+  const response = await fetch(INBOX_SEND_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to send reminder email: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log(`✅ Reminder email sent successfully via inbox API:`, result);
 } 

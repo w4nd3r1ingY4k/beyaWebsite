@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Inbox, Users, Send, Trash2 } from 'lucide-react';
+import { Inbox, Users, Send, Trash2, MessageCircle } from 'lucide-react';
 import { connectionsService, ConnectionsResponse, UserConnections } from '../../../../../connectionsService';
 import { useAuth } from '../../../../AuthContext';
 import { API_ENDPOINTS } from '../../../../../config/api';
@@ -114,6 +114,8 @@ const ThreadList: React.FC<Props> = ({
   // Refs
   const tagDropdownRef = useRef<HTMLDivElement>(null);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Fetch user connections
   const fetchUserConnections = async () => {
@@ -472,6 +474,25 @@ const ThreadList: React.FC<Props> = ({
     };
   }, []);
 
+  // Handle scroll events to show/hide scrollbar
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Show scrollbar immediately
+    container.classList.add('scrolling');
+
+    // Clear existing timeout
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+
+    // Hide scrollbar after 500ms of no scrolling
+    scrollTimeoutRef.current = setTimeout(() => {
+      container.classList.remove('scrolling');
+    }, 500);
+  };
+
   // Effects
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -484,6 +505,15 @@ const ThreadList: React.FC<Props> = ({
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Cleanup scroll timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+      }
+    };
   }, []);
 
   // Helper functions
@@ -522,10 +552,7 @@ const ThreadList: React.FC<Props> = ({
   const formatEmailAddress = (email: string): string => {
     if (!email) return email;
     
-    // Log full email for debugging
-    if (email.length > 20) {
-      console.log('🔍 Full email being truncated:', email);
-    }
+
     
     // If email is 20 characters or less, show it as-is
     if (email.length <= 20) {
@@ -539,6 +566,21 @@ const ThreadList: React.FC<Props> = ({
   const getThreadTitle = (threadId: string): string => {
     const flow = flows.find(f => f.flowId === threadId);
     
+    // NEW: Multi-participant email threads - show all participants
+    if (flow?.participants && Array.isArray(flow.participants) && flow.participants.length > 1) {
+      const uniqueParticipants = [...new Set(flow.participants)];
+      const formattedParticipants = uniqueParticipants
+        .filter((p): p is string => typeof p === 'string' && p !== userId) // Exclude current user and ensure string type
+        .map(p => formatEmailAddress(p))
+        .slice(0, 3); // Show max 3 participants
+      
+      if (formattedParticipants.length > 0) {
+        const participantString = formattedParticipants.join(', ');
+        const extraCount = uniqueParticipants.length - 1 - formattedParticipants.length;
+        return extraCount > 0 ? `${participantString} +${extraCount}` : participantString;
+      }
+    }
+    
     // First priority: Use the new contactIdentifier field
     if (flow?.contactIdentifier) {
       // Handle WhatsApp group chats specially
@@ -549,7 +591,6 @@ const ThreadList: React.FC<Props> = ({
       }
       
       const formatted = formatEmailAddress(flow.contactIdentifier);
-      console.log('ThreadList - Using contactIdentifier:', flow.contactIdentifier, '→', formatted);
       return formatted;
     }
     
@@ -709,19 +750,48 @@ const ThreadList: React.FC<Props> = ({
   };
 
   return (
-    <div style={{
+    <>
+      {/* Custom scrollbar styles */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: transparent;
+          border-radius: 2px;
+          min-height: 40px;
+        }
+        .custom-scrollbar.scrolling::-webkit-scrollbar-thumb {
+          background: #DE1785;
+        }
+        .custom-scrollbar.scrolling::-webkit-scrollbar-thumb:hover {
+          background: #C91476;
+        }
+        .custom-scrollbar {
+          scrollbar-width: none;
+        }
+        .custom-scrollbar.scrolling {
+          scrollbar-width: thin;
+          scrollbar-color: #DE1785 transparent;
+        }
+      `}</style>
       
-      width: '460px', // Increased width to accommodate both columns
-      minWidth: '460px', // Prevent compression
-      maxWidth: '460px', // Prevent expansion
-      flexShrink: 0, // Prevent flex compression
-      height: '100vh',
-      background: '#fff',
-      display: 'flex',
-      flexDirection: 'row', // Changed to row for side-by-side layout
-      overflow: 'hidden',
-      zIndex: 0
-    }}>
+      <div style={{
+        
+        width: '460px', // Increased width to accommodate both columns
+        minWidth: '460px', // Prevent compression
+        maxWidth: '460px', // Prevent expansion
+        flexShrink: 0, // Prevent flex compression
+        height: '100vh',
+        background: '#fff',
+        display: 'flex',
+        flexDirection: 'row', // Changed to row for side-by-side layout
+        overflow: 'hidden',
+        zIndex: 0
+      }}>
       {/* Left Column - Categories and Filters */}
       <div style={{
         width: '180px',
@@ -751,6 +821,10 @@ const ThreadList: React.FC<Props> = ({
               color: '#fff',
               textAlign: 'center',
               transition: 'background 0.18s',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              MozUserSelect: 'none',
+              msUserSelect: 'none'
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = '#C91476';
@@ -787,6 +861,10 @@ const ThreadList: React.FC<Props> = ({
                   alignItems: "center",
                   justifyContent: "space-between",
                   transition: "background 0.18s",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  MozUserSelect: "none",
+                  msUserSelect: "none"
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
                 onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
@@ -816,7 +894,7 @@ const ThreadList: React.FC<Props> = ({
                     style={{
                       width: "100%",
                       padding: "8px 12px",
-                      background: selectedAccountFilter.type === 'all' && actualViewFilter === "owned" ? "#EAE5E5" : "transparent",
+                      background: (currentView === 'inbox' && selectedAccountFilter.type === 'all' && actualViewFilter === "owned") ? "#EAE5E5" : "transparent",
                       border: "1px solid transparent",
                       borderRadius: "6px",
                       cursor: "pointer",
@@ -828,15 +906,19 @@ const ThreadList: React.FC<Props> = ({
                       display: "flex",
                       alignItems: "center",
                       gap: "8px",
-                      marginBottom: "2px"
+                      marginBottom: "2px",
+                      userSelect: "none",
+                      WebkitUserSelect: "none",
+                      MozUserSelect: "none",
+                      msUserSelect: "none"
                     }}
                     onMouseEnter={(e) => {
-                      if (!(selectedAccountFilter.type === 'all' && actualViewFilter === "owned")) {
+                      if (!(currentView === 'inbox' && selectedAccountFilter.type === 'all' && actualViewFilter === "owned")) {
                         e.currentTarget.style.background = "#f9fafb";
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (!(selectedAccountFilter.type === 'all' && actualViewFilter === "owned")) {
+                      if (!(currentView === 'inbox' && selectedAccountFilter.type === 'all' && actualViewFilter === "owned")) {
                         e.currentTarget.style.background = "transparent";
                       }
                     }}
@@ -887,7 +969,7 @@ const ThreadList: React.FC<Props> = ({
                           style={{
                             width: "100%",
                             padding: "8px 12px",
-                            background: selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email ? "#EAE5E5" : "transparent",
+                            background: (currentView === 'inbox' && selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email) ? "#EAE5E5" : "transparent",
                             border: "1px solid transparent",
                             borderRadius: "6px",
                             cursor: "pointer",
@@ -899,20 +981,32 @@ const ThreadList: React.FC<Props> = ({
                             display: "flex",
                             alignItems: "center",
                             gap: "8px",
-                            marginBottom: "2px"
+                            marginBottom: "2px",
+                            userSelect: "none",
+                            WebkitUserSelect: "none",
+                            MozUserSelect: "none",
+                            msUserSelect: "none"
                           }}
                           onMouseEnter={(e) => {
-                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email)) {
+                            if (!(currentView === 'inbox' && selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email)) {
                               e.currentTarget.style.background = "#f9fafb";
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email)) {
+                            if (!(currentView === 'inbox' && selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountEmail === account.email)) {
                               e.currentTarget.style.background = "transparent";
                             }
                           }}
                         >
-                          <span style={{ fontSize: '12px' }}>📧</span>
+                          <img 
+                            src="/assets/icons/gmail-logo.png" 
+                            alt="Gmail" 
+                            style={{ 
+                              width: '12px', 
+                              height: '12px', 
+                              objectFit: 'contain' 
+                            }} 
+                          />
                           <span style={{ 
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -944,7 +1038,7 @@ const ThreadList: React.FC<Props> = ({
                           style={{
                             width: "100%",
                             padding: "8px 12px",
-                            background: selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail' ? "#EAE5E5" : "transparent",
+                            background: (currentView === 'inbox' && selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail') ? "#EAE5E5" : "transparent",
                             border: "1px solid transparent",
                             borderRadius: "6px",
                             cursor: "pointer",
@@ -956,20 +1050,32 @@ const ThreadList: React.FC<Props> = ({
                             display: "flex",
                             alignItems: "center",
                             gap: "8px",
-                            marginBottom: "2px"
+                            marginBottom: "2px",
+                            userSelect: "none",
+                            WebkitUserSelect: "none",
+                            MozUserSelect: "none",
+                            msUserSelect: "none"
                           }}
                           onMouseEnter={(e) => {
-                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail')) {
+                            if (!(currentView === 'inbox' && selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail')) {
                               e.currentTarget.style.background = "#f9fafb";
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (!(selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail')) {
+                            if (!(currentView === 'inbox' && selectedAccountFilter.type === 'gmail' && selectedAccountFilter.accountId === 'primary-gmail')) {
                               e.currentTarget.style.background = "transparent";
                             }
                           }}
                         >
-                          <span style={{ fontSize: '12px' }}>📧</span>
+                          <img 
+                            src="/assets/icons/gmail-logo.png" 
+                            alt="Gmail" 
+                            style={{ 
+                              width: '12px', 
+                              height: '12px', 
+                              objectFit: 'contain' 
+                            }} 
+                          />
                           <span style={{ 
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -1000,7 +1106,7 @@ const ThreadList: React.FC<Props> = ({
                           style={{
                             width: "100%",
                             padding: "8px 12px",
-                            background: selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id ? "#EAE5E5" : "transparent",
+                            background: (currentView === 'inbox' && selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id) ? "#EAE5E5" : "transparent",
                             border: "1px solid transparent",
                             borderRadius: "6px",
                             cursor: "pointer",
@@ -1012,20 +1118,32 @@ const ThreadList: React.FC<Props> = ({
                             display: "flex",
                             alignItems: "center",
                             gap: "8px",
-                            marginBottom: "2px"
+                            marginBottom: "2px",
+                            userSelect: "none",
+                            WebkitUserSelect: "none",
+                            MozUserSelect: "none",
+                            msUserSelect: "none"
                           }}
                           onMouseEnter={(e) => {
-                            if (!(selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id)) {
+                            if (!(currentView === 'inbox' && selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id)) {
                               e.currentTarget.style.background = "#f9fafb";
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (!(selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id)) {
+                            if (!(currentView === 'inbox' && selectedAccountFilter.type === 'whatsapp' && selectedAccountFilter.accountId === account.id)) {
                               e.currentTarget.style.background = "transparent";
                             }
                           }}
                         >
-                          <span style={{ fontSize: '12px' }}>📱</span>
+                          <img 
+                            src="/assets/icons/whatsapp-logo.png" 
+                            alt="WhatsApp" 
+                            style={{ 
+                              width: '12px', 
+                              height: '12px', 
+                              objectFit: 'contain' 
+                            }} 
+                          />
                           <span style={{ 
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -1053,14 +1171,14 @@ const ThreadList: React.FC<Props> = ({
               )}
             </div>
 
-            {/* Shared With Me Section */}
+            {/* Discussions Section */}
             <div>
               <button
-                onClick={() => toggleSection('shared')}
+                onClick={onDiscussionsClick}
                 style={{
                   width: "100%",
                   padding: "8px 12px",
-                  background: "transparent",
+                  background: currentView === 'discussions' ? "#EAE5E5" : "transparent",
                   border: "1px solid transparent",
                   borderRadius: "6px",
                   cursor: "pointer",
@@ -1072,58 +1190,80 @@ const ThreadList: React.FC<Props> = ({
                   alignItems: "center",
                   justifyContent: "space-between",
                   transition: "background 0.18s",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  MozUserSelect: "none",
+                  msUserSelect: "none"
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                onMouseEnter={(e) => {
+                  if (currentView !== 'discussions') {
+                    e.currentTarget.style.background = "#f9fafb";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = currentView === 'discussions' ? "#EAE5E5" : "transparent";
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <MessageCircle size={16} />
+                  Discussions
+                </div>
+              </button>
+            </div>
+
+            {/* Shared With Me Section */}
+            <div>
+              <button
+                onClick={() => {
+                  onBackToInbox?.();
+                  handleViewFilterChange("sharedWithMe");
+                }}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  background: (currentView === 'inbox' && actualViewFilter === "sharedWithMe") ? "#EAE5E5" : "transparent",
+                  border: "1px solid transparent",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  color: "#6b7280",
+                  textAlign: "left",
+                  display: "flex",
+                  alignItems: "center",
+                  transition: "background 0.18s",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  MozUserSelect: "none",
+                  msUserSelect: "none"
+                }}
+                onMouseEnter={(e) => {
+                  if (!(currentView === 'inbox' && actualViewFilter === "sharedWithMe")) {
+                    e.currentTarget.style.background = "#f9fafb";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = (currentView === 'inbox' && actualViewFilter === "sharedWithMe") ? "#EAE5E5" : "transparent";
+                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Users size={16} />
                   Shared with me
                 </div>
-                <span style={{ 
-                  fontSize: '12px',
-                  transform: expandedSections.shared ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s'
-                }}>
-                  ▶
-                </span>
               </button>
-              
-              {expandedSections.shared && (
-                <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
-                  <button
-                    onClick={() => {
-                      handleViewFilterChange("sharedWithMe");
-                      onBackToInbox?.();
-                    }}
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      background: actualViewFilter === "sharedWithMe" ? "#EAE5E5" : "transparent",
-                      border: "1px solid transparent",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                      fontWeight: "500",
-                      color: "#374151",
-                      textAlign: "left",
-                      transition: "background 0.18s",
-                    }}
-                  >
-                    Shared Conversations
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Shared By Me Section */}
             <div>
               <button
-                onClick={() => toggleSection('sharedByMe')}
+                onClick={() => {
+                  onBackToInbox?.();
+                  handleViewFilterChange("sharedByMe");
+                }}
                 style={{
                   width: "100%",
                   padding: "8px 12px",
-                  background: "transparent",
+                  background: (currentView === 'inbox' && actualViewFilter === "sharedByMe") ? "#EAE5E5" : "transparent",
                   border: "1px solid transparent",
                   borderRadius: "6px",
                   cursor: "pointer",
@@ -1133,57 +1273,39 @@ const ThreadList: React.FC<Props> = ({
                   textAlign: "left",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
                   transition: "background 0.18s",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  MozUserSelect: "none",
+                  msUserSelect: "none"
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                onMouseEnter={(e) => {
+                  if (!(currentView === 'inbox' && actualViewFilter === "sharedByMe")) {
+                    e.currentTarget.style.background = "#f9fafb";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = (currentView === 'inbox' && actualViewFilter === "sharedByMe") ? "#EAE5E5" : "transparent";
+                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Send size={16} />
                   Shared By Me ({sharedByMe.length})
                 </div>
-                <span style={{ 
-                  fontSize: '12px',
-                  transform: expandedSections.sharedByMe ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s'
-                }}>
-                  ▶
-                </span>
               </button>
-              
-              {expandedSections.sharedByMe && (
-                <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
-                  <button
-                    onClick={() => handleViewFilterChange("sharedByMe")}
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      background: actualViewFilter === "sharedByMe" ? "#EAE5E5" : "transparent",
-                      border: "1px solid transparent",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                      fontWeight: "500",
-                      color: "#374151",
-                      textAlign: "left",
-                      transition: "background 0.18s",
-                    }}
-                  >
-                    All Shared By Me
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Deleted Section */}
             <div>
               <button
-                onClick={() => toggleSection('deleted')}
+                onClick={() => {
+                  onBackToInbox?.();
+                  handleViewFilterChange("deleted");
+                }}
                 style={{
                   width: "100%",
                   padding: "8px 12px",
-                  background: "transparent",
+                  background: (currentView === 'inbox' && actualViewFilter === "deleted") ? "#EAE5E5" : "transparent",
                   border: "1px solid transparent",
                   borderRadius: "6px",
                   cursor: "pointer",
@@ -1193,83 +1315,30 @@ const ThreadList: React.FC<Props> = ({
                   textAlign: "left",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
                   transition: "background 0.18s",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  MozUserSelect: "none",
+                  msUserSelect: "none"
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = "#f9fafb"}
-                onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                onMouseEnter={(e) => {
+                  if (!(currentView === 'inbox' && actualViewFilter === "deleted")) {
+                    e.currentTarget.style.background = "#f9fafb";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = (currentView === 'inbox' && actualViewFilter === "deleted") ? "#EAE5E5" : "transparent";
+                }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Trash2 size={16} />
                   Deleted
                 </div>
-                <span style={{ 
-                  fontSize: '12px',
-                  transform: expandedSections.deleted ? 'rotate(90deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s'
-                }}>
-                  ▶
-                </span>
               </button>
-              
-              {expandedSections.deleted && (
-                <div style={{ paddingLeft: '16px', marginTop: '4px' }}>
-                  <button
-                    onClick={() => handleViewFilterChange("deleted")}
-                    style={{
-                      width: "100%",
-                      padding: "8px 12px",
-                      background: actualViewFilter === "deleted" ? "#EAE5E5" : "transparent",
-                      border: "1px solid transparent",
-                      borderRadius: "6px",
-                      cursor: "pointer",
-                      fontSize: "13px",
-                      fontWeight: "500",
-                      color: "#374151",
-                      textAlign: "left",
-                      transition: "background 0.18s",
-                    }}
-                  >
-                    Deleted Items
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
-          {/* Discussions Section */}
-          <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #e5e7eb' }}>
-            <button
-              onClick={onDiscussionsClick}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: "#f8f9fa",
-                border: "2px solid #DE1785",
-                borderRadius: "8px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "600",
-                color: "#DE1785",
-                textAlign: "center",
-                transition: "all 0.18s",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px"
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#DE1785";
-                e.currentTarget.style.color = "#fff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#f8f9fa";
-                e.currentTarget.style.color = "#DE1785";
-              }}
-            >
-              💬 Discussions
-            </button>
-          </div>
+
         </div>
 
 
@@ -1292,9 +1361,8 @@ const ThreadList: React.FC<Props> = ({
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            alignItems: 'center',
-                      }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            alignItems: 'center'
+          }}>
                 {/* Search Button */}
                 <button
                   onClick={() => {
@@ -1304,14 +1372,16 @@ const ThreadList: React.FC<Props> = ({
                     }
                   }}
                   style={{
-                    padding: '8px',
+                    padding: '8px 12px',
                     background: 'transparent',
                     border: '1px solid #e5e7eb',
                     borderRadius: '6px',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    color: '#6b7280',
                     transition: 'all 0.18s'
                   }}
                 >
@@ -1320,7 +1390,7 @@ const ThreadList: React.FC<Props> = ({
                     height="16"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#6b7280"
+                    stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -1328,9 +1398,10 @@ const ThreadList: React.FC<Props> = ({
                     <circle cx="11" cy="11" r="8"></circle>
                     <path d="m21 21-4.35-4.35"></path>
                   </svg>
+                  Search
                 </button>
 
-                {/* Sort Toggle Button */}
+                {/* Sort Toggle Button - Centered */}
                 <button
                   onClick={() => setSortOrder(sortOrder === 'newest' ? 'oldest' : 'newest')}
                   style={{
@@ -1352,7 +1423,6 @@ const ThreadList: React.FC<Props> = ({
                   </span>
                   {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
                 </button>
-
                 {/* Tag Filter Dropdown */}
                 <div style={{ position: 'relative' }} ref={tagDropdownRef}>
               <button
@@ -1371,7 +1441,18 @@ const ThreadList: React.FC<Props> = ({
                   transition: "all 0.18s"
                 }}
               >
-                <span style={{ fontSize: '14px' }}>🏷️</span>
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46 22,3" />
+                </svg>
                 Filter
                 {categoryFilter.length > 0 && (
                   <span style={{
@@ -1389,9 +1470,6 @@ const ThreadList: React.FC<Props> = ({
                     {categoryFilter.length}
                   </span>
                 )}
-                <span style={{ fontSize: '10px' }}>
-                  {showTagDropdown ? '▼' : '▶'}
-                </span>
               </button>
 
               {showTagDropdown && (
@@ -1478,13 +1556,12 @@ const ThreadList: React.FC<Props> = ({
                 </div>
               )}
             </div>
-            </div>
           </div>
 
           {/* Collapsible Search Input */}
           {showSearchInput && (
             <div style={{
-              padding: '0 16px 16px 16px',
+              padding: '10px 0 16px 0',
               borderBottom: '1px solid #e5e7eb'
             }}>
               <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -1540,12 +1617,17 @@ const ThreadList: React.FC<Props> = ({
         </div>
 
         {/* Thread List */}
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          background: '#FBF7F7', // Light background for the container
-          padding: '8px' // Add padding around the thread items
-        }}>
+        <div 
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          style={{
+            flex: 1,
+            overflowY: 'auto',
+            background: '#FBF7F7', // Light background for the container
+            padding: '8px', // Add padding around the thread items
+          }}
+          className="custom-scrollbar"
+        >
           {filteredThreads.length === 0 ? (
             <div style={{
               padding: '32px 16px',
@@ -1576,6 +1658,10 @@ const ThreadList: React.FC<Props> = ({
                       : '0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.06)', // Subtle shadow for all items
                     transition: 'all 0.2s ease-in-out', // Smooth transitions for all properties
                     transform: isSelected ? 'translateY(-1px)' : 'translateY(0)', // Slight lift when selected
+                    minHeight: '120px', // Fixed minimum height to ensure consistent sizing
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between', // Distribute content evenly
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) {
@@ -1590,6 +1676,7 @@ const ThreadList: React.FC<Props> = ({
                     }
                   }}
                 >
+                  {/* Top section - Header with title and status */}
                   <div style={{
                     display: 'flex',
                     justifyContent: 'space-between',
@@ -1616,14 +1703,15 @@ const ThreadList: React.FC<Props> = ({
                       
                       <h4 style={{
                         margin: 0,
-                        fontSize: '14px',
+                        fontSize: '15px',
                         fontWeight: flow?.hasUnreadMessages ? '700' : '600',
                         color: flow?.hasUnreadMessages ? '#111827' : '#374151',
                         lineHeight: '1.2',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
-                        flex: 1
+                        flex: 1,
+                        fontFamily: 'AEONIK TRIAL, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                       }}>
                         {getThreadTitle(threadId)}
                       </h4>
@@ -1661,46 +1749,41 @@ const ThreadList: React.FC<Props> = ({
                     )}
                   </div>
                   
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    marginBottom: '4px'
-                  }}>
-                    {/* Direction indicator */}
-                    <span style={{
-                      fontSize: '10px',
-                      color: previewData.isOutgoing ? '#10b981' : '#6b7280',
-                      fontWeight: '500'
+                  {/* Middle section - Content that can expand */}
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
                     }}>
-                      {previewData.isOutgoing ? '➤' : '←'}
-                    </span>
-                    
-                    {/* Channel indicator */}
-                    {previewData.isEmail && (
+                      {/* Direction indicator */}
                       <span style={{
                         fontSize: '10px',
-                        color: '#6b7280'
+                        color: '#6b7280',
+                        fontWeight: '600',
+                        letterSpacing: '0.5px',
+                        fontFamily: 'AEONIK TRIAL, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
                       }}>
-                        📧
+                        {previewData.isOutgoing ? 'OUTGOING' : 'INCOMING'}
                       </span>
-                    )}
+                    </div>
+                    
+                    <p style={{
+                      margin: 0,
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      lineHeight: '1.4',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}>
+                      {previewData.content}
+                    </p>
                   </div>
                   
-                  <p style={{
-                    margin: 0,
-                    fontSize: '12px',
-                    color: '#6b7280',
-                    lineHeight: '1.4',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}>
-                    {previewData.content}
-                  </p>
-                  
-                  <div style={{ marginTop: '8px', display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                  {/* Bottom section - Tags */}
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '8px' }}>
                     {/* Primary tag */}
                     {flow?.primaryTag && (
                       <div style={{
@@ -1766,6 +1849,7 @@ const ThreadList: React.FC<Props> = ({
         </div>
       </div>
     </div>
+    </>
   );
 };
 

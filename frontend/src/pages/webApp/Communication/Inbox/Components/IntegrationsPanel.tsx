@@ -10,6 +10,7 @@ import QRCodeModal from './QRCodeModal';
 import gmailLogo from '../../../../../assets/images/logos/gmail logo.png';
 import whatsappLogo from '../../../../../assets/images/logos/whatsapp-icon logo.png';
 import hyrosLogo from '../../../../../assets/images/logos/Hyros logo.png';
+import msTeamsLogo from '../../../../../assets/images/logos/msTeamsLogo.png';
 
 // Fargate service URL - using DNS name instead of IP for stability
 const FARGATE_SERVICE_URL = config.FARGATE_SERVICE_URL;
@@ -238,6 +239,30 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
       ]
     },
     {
+      id: 'msteams',
+      name: 'Microsoft Teams',
+      icon: msTeamsLogo,
+      description: 'Team collaboration & communication',
+      connected: false,
+      detailedDescription: 'Integrate Microsoft Teams to streamline team communication and collaboration. Manage conversations, share files, and coordinate with your team directly from Beya while keeping all customer interactions organized.',
+      features: [
+        'Team chat and messaging',
+        'File sharing and collaboration',
+        'Video calls and meetings integration',
+        'Channel-based organization',
+        'Real-time notifications',
+        'Integration with Office 365 suite'
+      ],
+      setupSteps: [
+        'Ensure you have a Microsoft Teams account',
+        'Click the "Connect Integration" button',
+        'Sign in with your Microsoft credentials',
+        'Grant Beya permission to access Teams',
+        'Select which teams and channels to sync',
+        'Start collaborating from Beya!'
+      ]
+    },
+    {
       id: 'whatsapp-personal',
       name: 'WhatsApp Personal',
       icon: whatsappLogo,
@@ -463,6 +488,13 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
         // For demo purposes, just update the UI state
         updateIntegration('hyros', true, 'Demo mode');
         
+      } else if (integrationId === 'msteams') {
+        // Placeholder for Microsoft Teams integration
+        console.log('Microsoft Teams integration not yet implemented');
+        alert('Microsoft Teams integration coming soon! This is currently a UI placeholder.');
+        // For demo purposes, just update the UI state
+        updateIntegration('msteams', true, 'Demo mode');
+        
       } else if (integrationId === 'whatsapp-personal') {
         // OpenWA WhatsApp Personal integration
         console.log('Starting OpenWA WhatsApp Personal integration...');
@@ -564,6 +596,9 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
     } else if (integrationId === 'hyros') {
       // Placeholder for Hyros disconnection
       console.log('Disconnecting Hyros (demo mode)');
+    } else if (integrationId === 'msteams') {
+      // Placeholder for Microsoft Teams disconnection
+      console.log('Disconnecting Microsoft Teams (demo mode)');
     } else if (integrationId === 'whatsapp-personal') {
       // Disconnect OpenWA session
       try {

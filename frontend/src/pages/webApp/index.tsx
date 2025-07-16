@@ -14,10 +14,13 @@ import InboxHome from './Communication/Inbox/Home';
 import ContactsCRM from './Communication/Contacts/Home';
 import CalendarPage from './Communication/Schedule/ScheduleHome';
 import TicketsHome from './Communication/Tickets/TicketsHome';
+import CommunicationDashboard from './Communication/CommunicationDashboard';
 import PaymentsHome from './Commerce/Payments/PaymentsHome';
 import ProductsHome from './Commerce/Products/ProductsHome';
 import OrdersHome from './Commerce/Orders/OrdersHome';
 import WebsiteHome from './Commerce/Website/WebsiteHome';
+import AttributionHome from './Commerce/AttributionHome';
+import CommerceDashboard from './Commerce/CommerceDashboard';
 import { useAuth } from "../AuthContext";
 import IntegrationsPanel from './Communication/Inbox/Components/IntegrationsPanel';
 import CommandBChat from './Communication/Inbox/Components/CommandBChat';
@@ -52,6 +55,7 @@ const Homes: React.FC = () => {
   // Resizable sidebar state
   const [rightSidebarWidth, setRightSidebarWidth] = useState(280);
   const [isResizing, setIsResizing] = useState(false);
+  const [isRightPanelHidden, setIsRightPanelHidden] = useState(false);
   
 const navigate = useNavigate();
   // 1) Redirect to /login if auth is done but no user
@@ -61,18 +65,36 @@ const navigate = useNavigate();
     }
   }, [authLoading, user, navigate]);
 
-  // 2) Global keyboard shortcut for Command-B chat
+  // 2) Global keyboard shortcuts for panel control
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
         e.preventDefault();
-        setIsCommandBChatOpen(prev => !prev);
+        
+        // Command+Shift+B: Hide panel completely
+        if (e.shiftKey) {
+          setIsRightPanelHidden(true);
+          setRightSidebarWidth(0);
+          setIsCommandBChatOpen(false);
+          return;
+        }
+        
+        // Command+B: Show panel and toggle chat
+        // If panel is hidden, restore it first, then open chat
+        if (isRightPanelHidden) {
+          setIsRightPanelHidden(false);
+          setRightSidebarWidth(280);
+          setIsCommandBChatOpen(true);
+        } else {
+          // If panel is visible, just toggle chat
+          setIsCommandBChatOpen(prev => !prev);
+        }
       }
     };
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [isRightPanelHidden]);
 
   // 3) Handle resizing functionality
   useEffect(() => {
@@ -83,11 +105,19 @@ const navigate = useNavigate();
       e.stopPropagation();
       
       const newWidth = window.innerWidth - e.clientX;
-      // Set minimum and maximum widths
       const minWidth = 200;
       const maxWidth = Math.min(600, window.innerWidth * 0.6);
+      const hideThreshold = 50; // Hide panel when width is less than 50px
       
-      setRightSidebarWidth(Math.max(minWidth, Math.min(maxWidth, newWidth)));
+      if (newWidth < hideThreshold) {
+        // Hide the panel completely
+        setIsRightPanelHidden(true);
+        setRightSidebarWidth(0);
+      } else {
+        // Show panel and constrain width
+        setIsRightPanelHidden(false);
+        setRightSidebarWidth(Math.max(minWidth, Math.min(maxWidth, newWidth)));
+      }
     };
 
     const handleMouseUp = (e: MouseEvent) => {
@@ -166,10 +196,9 @@ const navigate = useNavigate();
           return <TicketsHome />;
         default:
           return (
-            <div style={{ marginTop: 30 }}>
-              <h2>Communication Dashboard</h2>
-              <p>Select something from the Communication menu</p>
-            </div>
+            <CommunicationDashboard 
+              onOptionSelect={(optionId) => handleMenuSelect('communication', optionId)}
+            />
           );
       }
     }
@@ -184,12 +213,13 @@ const navigate = useNavigate();
           return <OrdersHome />;
         case 'website':
           return <WebsiteHome />;
+        case 'attribution':
+          return <AttributionHome />;
         default:
           return (
-            <div style={{ marginTop: 30 }}>
-              <h2>Commerce Dashboard</h2>
-              <p>Select something from the Commerce menu</p>
-            </div>
+            <CommerceDashboard 
+              onOptionSelect={(optionId) => handleMenuSelect('commerce', optionId)}
+            />
           );
       }
     }
@@ -233,57 +263,75 @@ const navigate = useNavigate();
         {renderContent()}
         </div>
 
-        {/* Resize Handle */}
+        {/* Resize Handle - Always visible, but styled differently when panel is hidden */}
         <div
           data-resize-handle
           style={{
-            width: '4px',
-            backgroundColor: isResizing ? '#3b82f6' : 'transparent',
+            width: isRightPanelHidden ? '8px' : '4px',
+            backgroundColor: isResizing ? '#3b82f6' : (isRightPanelHidden ? '#e5e7eb' : 'transparent'),
             cursor: 'ew-resize',
             flexShrink: 0,
             position: 'relative',
-            transition: isResizing ? 'none' : 'background-color 0.2s',
+            transition: isResizing ? 'none' : 'all 0.2s',
+            borderRadius: isRightPanelHidden ? '4px 0 0 4px' : '0',
+            opacity: isRightPanelHidden ? 0.7 : 1,
           }}
           onMouseDown={(e) => {
             e.preventDefault();
             setIsResizing(true);
           }}
+          onDoubleClick={() => {
+            if (isRightPanelHidden) {
+              // Restore panel to default width
+              setIsRightPanelHidden(false);
+              setRightSidebarWidth(280);
+            } else {
+              // Hide panel
+              setIsRightPanelHidden(true);
+              setRightSidebarWidth(0);
+            }
+          }}
           onMouseEnter={(e) => {
             if (!isResizing) {
-              e.currentTarget.style.backgroundColor = '#e5e7eb';
+              e.currentTarget.style.backgroundColor = isRightPanelHidden ? '#d1d5db' : '#e5e7eb';
+              e.currentTarget.style.opacity = '1';
             }
           }}
           onMouseLeave={(e) => {
             if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'transparent';
+              e.currentTarget.style.backgroundColor = isRightPanelHidden ? '#e5e7eb' : 'transparent';
+              e.currentTarget.style.opacity = isRightPanelHidden ? '0.7' : '1';
             }
           }}
         />
 
         {/* Right Sidebar - Global Chat & Integrations */}
-        <div style={{ 
-          width: `${rightSidebarWidth}px`, 
-          borderLeft: '1px solid #e5e7eb',
-          backgroundColor: '#fff',
-          flexShrink: 0,
-          height: '100vh',
-          overflow: 'hidden',
-          margin: 0,
-          padding: 0
-        }}>
-          {isCommandBChatOpen ? (
-            <CommandBChat 
-              onClose={() => {
-                setIsCommandBChatOpen(false);
-                setAiChatInitialMessage(null);
-              }} 
-              initialMessage={aiChatInitialMessage}
-              width={rightSidebarWidth}
-            />
-          ) : (
-            <IntegrationsPanel width={rightSidebarWidth} />
-          )}
-        </div>
+        {!isRightPanelHidden && (
+          <div style={{ 
+            width: `${rightSidebarWidth}px`, 
+            borderLeft: '1px solid #e5e7eb',
+            backgroundColor: '#fff',
+            flexShrink: 0,
+            height: '100vh',
+            overflow: 'hidden',
+            margin: 0,
+            padding: 0,
+            transition: 'width 0.2s ease-out'
+          }}>
+            {isCommandBChatOpen ? (
+              <CommandBChat 
+                onClose={() => {
+                  setIsCommandBChatOpen(false);
+                  setAiChatInitialMessage(null);
+                }} 
+                initialMessage={aiChatInitialMessage}
+                width={rightSidebarWidth}
+              />
+            ) : (
+              <IntegrationsPanel width={rightSidebarWidth} />
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

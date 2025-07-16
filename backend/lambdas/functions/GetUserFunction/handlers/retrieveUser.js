@@ -118,13 +118,19 @@ async function handleUserRequest(userId) {
     };
   }
 
+  // Map subscriber_email to email for frontend compatibility
+  const userResponse = {
+    ...Item,
+    email: Item.subscriber_email // Map subscriber_email to email
+  };
+
   // Return the full metadata
   return {
     statusCode: 200,
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify(Item)
+    body: JSON.stringify(userResponse)
   };
 }
 
