@@ -55,3 +55,6 @@ node_modules/
 **.node-persist**
 **_IGNORE_**
 # end managed by open-wa
+# Lambda deployment packages and node_modules
+backend/lambdas/functions/*/node_modules/
+backend/lambdas/functions/*/*.zip
