@@ -3,12 +3,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SideMenu } from './SideMenu';
-import { ReactComponent as HomeIcon } from './assets/icons/HomeIcon.svg';
-import { ReactComponent as CRMIcon } from './assets/icons/CRMIcon.svg';
-import { ReactComponent as DataIcon } from './assets/icons/DataIcon.svg';
-import { ReactComponent as LogisticsIcon } from './assets/icons/LogisticsIcon.svg';
-import { ReactComponent as MarketingIcon } from './assets/icons/MarketingIcon.svg';
-import { ReactComponent as CommerceIcon } from './assets/icons/CommerceIcon.svg';
+import { ReactComponent as HomeIcon } from './Assets/Icons/HomeIcon.svg';
+import { ReactComponent as CRMIcon } from './Assets/Icons/CRMIcon.svg';
+import { ReactComponent as DataIcon } from './Assets/Icons/DataIcon.svg';
+import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.svg';
+import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
+import { ReactComponent as CommerceIcon } from './Assets/Icons/CommerceIcon.svg';
 import InboxHome from './CRM/Inbox/Home';
 import ContactsCRM from './CRM/Contacts/Home';
 import CalendarPage from './CRM/Schedule/ScheduleHome';
@@ -16,7 +16,7 @@ import { useAuth } from "@/pages/AuthContext";
 import IntegrationsPanel from './CRM/Inbox/Components/IntegrationsPanel';
 import CommandBChat from './CRM/Inbox/Components/CommandBChat';
 import LoadingScreen from './components/LoadingScreen';
-import HomeDashboard from './home/index';
+import HomeDashboard from './Home/index';
 
 const ICON_SIZE = 60;
 const GAP = 24;
