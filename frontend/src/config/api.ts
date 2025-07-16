@@ -2,56 +2,45 @@
 // Handles different API endpoints for different environments
 
 interface APIConfig {
-  BACKEND_URL: string;
-  FARGATE_SERVICE_URL: string;
-  // Add other API endpoints here
+  API_GATEWAY_URL: string;
 }
 
-// Force production URLs for testing (set to true to test production endpoints locally)
-const FORCE_PRODUCTION_URLS = false;
+// Helper to get env variable or fallback
+const env = (key: string, fallback: string) =>
+  (typeof process !== 'undefined' && process.env[key]) ? process.env[key] as string : fallback;
 
-// Detect environment
-const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost';
-const isProduction = process.env.NODE_ENV === 'production';
-
-// Environment-based configuration
+// Environment-based configuration using .env variables
 const config: APIConfig = {
-  BACKEND_URL: (isDevelopment && !FORCE_PRODUCTION_URLS)
-    ? 'http://localhost:2074' 
-    : 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com', // New API Gateway endpoint
-  
-  FARGATE_SERVICE_URL: (isDevelopment && !FORCE_PRODUCTION_URLS)
-    ? 'http://localhost:2074'
-    : 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com', // New API Gateway endpoint
+  API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'http://localhost:2074'),
 };
 
 // Export individual endpoints for easy importing
 export const API_ENDPOINTS = {
   // Main backend endpoints via API Gateway
-  WORKFLOW: `${config.BACKEND_URL}/workflow`,
-  QUERY_AI: `${config.BACKEND_URL}/api/v1/query-with-ai`,
-  WHATSAPP_CONNECT: `${config.FARGATE_SERVICE_URL}/whatsapp/connect`,
-  GMAIL_CONNECT: `${config.FARGATE_SERVICE_URL}/gmail/connect`,
-  INTEGRATIONS_SETUP: `${config.FARGATE_SERVICE_URL}/api/integrations/setup-polling`,
-  BACKEND_URL: config.BACKEND_URL, // Export base URL for components that need it
-  
-  // Lambda Function URLs (these remain direct Lambda URLs)
-  GET_USER: 'https://qyb7x6hp2fhypw5gf7kjk3hf7a0hmoev.lambda-url.us-east-1.on.aws',
-  CREATE_USER: 'https://qfk6yjyzg6utzok6gpels4cyhy0vhrmg.lambda-url.us-east-1.on.aws',
-  UPDATE_USER: 'https://srt2mvwqmhos6pbp5kbj6vbsfy0aycvl.lambda-url.us-east-1.on.aws', // Updated to correct beya-update-user URL
-  GMAIL_WORKFLOW_MANAGER: 'https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws',
-  FLOW_COMMENTS: 'https://pndg7ad6xttoa2qm645ryd6bii0cugff.lambda-url.us-east-1.on.aws',
-  DISCUSSIONS: 'https://45lcjloxwa2wt2hfmbltw42dqm0kiaue.lambda-url.us-east-1.on.aws',
-  FLOW_STATUS_UPDATE: 'https://spizyylamz3oavcuay5a3hrmsi0eairh.lambda-url.us-east-1.on.aws',
-  
+  WORKFLOW: `${config.API_GATEWAY_URL}/workflow`,
+  QUERY_AI: `${config.API_GATEWAY_URL}/api/v1/query-with-ai`,
+  WHATSAPP_CONNECT: `${config.API_GATEWAY_URL}/whatsapp/connect`,
+  GMAIL_CONNECT: `${config.API_GATEWAY_URL}/gmail/connect`,
+  INTEGRATIONS_SETUP: `${config.API_GATEWAY_URL}/api/integrations/setup-polling`,
+  BACKEND_URL: config.API_GATEWAY_URL, // Export base URL for components that need it
+
+  // Lambda Function URLs (from .env or fallback)
+  GET_USER: env('REACT_APP_GET_USER_URL', ''),
+  CREATE_USER: env('REACT_APP_CREATE_USER_URL', ''),
+  UPDATE_USER: env('REACT_APP_UPDATE_USER_URL', ''),
+  GMAIL_WORKFLOW_MANAGER: env('REACT_APP_GMAIL_WORKFLOW_MANAGER_URL', ''),
+  FLOW_COMMENTS: env('REACT_APP_FLOW_COMMENTS_URL', ''),
+  DISCUSSIONS: env('REACT_APP_DISCUSSIONS_URL', ''),
+  FLOW_STATUS_UPDATE: env('REACT_APP_FLOW_STATUS_UPDATE_URL', ''),
+
   // API Gateway endpoints for inbox/messaging services
-  INBOX_API_BASE: 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod',
-  CONTACTS_API_BASE: 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod',
-  SCHEDULE_API_BASE: 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod',
-  
+  INBOX_API_BASE: env('REACT_APP_INBOX_API_BASE', ''),
+  CONTACTS_API_BASE: env('REACT_APP_CONTACTS_API_BASE', ''),
+  SCHEDULE_API_BASE: env('REACT_APP_SCHEDULE_API_BASE', ''),
+
   // Specific endpoints
-  TEMPLATES: 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/templates',
-  REMINDERS: 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/reminders',
+  TEMPLATES: env('REACT_APP_TEMPLATES_URL', ''),
+  REMINDERS: env('REACT_APP_REMINDERS_URL', ''),
 } as const;
 
 export default config; 
