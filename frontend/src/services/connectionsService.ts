@@ -1,3 +1,4 @@
+import { API_ENDPOINTS } from '@/config/api';
 // Service to fetch user connections from backend
 export interface ConnectedAccount {
   id: string;
@@ -33,7 +34,7 @@ export interface ConnectionsResponse {
 }
 
 // Use the working Lambda Function URL
-const API_BASE = 'https://qyb7x6hp2fhypw5gf7kjk3hf7a0hmoev.lambda-url.us-east-1.on.aws';
+const API_BASE = API_ENDPOINTS.GET_USER;
 
 export const connectionsService = {
   /**
