@@ -30,7 +30,7 @@
     "node_modules",
     "build",
     "dist",
-    "src/pages/webApp/Backend/LambdaFunctions/**/*", // Exclude all Lambda functions from TypeScript checking
+    "src/webapp/Backend/LambdaFunctions/**/*", // Exclude all Lambda functions from TypeScript checking
     "**/*.test.*",
     "**/__tests__/**/*"
   ]

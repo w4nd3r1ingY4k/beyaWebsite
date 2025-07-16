@@ -11,7 +11,7 @@ export const heroData = {
       "https://cdn.builder.io/api/v1/image/assets/TEMP/55587a083e14666c47a60f1e7df7fab553ef5b29b0ea123c36d46cc8bb821941?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac",
     disabled: true
   },
-  heroImage: "assets/landing_page/hero_image.png",
+  heroImage: "assets/landingPage/hero_image.png",
 };
 
 // https://cdn.builder.io/api/v1/image/assets/TEMP/cf4a5bb94a24087191853277e7f4cd0828359d4e3ffba5b0e5f37b7fbe837c63?placeholderIfAbsent=true&apiKey=81df03e36d684043a7cd51a4520bc0ac

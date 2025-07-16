@@ -1,13 +1,12 @@
 // src/App.tsx
 import { Routes, Route, Navigate } from "react-router-dom";
-import HomePage from "./pages/HomePage";
+import HomePage from "@/webapp/components/HomePage";
 import Privacy from "./pages/Privacy";
-import Login from "./pages/Login";
-import Home from "./pages/webApp";
-import SignUp from "./pages/Signup";
-import Confirm from "./pages/Confirm";
-import SettingsPage from "./pages/Settings";
-
+import Login from "@/webapp/components/Login";
+import SignUp from "@/webapp/components/Signup";
+import Confirm from "@/webapp/components/Confirm";
+import SettingsPage from "@/webapp/components/Settings";
+import WebAppHome from "./webapp";
 export default function App() {
   return (
     <Routes>
@@ -19,7 +18,7 @@ export default function App() {
       <Route path="/confirm" element={<Confirm />} />
 
       {/* Protected webapp */}
-      <Route path="/webapp" element={<Home />} />
+      <Route path="/webapp" element={<WebAppHome />} />
       <Route path="/settings" element={<SettingsPage />} />
 
       {/* Catch‐all */}
