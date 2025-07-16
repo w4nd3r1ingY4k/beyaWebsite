@@ -1,9 +1,88 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { HeroSectionProps } from "../types/componentTypes";
+import { motion, useAnimation } from "framer-motion";
+
+// CompanyLogo component
+const CompanyLogo: React.FC<{ src: string; alt: string; href?: string }> = ({ src, alt, href }) => {
+  const img = (
+    <img
+      src={src}
+      alt={alt}
+      style={{ height: '3.5rem', width: 'auto', objectFit: 'contain', filter: 'none' }}
+    />
+  );
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: '8rem',
+          height: '3.75rem',
+          background: 'transparent',
+          borderRadius: '0.65rem',
+          border: 'none',
+          textDecoration: 'none',
+        }}
+      >
+        {img}
+      </a>
+    );
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '8rem',
+        height: '3.75rem',
+        background: 'transparent',
+        borderRadius: '0.65rem',
+        border: 'none',
+      }}
+    >
+      {img}
+    </div>
+  );
+};
+
+const companyLogos = [
+  { src: "/assets/landingPage/ironwire-logo.png", alt: "Ironwire logo", href: "https://ironwire.usebeya.com/" },
+  { src: "/assets/landingPage/brown-logo.png", alt: "Brown logo" },
+  { src: "/assets/landingPage/safiyaa.webp", alt: "Safiyaa logo", href: "https://us.safiyaa.com/" },
+];
 
 export const HeroSection: React.FC<HeroSectionProps> = () => {
   const systemFontStack =
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol'";
+
+  // Repeat the logo set 4 times for seamlessness
+  const logos = Array(4).fill(companyLogos).flat();
+  const logoCount = companyLogos.length;
+  const logoWidth = 128; // px, matches width in CompanyLogo
+  const gap = 32; // px
+  const setWidth = logoCount * (logoWidth + gap);
+  const totalWidth = setWidth * 4;
+
+  // Framer Motion wrap-around animation
+  const controls = useAnimation();
+
+  useEffect(() => {
+    let isActive = true;
+    const animate = async () => {
+      while (isActive) {
+        await controls.start({ x: -setWidth, transition: { duration: 6, ease: "linear" } });
+        await controls.set({ x: 0 });
+      }
+    };
+    animate();
+    return () => { isActive = false; };
+  }, [controls, setWidth]);
 
   return (
     <section
@@ -264,60 +343,39 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               textAlign: "center",
               fontSize: "0.95rem",
               color: "#6B7280",
-              marginBottom: "3.5rem",
+              marginBottom: "2.5rem",
               marginTop: 0,
               fontWeight: 500,
             }}
           >
             Trusted by forward-thinking businesses
           </p>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: "4.5rem",
-              opacity: 1, // Remove gray overlay
-              flexWrap: "wrap",
-              background: 'transparent', // Remove any background
-            }}
-          >
-            {/* Safiyaa logo with link */}
-            <a
-              href="https://us.safiyaa.com/"
-              target="_blank"
-              rel="noopener noreferrer"
+          {/* Framer Motion wrap-around carousel */}
+          <div style={{
+            width: '100%',
+            overflow: 'hidden',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            position: 'relative',
+            height: '4.5rem',
+            marginBottom: '2rem',
+          }}>
+            <motion.div
+              className="business-logo-carousel"
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                width: '9.5rem',
-                height: '3.75rem',
-                background: 'transparent', // Remove gray box
-                borderRadius: '0.65rem',
-                border: 'none', // Remove border
-                textDecoration: 'none',
+                gap: `${gap}px`,
+                minWidth: totalWidth,
               }}
+              animate={controls}
+              initial={{ x: 0 }}
             >
-              <img
-                src="/assets/landingPage/safiyaa.webp"
-                alt="Safiyaa logo"
-                style={{ maxHeight: '2.5rem', maxWidth: '7rem', objectFit: 'contain', filter: 'none' }}
-              />
-            </a>
-            {/* Other placeholder trust logos */}
-            {[1, 2, 3].map((_, index) => (
-              <div
-                key={index}
-                style={{
-                  width: "9.5rem",
-                  height: "3.75rem",
-                  background: "transparent", // Remove gray box
-                  borderRadius: "0.65rem",
-                  border: "none", // Remove border
-                }}
-              />
-            ))}
+              {logos.map((logo, idx) => (
+                <CompanyLogo key={idx} {...logo} />
+              ))}
+            </motion.div>
           </div>
         </div>
       </div>
