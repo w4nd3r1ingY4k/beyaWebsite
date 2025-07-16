@@ -274,6 +274,7 @@ class ContextManager {
   }
 }
 
-// Export singleton instance
+// Export both the class and singleton instance
+export { ContextManager };
 export const contextManager = new ContextManager();
 export default contextManager; 
