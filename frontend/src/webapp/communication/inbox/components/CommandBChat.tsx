@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from "@/webapp/AuthContext";
+import { API_ENDPOINTS } from '../../../../config/api';
 
 interface Message {
   id: string;
@@ -40,8 +41,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // API Base URL - matches your backend server
-  const API_BASE = 'http://localhost:2074';
+
 
   // Typewriter effect for agent messages
   const startTypewriter = (messageId: string, fullText: string) => {
@@ -161,7 +161,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
     const fetchInsights = async () => {
       if (!user?.userId) return;
       try {
-        const res = await fetch(`http://localhost:2074/api/v1/proactive-insights?userId=${user.userId}`);
+        const res = await fetch(`http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2075/api/v1/proactive-insights?userId=${user.userId}`);
         const data = await res.json();
         if (data.insights) {
           setProactiveInsights(data.insights);
@@ -257,7 +257,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
                             'general-navigation';
 
       // Call enhanced semantic search API with context awareness
-      const response = await fetch(`${API_BASE}/api/v1/query-with-ai`, {
+      const response = await fetch(API_ENDPOINTS.QUERY_AI, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
