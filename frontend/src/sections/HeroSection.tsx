@@ -1,9 +1,5 @@
 import React from "react";
-import { HeroSectionProps } from "../ComponentTypes";
-
-const desktop = require("../pages/webApp/Assets/Media/desktop.png");
-const mobile = require("../pages/webApp/Assets/Media/mobile.png");
-
+import { HeroSectionProps } from "../types/componentTypes";
 
 export const HeroSection: React.FC<HeroSectionProps> = () => {
   const systemFontStack =
@@ -170,7 +166,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               }}
             >
               <img
-                src={desktop}
+                src="/assets/landingPage/desktop.png"
                 alt="Desktop app preview"
                 style={{
                   width: "800px",
@@ -196,7 +192,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               }}
             >
               <img
-                src={mobile}
+                src="/assets/landingPage/mobile.png"
                 alt="Mobile app preview"
                 style={{
                   width: "250px", // iPhone scale (larger)
@@ -281,19 +277,44 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
               justifyContent: "center",
               alignItems: "center",
               gap: "4.5rem",
-              opacity: 0.5,
+              opacity: 1, // Remove gray overlay
               flexWrap: "wrap",
+              background: 'transparent', // Remove any background
             }}
           >
-            {[1, 2, 3, 4].map((_, index) => (
+            {/* Safiyaa logo with link */}
+            <a
+              href="https://us.safiyaa.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '9.5rem',
+                height: '3.75rem',
+                background: 'transparent', // Remove gray box
+                borderRadius: '0.65rem',
+                border: 'none', // Remove border
+                textDecoration: 'none',
+              }}
+            >
+              <img
+                src="/assets/landingPage/safiyaa.webp"
+                alt="Safiyaa logo"
+                style={{ maxHeight: '2.5rem', maxWidth: '7rem', objectFit: 'contain', filter: 'none' }}
+              />
+            </a>
+            {/* Other placeholder trust logos */}
+            {[1, 2, 3].map((_, index) => (
               <div
                 key={index}
                 style={{
                   width: "9.5rem",
                   height: "3.75rem",
-                  background: "linear-gradient(135deg, #E5E7EB, #D1D5DB)",
+                  background: "transparent", // Remove gray box
                   borderRadius: "0.65rem",
-                  border: "1px solid rgba(229, 231, 235, 0.3)",
+                  border: "none", // Remove border
                 }}
               />
             ))}

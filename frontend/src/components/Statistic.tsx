@@ -1,5 +1,5 @@
 import React from "react";
-import { StatisticProps } from "../ComponentTypes";
+import { StatisticProps } from "../types/componentTypes";
 
 export const Statistic: React.FC<StatisticProps> = ({ icon, value, label }) => (
   <div

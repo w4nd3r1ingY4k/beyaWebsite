@@ -1,5 +1,5 @@
 import React from "react";
-import { BlogPostProps } from "../ComponentTypes";
+import { BlogPostProps } from "../types/componentTypes";
 import "./BlogPost.css";
 
 export const BlogPost: React.FC<BlogPostProps> = ({

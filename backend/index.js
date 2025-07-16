@@ -9,10 +9,16 @@ import express from "express";
 import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
+<<<<<<< HEAD
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect/connect.js';
+import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
+import { MultiServicePollingManager } from './services/multi-user-polling.js';
+=======
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect/connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
 import { MultiServicePollingManager } from './services/multi-user-polling.js';
 import { normalizeNumber } from './services/normalizePhone.js';
+>>>>>>> main
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -2536,3 +2542,82 @@ server.on('close', () => {
 setInterval(() => {
   // Do nothing, just keep the event loop alive
 }, 10000);
+
+
+/**
+ * Real proactive insights endpoint
+ * Returns a list of actionable insights for the user based on recent context
+ */
+app.get("/api/v1/proactive-insights", async (req, res) => {
+  const { userId = null } = req.query;
+  if (!userId) {
+    return res.status(400).json({ error: 'userId is required' });
+  }
+  try {
+    // 1. Pull recent events for the user (e.g., last 50 for more context)
+    const contextResults = await semanticSearch('recent activity', { userId }, 50, userId);
+    const events = contextResults.results || [];
+    const now = Date.now();
+    const insights = [];
+
+    // --- 1. Follow-up Opportunities & Time-based Triggers ---
+    const sentEmails = events.filter(e => e.eventType === 'email.sent');
+    const receivedEmails = events.filter(e => e.eventType === 'email.received');
+    const sentThreads = new Map();
+    sentEmails.forEach(e => {
+      if (!sentThreads.has(e.threadId) || new Date(e.timestamp) > new Date(sentThreads.get(e.threadId).timestamp)) {
+        sentThreads.set(e.threadId, e);
+      }
+    });
+    const receivedThreads = new Set(receivedEmails.map(e => e.threadId));
+    // For each sent thread, if no reply after 2 days, suggest follow-up
+    sentThreads.forEach((email, threadId) => {
+      const lastSentTime = new Date(email.timestamp).getTime();
+      const hasReply = receivedEmails.some(r => r.threadId === threadId && new Date(r.timestamp) > lastSentTime);
+      if (!hasReply && (now - lastSentTime) > 2 * 24 * 60 * 60 * 1000) {
+        insights.push({
+          id: `followup-${threadId}`,
+          type: 'followup',
+          message: `No reply to your email "${email.subject || '(no subject)'}" to ${email.emailParticipant || 'a contact'} for over 2 days. Consider following up!`,
+          timestamp: email.timestamp,
+        });
+      }
+    });
+
+    // --- 2. Negative Sentiment Alerts ---
+    const negativeEmails = receivedEmails.filter(e => e.sentiment === 'NEGATIVE' && e.sentimentConfidence > 0.7);
+    negativeEmails.forEach(email => {
+      insights.push({
+        id: `neg-${email.id}`,
+        type: 'negative-sentiment',
+        message: `Negative sentiment detected from ${email.emailParticipant || 'a contact'}: "${email.subject || '(no subject)'}". Check if follow-up is needed!`,
+        timestamp: email.timestamp,
+      });
+    });
+
+    // --- 3. Recent Replies (for context) ---
+    if (receivedEmails.length > 0) {
+      const lastReply = receivedEmails[0];
+      insights.push({
+        id: 'recent-reply',
+        type: 'reply',
+        message: `You received a reply from ${lastReply.emailParticipant || 'a contact'} on "${lastReply.subject || '(no subject)'}" at ${lastReply.timestamp}.`,
+        timestamp: lastReply.timestamp,
+      });
+    }
+
+    // --- 4. Fallback if no insights ---
+    if (insights.length === 0) {
+      insights.push({
+        id: 'no-insights',
+        type: 'info',
+        message: 'No actionable insights found in your recent activity.',
+        timestamp: new Date().toISOString(),
+      });
+    }
+    res.json({ userId, insights });
+  } catch (err) {
+    console.error('Failed to generate proactive insights:', err);
+    res.status(500).json({ error: 'Failed to generate insights', details: err.message });
+  }
+});
