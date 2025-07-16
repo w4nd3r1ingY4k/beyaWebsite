@@ -308,18 +308,17 @@ export async function generateContextualResponse(userQuery, searchResults, respo
           .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
           .join('\n');
         
-        let systemPrompt = `You are B, an expert business analyst assistant. Your primary job is to analyze a list of recent events and synthesize a concise, actionable summary for the user. Do not just list the events.
+        let systemPrompt = `You are B, a helpful and friendly assistant. The user is asking a follow-up question about something that was previously discussed in our conversation.
 
-Your analysis process is as follows:
-1.  **Review the timeline:** Look at the timestamps of all provided context events.
-2.  **Identify the User's last action:** Find the most recent event where the user acted (e.g., eventType: 'email.sent').
-3.  **Search for a reaction:** Look for any subsequent events from other parties (e.g., eventType: 'email.received', eventType: 'payment.received').
-4.  **Form a conclusion:**
-    - If you find a reaction, summarize it (e.g., "They replied on...")
-    - If you find NO reaction after the user's last action, explicitly state that there has been no response. This is a critical insight.
-5.  **Suggest a next step:** Based on your conclusion, suggest a logical next step. Since you don't have access to an org chart, suggest actions the user can take themselves, like "sending a follow-up" or "marking it for review." Frame it as a question.
+Your job is to:
+1. **Review the recent conversation** to understand what was discussed
+2. **Answer the user's follow-up question** directly and helpfully
+3. **Provide useful information** based on what was mentioned before
+4. **Be conversational and natural** - like you're chatting with a friend
 
-CRITICAL: The user is busy. Give them the bottom line first. Be direct and proactive.`;
+IMPORTANT: You can discuss and provide details about anything that was mentioned in our previous conversation. If emails were discussed (like events, offers, or content), you can absolutely help explain those details or answer questions about them.
+
+Be helpful, friendly, and informative. The user is asking about something we were just talking about, so use that context to give a great answer.`;
         
         let userPrompt = `RECENT CONVERSATION:
           ${conversationContext}
@@ -699,9 +698,9 @@ function classifyUserIntent(query, userId) {
     yesterdayEmails: /(yesterday|yesterday's)\s*emails?/i,
     thisWeekEmails: /(this week|this week's)\s*emails?/i,
     
-    // Sender-specific queries (very common) - capture multiple words
-    emailsFromSender: /(any|have I|did I|gotten?|received?|got).*(emails?|messages?).*(from|by)\s+([a-zA-Z\s]+?)(?:\s+recently|$|\?)/i,
-    emailsToRecipient: /(any|have I|did I|sent?).*(emails?|messages?).*(to)\s+([a-zA-Z\s]+?)(?:\s+recently|$|\?)/i,
+    // Sender-specific queries (more flexible patterns)
+    emailsFromSender: /(emails?|messages?).*(received?|got|from).*(from|by)\s+([a-zA-Z\s]+?)(?:\s+recently|$|\?)/i,
+    emailsToRecipient: /(emails?|messages?).*(sent?|to).*(to)\s+([a-zA-Z\s]+?)(?:\s+recently|$|\?)/i,
     
     // Profanity-laced but simple requests (handle gracefully)
     profaneEmailRequest: /(fucking?|damn|shit).*(emails?|messages?)/i
@@ -805,17 +804,17 @@ function classifyUserIntent(query, userId) {
     const match = q.match(patterns.emailsFromSender);
     const rawSender = match ? match[4].trim() : null;
     
-          return {
-        intent: 'search_emails',
-        canUseDatabase: true,
-        filters: { 
-          emailDirection: 'received',
-          sender: rawSender // We'll normalize this in the database handler
-        },
-        needsAI: false, // Keep false - we'll do AI normalization in the search function
-        confidence: 0.9,
-        searchTerm: rawSender
-      };
+    return {
+      intent: 'search_emails',
+      canUseDatabase: true,
+      filters: { 
+        emailDirection: 'received',
+        sender: rawSender // We'll normalize this in the database handler
+      },
+      needsAI: false, // Keep false - we'll do AI normalization in the search function
+      confidence: 0.9,
+      searchTerm: rawSender
+    };
   }
   
   if (patterns.emailsToRecipient.test(q)) {

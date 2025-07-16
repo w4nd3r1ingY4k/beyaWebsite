@@ -53,12 +53,13 @@ async function findUserByEmail(emailAddress) {
   try {
     const scan = await docClient.send(new ScanCommand({
       TableName: USERS_TABLE,
-      ProjectionExpression: "userId, connectedAccounts.email, connectedAccounts.gmail",
-      FilterExpression: "connectedAccounts.email = :email OR connectedAccounts.gmail = :email",
+      ProjectionExpression: "userId, subscriber_email, connectedAccounts.email, connectedAccounts.gmail",
+      FilterExpression: "subscriber_email = :email OR connectedAccounts.email = :email OR connectedAccounts.gmail = :email",
       ExpressionAttributeValues: { ":email": emailAddress }
     }));
     
     if (scan.Items && scan.Items.length > 0) {
+      console.log(`✅ Found user ${scan.Items[0].userId} for email: ${emailAddress}`);
       return scan.Items[0].userId;
     }
     

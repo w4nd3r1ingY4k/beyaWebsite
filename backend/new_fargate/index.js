@@ -2053,6 +2053,8 @@ const server = app.listen(PORT, () => {
   console.log("  POST /debug/list-tools - List available tools for an app");
   console.log("  POST /debug/intent-classification - Test intent classification");
   console.log("  POST /debug/database-emails - Debug DynamoDB email contents");
+  console.log("  POST /debug/raw-email-structure - Examine email field structure");
+  console.log("  POST /debug/test-email-tools - Test new tools-based email system");
   console.log("  POST /shopify/connect - Shopify Connect integration");
   console.log("  GET /health - Health check");
   console.log("\nIntegration Polling API:");
@@ -2348,6 +2350,35 @@ app.post("/debug/raw-email-structure", async (req, res) => {
 
   } catch (error) {
     console.error("🔥 Raw email structure debug error:", error);
+    return res.status(500).json({ 
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Test endpoint for new tools-based email system
+app.post("/debug/test-email-tools", async (req, res) => {
+  const { query, userId } = req.body;
+  if (!query || !userId) {
+    return res.status(400).json({ error: "query and userId are required" });
+  }
+
+  try {
+    // Import the email tool handler
+    const { emailToolHandler } = await import('./services/semantic-search.js');
+    
+    const result = await emailToolHandler.route(query, userId);
+    
+    return res.status(200).json({
+      success: true,
+      query,
+      userId,
+      result,
+      architecture: 'tools-based'
+    });
+  } catch (error) {
+    console.error("🔥 Email tools test error:", error);
     return res.status(500).json({ 
       error: error.message,
       stack: error.stack
