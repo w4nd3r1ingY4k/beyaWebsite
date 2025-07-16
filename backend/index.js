@@ -1847,48 +1847,59 @@ app.get("/api/v1/proactive-insights", async (req, res) => {
     return res.status(400).json({ error: 'userId is required' });
   }
   try {
-    // 1. Pull recent events for the user (e.g., last 20)
-    const contextResults = await semanticSearch('recent activity', { userId }, 20, userId);
+    // 1. Pull recent events for the user (e.g., last 50 for more context)
+    const contextResults = await semanticSearch('recent activity', { userId }, 50, userId);
     const events = contextResults.results || [];
-
-    // 2. Analyze for insights
+    const now = Date.now();
     const insights = [];
-    // Example: Find threads with no response after user sent an email
+
+    // --- 1. Follow-up Opportunities & Time-based Triggers ---
     const sentEmails = events.filter(e => e.eventType === 'email.sent');
     const receivedEmails = events.filter(e => e.eventType === 'email.received');
-    const sentThreads = new Set(sentEmails.map(e => e.threadId));
+    const sentThreads = new Map();
+    sentEmails.forEach(e => {
+      if (!sentThreads.has(e.threadId) || new Date(e.timestamp) > new Date(sentThreads.get(e.threadId).timestamp)) {
+        sentThreads.set(e.threadId, e);
+      }
+    });
     const receivedThreads = new Set(receivedEmails.map(e => e.threadId));
-    // Threads where user sent but no reply
-    const noReplyThreads = Array.from(sentThreads).filter(tid => !receivedThreads.has(tid));
-    if (noReplyThreads.length > 0) {
+    // For each sent thread, if no reply after 2 days, suggest follow-up
+    sentThreads.forEach((email, threadId) => {
+      const lastSentTime = new Date(email.timestamp).getTime();
+      const hasReply = receivedEmails.some(r => r.threadId === threadId && new Date(r.timestamp) > lastSentTime);
+      if (!hasReply && (now - lastSentTime) > 2 * 24 * 60 * 60 * 1000) {
+        insights.push({
+          id: `followup-${threadId}`,
+          type: 'followup',
+          message: `No reply to your email "${email.subject || '(no subject)'}" to ${email.emailParticipant || 'a contact'} for over 2 days. Consider following up!`,
+          timestamp: email.timestamp,
+        });
+      }
+    });
+
+    // --- 2. Negative Sentiment Alerts ---
+    const negativeEmails = receivedEmails.filter(e => e.sentiment === 'NEGATIVE' && e.sentimentConfidence > 0.7);
+    negativeEmails.forEach(email => {
       insights.push({
-        id: 'no-reply',
-        type: 'noresponse',
-        message: `You have ${noReplyThreads.length} conversation(s) with no reply yet. Consider following up.`,
-        timestamp: new Date().toISOString(),
+        id: `neg-${email.id}`,
+        type: 'negative-sentiment',
+        message: `Negative sentiment detected from ${email.emailParticipant || 'a contact'}: "${email.subject || '(no subject)'}". Check if follow-up is needed!`,
+        timestamp: email.timestamp,
       });
-    }
-    // Example: Recent replies
+    });
+
+    // --- 3. Recent Replies (for context) ---
     if (receivedEmails.length > 0) {
       const lastReply = receivedEmails[0];
       insights.push({
         id: 'recent-reply',
         type: 'reply',
-        message: `You received a reply from ${lastReply.emailParticipant || 'a contact'} on ${lastReply.timestamp}.`,
+        message: `You received a reply from ${lastReply.emailParticipant || 'a contact'} on "${lastReply.subject || '(no subject)'}" at ${lastReply.timestamp}.`,
         timestamp: lastReply.timestamp,
       });
     }
-    // Example: Suggest follow-up for oldest sent email
-    if (sentEmails.length > 0) {
-      const oldestSent = sentEmails[sentEmails.length - 1];
-      insights.push({
-        id: 'followup',
-        type: 'followup',
-        message: `Consider following up on your message from ${oldestSent.timestamp}.`,
-        timestamp: oldestSent.timestamp,
-      });
-    }
-    // Fallback if no insights
+
+    // --- 4. Fallback if no insights ---
     if (insights.length === 0) {
       insights.push({
         id: 'no-insights',
