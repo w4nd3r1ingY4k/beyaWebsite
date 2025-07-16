@@ -664,211 +664,59 @@ Include common abbreviations, domain names, and spacing variations. Keep it unde
 }
 
 /**
- * Fast intent classifier - no AI calls, just pattern matching
+ * AI-based intent classifier using OpenAI
+ * This replaces the rigid regex patterns with flexible AI understanding
  * @param {string} query - User's query
  * @param {string} userId - User ID for context
- * @returns {Object} - Classification result
+ * @returns {Promise<Object>} - Classification result
  */
-function classifyUserIntent(query, userId) {
-  const q = query.toLowerCase().trim();
-  
-  // Remove common prefixes/suffixes that don't affect intent
-  const cleanQ = q.replace(/^(please\s+|can you\s+|could you\s+)/, '')
-                  .replace(/(\s+please|\s+thanks|\s+thank you)$/, '');
-  
-  const patterns = {
-    // Simple email listing patterns
-    listEmails: /^(show|list|get|display)\s*(me\s*)?(my\s*)?(recent\s*|latest\s*|last\s*)?emails?$/i,
-    listSentEmails: /^(show|list|get|display)\s*(me\s*)?(my\s*)?(sent|outgoing)\s*emails?$/i,
-    listReceivedEmails: /^(show|list|get|display)\s*(me\s*)?(my\s*)?(received|incoming|inbox)\s*emails?$/i,
+async function classifyUserIntent(query, userId) {
+  try {
+    initializeClients();
     
-    // Count queries
-    countEmails: /^how many emails/i,
-    countSentEmails: /^how many.*(sent|outgoing)/i,
-    countReceivedEmails: /^how many.*(received|incoming)/i,
+    console.log(`🎯 AI classifying user intent for: "${query}"`);
     
-    // Simple greetings and casual
-    simpleGreeting: /^(hi|hello|hey|good morning|good afternoon|good evening)!?$/i,
+    const prompt = `You are an intent classifier for an email AI assistant. Analyze the user's query and determine the best intent and parameters.
+
+Available intents:
+- list_emails: Show recent emails (params: direction - "sent"|"received"|null, timeframe - "today"|"yesterday"|null)
+- search_emails: Search for emails from/to someone or containing something (params: searchTerm, direction - "sent"|"received"|null, useSemantic - true|false)
+- count_emails: Count emails (params: direction, timeframe)
+- email_details_followup: Follow-up on a specific email (params: reference - "that"|"this"|"the first one" etc.)
+- greeting: Simple hello/greeting
+- complex_query: Anything else that needs full AI processing
+
+User Query: "${query}"
+
+Respond with JSON:
+{
+  "intent": "search_emails",
+  "canUseDatabase": true,
+  "filters": { "direction": "received", "sender": "experian" },
+  "confidence": 0.9,
+  "searchTerm": "experian",
+  "reason": "Brief explanation"
+}`;
     
-    // Status checks
-    emailStatus: /^(any|do I have).*(new|recent|unread)\s*emails?/i,
+    const response = await openaiClient.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.1,
+      response_format: { type: "json_object" }
+    });
     
-    // Quick searches that can use database filters
-    todayEmails: /(today|today's)\s*emails?/i,
-    yesterdayEmails: /(yesterday|yesterday's)\s*emails?/i,
-    thisWeekEmails: /(this week|this week's)\s*emails?/i,
-    
-    // Sender-specific queries (more flexible patterns)
-    emailsFromSender: /(emails?|messages?).*(received?|got|from).*(from|by)\s+([a-zA-Z\s]+?)(?:\s+recently|$|\?)/i,
-    emailsToRecipient: /(emails?|messages?).*(sent?|to).*(to)\s+([a-zA-Z\s]+?)(?:\s+recently|$|\?)/i,
-    
-    // Profanity-laced but simple requests (handle gracefully)
-    profaneEmailRequest: /(fucking?|damn|shit).*(emails?|messages?)/i
-  };
-  
-  // Check for database-friendly patterns first
-  if (patterns.listEmails.test(cleanQ) || patterns.listEmails.test(q)) {
+    const result = JSON.parse(response.choices[0].message.content);
+    console.log(`🎯 AI classification result:`, result);
+    return result;
+  } catch (error) {
+    console.error('❌ AI intent classification failed:', error);
     return {
-      intent: 'list_emails',
-      canUseDatabase: true,
-      filters: {},
-      needsAI: false,
-      confidence: 0.95
-    };
-  }
-  
-  if (patterns.listSentEmails.test(cleanQ) || patterns.listSentEmails.test(q)) {
-    return {
-      intent: 'list_emails',
-      canUseDatabase: true,
-      filters: { emailDirection: 'sent' },
-      needsAI: false,
-      confidence: 0.95
-    };
-  }
-  
-  if (patterns.listReceivedEmails.test(cleanQ) || patterns.listReceivedEmails.test(q)) {
-    return {
-      intent: 'list_emails',
-      canUseDatabase: true,
-      filters: { emailDirection: 'received' },
-      needsAI: false,
-      confidence: 0.95
-    };
-  }
-  
-  if (patterns.countEmails.test(q) || patterns.countSentEmails.test(q) || patterns.countReceivedEmails.test(q)) {
-    const direction = patterns.countSentEmails.test(q) ? 'sent' : 
-                     patterns.countReceivedEmails.test(q) ? 'received' : null;
-    return {
-      intent: 'count_emails',
-      canUseDatabase: true,
-      filters: direction ? { emailDirection: direction } : {},
-      needsAI: false,
-      confidence: 0.9
-    };
-  }
-  
-  if (patterns.simpleGreeting.test(q)) {
-    return {
-      intent: 'greeting',
+      intent: 'complex_query',
       canUseDatabase: false,
-      needsAI: false,
-      confidence: 0.99
+      confidence: 0.5,
+      reason: 'Fallback due to classification error'
     };
   }
-  
-  if (patterns.emailStatus.test(q)) {
-    return {
-      intent: 'email_status',
-      canUseDatabase: true,
-      filters: { isUnread: true },
-      needsAI: false,
-      confidence: 0.85
-    };
-  }
-  
-  // Time-based queries (can optimize with date filters)
-  if (patterns.todayEmails.test(q)) {
-    return {
-      intent: 'list_emails',
-      canUseDatabase: true,
-      filters: { timeframe: 'today' },
-      needsAI: false,
-      confidence: 0.9
-    };
-  }
-  
-  if (patterns.yesterdayEmails.test(q)) {
-    return {
-      intent: 'list_emails',
-      canUseDatabase: true,
-      filters: { timeframe: 'yesterday' },
-      needsAI: false,
-      confidence: 0.9
-    };
-  }
-  
-  if (patterns.thisWeekEmails.test(q)) {
-    return {
-      intent: 'list_emails',
-      canUseDatabase: true,
-      filters: { timeframe: 'thisWeek' },
-      needsAI: false,
-      confidence: 0.9
-    };
-  }
-  
-  // Handle sender-specific queries
-  if (patterns.emailsFromSender.test(q)) {
-    const match = q.match(patterns.emailsFromSender);
-    const rawSender = match ? match[4].trim() : null;
-    
-    return {
-      intent: 'search_emails',
-      canUseDatabase: true,
-      filters: { 
-        emailDirection: 'received',
-        sender: rawSender // We'll normalize this in the database handler
-      },
-      needsAI: false, // Keep false - we'll do AI normalization in the search function
-      confidence: 0.9,
-      searchTerm: rawSender
-    };
-  }
-  
-  if (patterns.emailsToRecipient.test(q)) {
-    const match = q.match(patterns.emailsToRecipient);
-    const rawRecipient = match ? match[4].trim() : null;
-    
-    return {
-      intent: 'search_emails',
-      canUseDatabase: true,
-      filters: { 
-        emailDirection: 'sent',
-        recipient: rawRecipient
-      },
-      needsAI: false,
-      confidence: 0.9,
-      searchTerm: rawRecipient
-    };
-  }
-  
-  // Handle profane but simple requests
-  if (patterns.profaneEmailRequest.test(q)) {
-    return {
-      intent: 'list_emails',
-      canUseDatabase: true,
-      filters: {},
-      needsAI: false,
-      confidence: 0.8,
-      tone: 'casual' // Flag for response formatting
-    };
-  }
-  
-  // Check for general "my emails" patterns that could benefit from direction analysis
-  const emailIntent = analyzeEmailDirectionIntent(query);
-  if (emailIntent.isPersonalEmailQuery && !emailIntent.isSentQuery && !emailIntent.isReceivedQuery) {
-    // General email query but not complex enough for full semantic search
-    if (q.length < 30 && !q.includes(' and ') && !q.includes(' about ')) {
-      return {
-        intent: 'list_emails',
-        canUseDatabase: true,
-        filters: {},
-        needsAI: false,
-        confidence: 0.7
-      };
-    }
-  }
-  
-  // Default: needs full semantic search + AI
-  return {
-    intent: 'complex_query',
-    canUseDatabase: false,
-    needsAI: true,
-    confidence: 0.5,
-    reason: 'Query requires semantic understanding and context analysis'
-  };
 }
 
 /**
@@ -894,6 +742,9 @@ async function handleDatabaseQuery(userQuery, intentResult, userId, conversation
       
       case 'email_status':
         return await getEmailStatusFromDB(userId, intentResult.filters, userQuery);
+      
+      case 'email_details_followup':
+        return await handleEmailDetailsFollowUp(userQuery, userId, conversationHistory);
       
       case 'greeting':
         return handleGreeting(userQuery, conversationHistory);
@@ -1109,6 +960,10 @@ async function searchEmailsFromDB(userId, filters, userQuery, conversationHistor
     
     console.log(`📧 After smart filtering: ${matchingEmails.length} emails match "${searchTerm}"`);
     
+    // Store email IDs for follow-up references
+    const emailIds = matchingEmails.map(email => email.MessageId || email.messageId || email.id).filter(Boolean);
+    console.log(`📝 Tracking email IDs for follow-ups:`, emailIds.slice(0, 3));
+    
     // If we found no matches and haven't searched enough, automatically try the paginated search
     if (matchingEmails.length === 0 && allEmails.length === (parseInt(limit) || 200)) {
       console.log(`⚠️ No matches found in first ${allEmails.length} emails, falling back to paginated search...`);
@@ -1174,6 +1029,8 @@ async function searchEmailsFromDB(userId, filters, userQuery, conversationHistor
       responseType: 'search',
       source: 'database',
       fast: true,
+      emailIds: emailIds, // Track email IDs for follow-ups
+      lastSearchedEmails: limitedEmails, // Store emails for "that email" references
       intentClassification: {
         intent: 'search_emails',
         confidence: 0.9,
@@ -1325,6 +1182,9 @@ async function searchEmailsFromDBWithPagination(userId, filters, userQuery, conv
     // Take only the first 10 for response
     const limitedEmails = matchingEmails.slice(0, 10);
     
+    // Store email IDs for follow-up references
+    const emailIds = limitedEmails.map(email => email.MessageId || email.messageId || email.id).filter(Boolean);
+    
     // Format response specifically for search results
     const aiResponse = formatSearchEmailResponse(limitedEmails, searchTerm, filters);
     
@@ -1335,6 +1195,8 @@ async function searchEmailsFromDBWithPagination(userId, filters, userQuery, conv
       emailsReturned: limitedEmails.length,
       aiResponse,
       rawResults: limitedEmails,
+      emailIds: emailIds, // Track email IDs for follow-ups
+      lastSearchedEmails: limitedEmails, // Store emails for "that email" references
       usedDatabaseQuery: true,
       searchMethod: 'paginated_database_search'
     };
@@ -1482,6 +1344,193 @@ async function getEmailStatusFromDB(userId, filters, userQuery) {
     console.error('❌ Email status query failed:', error);
     throw error;
   }
+}
+
+/**
+ * Handle follow-up requests for email details using AI to identify reference
+ */
+async function handleEmailDetailsFollowUp(userQuery, userId, conversationHistory) {
+  try {
+    console.log(`📧 Handling email details follow-up: "${userQuery}"`);
+    
+    // Use AI to analyze history and identify the referenced email
+    const recentHistory = conversationHistory.slice(-5).map(msg => `${msg.role}: ${msg.content}`).join('\n');
+    
+    const prompt = `Analyze this conversation history and user query to identify which email is being referred to in the follow-up.
+
+RECENT CONVERSATION:
+${recentHistory}
+
+FOLLOW-UP QUERY: "${userQuery}"
+
+Extract:
+- Referenced subject or keywords
+- Sender if mentioned
+- Any identifying details
+
+Respond with JSON:
+{
+  "referencedSubject": "Your debt shift offers have improved",
+  "referencedSender": "email@eml.experian.co.uk",
+  "referenceDescription": "the Experian email about debt shift",
+  "confidence": 0.9
+}`;
+    
+    const response = await openaiClient.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" }
+    });
+    
+    const reference = JSON.parse(response.choices[0].message.content);
+    console.log(`🎯 AI identified reference:`, reference);
+    
+    if (reference.confidence < 0.5 || !reference.referencedSubject) {
+      return {
+        userQuery,
+        aiResponse: "I'm not sure which email you're referring to. Could you be more specific?",
+        contextUsed: [],
+        responseType: 'error',
+        source: 'followup_handler'
+      };
+    }
+    
+    // Search for the referenced email
+    const searchResult = await searchSpecificEmail(userId, reference.referencedSender, reference.referencedSubject);
+    
+    if (searchResult.length === 0) {
+      return {
+        userQuery,
+        aiResponse: `I understood you're asking about the email "${reference.referencedSubject}" from ${reference.referencedSender}, but I couldn't find the full details in my search. Based on what we discussed, it's about ${reference.referenceDescription}. What specific part do you want to know more about?`,
+        contextUsed: [],
+        responseType: 'partial',
+        source: 'followup_handler'
+      };
+    }
+    
+    const email = searchResult[0];
+    const detailedResponse = formatEmailDetails(email, reference.referencedSubject, reference.referencedSender);
+    
+    return {
+      userQuery,
+      aiResponse: detailedResponse,
+      contextUsed: [email],
+      responseType: 'email_details',
+      source: 'followup_handler',
+      aiReference: reference
+    };
+    
+  } catch (error) {
+    console.error('❌ AI follow-up handler failed:', error);
+    return {
+      userQuery,
+      aiResponse: "Sorry, I had trouble understanding which email you're referring to. Could you quote the subject or sender?",
+      contextUsed: [],
+      responseType: 'error',
+      source: 'followup_handler'
+    };
+  }
+}
+
+/**
+ * Search for a specific email by sender and subject
+ */
+async function searchSpecificEmail(userId, sender, subject) {
+  try {
+    console.log(`🔍 Searching for specific email: sender="${sender}", subject="${subject}"`);
+    
+    const { DynamoDBDocumentClient, QueryCommand } = await import('@aws-sdk/lib-dynamodb');
+    const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+    
+    const ddbClient = new DynamoDBClient({ region: 'us-east-1' });
+    const docClient = DynamoDBDocumentClient.from(ddbClient, {
+      marshallOptions: { removeUndefinedValues: true }
+    });
+
+    const dbQuery = {
+      TableName: process.env.MSG_TABLE || 'Messages',
+      IndexName: 'User-Messages-Index',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':channel': 'email'
+      },
+      FilterExpression: 'Channel = :channel',
+      ScanIndexForward: false,
+      Limit: 50
+    };
+
+    const result = await docClient.send(new QueryCommand(dbQuery));
+    const emails = result.Items || [];
+    
+    // Find emails that match both sender and subject
+    const matchingEmails = emails.filter(email => {
+      const emailSender = (email.From || email.Sender || '').toLowerCase();
+      const emailSubject = (email.Subject || '').toLowerCase();
+      const searchSender = sender.toLowerCase().trim();
+      const searchSubject = subject.toLowerCase().trim();
+      
+      const senderMatch = emailSender.includes(searchSender) || searchSender.includes(emailSender);
+      const subjectMatch = emailSubject.includes(searchSubject) || searchSubject.includes(emailSubject);
+      
+      return senderMatch && subjectMatch;
+    });
+    
+    console.log(`📧 Found ${matchingEmails.length} matching emails for sender="${sender}" and subject="${subject}"`);
+    return matchingEmails;
+    
+  } catch (error) {
+    console.error('❌ Specific email search failed:', error);
+    return [];
+  }
+}
+
+/**
+ * Format detailed email information
+ */
+function formatEmailDetails(email, fallbackSubject, fallbackSender) {
+  const subject = email.Subject || fallbackSubject || '(no subject)';
+  const sender = email.From || email.Sender || fallbackSender || 'Unknown sender';
+  const timestamp = email.Timestamp || email.timestamp;
+  const body = email.Body || email.content || '';
+  
+  let timeDescription = 'unknown time';
+  if (timestamp) {
+    const emailDate = new Date(timestamp);
+    const now = new Date();
+    const diffHours = Math.floor((now - emailDate) / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffDays > 0) {
+      timeDescription = `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    } else if (diffHours > 0) {
+      timeDescription = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    } else {
+      timeDescription = 'recently';
+    }
+  }
+  
+  // Extract key information from email body
+  let bodyPreview = '';
+  if (body) {
+    // Clean up HTML and get first few sentences
+    const cleanBody = body.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    bodyPreview = cleanBody.length > 300 ? cleanBody.substring(0, 300) + '...' : cleanBody;
+  }
+  
+  let response = `Here are the details for that email:\n\n`;
+  response += `**Subject:** "${subject}"\n`;
+  response += `**From:** ${sender}\n`;
+  response += `**Received:** ${timeDescription}\n\n`;
+  
+  if (bodyPreview) {
+    response += `**Content:**\n${bodyPreview}`;
+  } else {
+    response += `**Content:** The email content is not available in my records, but the subject and sender information above should help you locate it in your email client.`;
+  }
+  
+  return response;
 }
 
 /**
