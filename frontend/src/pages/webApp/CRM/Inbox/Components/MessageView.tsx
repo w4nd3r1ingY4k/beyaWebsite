@@ -16,8 +16,8 @@ interface APIMessage {
   Timestamp: number;
   Channel?: 'whatsapp' | 'email';
   ThreadId?: string;
-  MediaUrl?: string;
-  MediaType?: string;
+  mediaUrl?: string;
+  mediaType?: string;
   originalMessageId?: string;
 }
 
