@@ -53,7 +53,8 @@ const icons: IconItem[] = [
         { id: 'payments', label: 'Payments' },
         { id: 'products', label: 'Products' },
         { id: 'orders', label: 'Orders' },
-        { id: 'website', label: 'Website' }
+        { id: 'website', label: 'Website' },
+        { id: 'attribution', label: 'Attribution' }
       ]
     },
     { id: 'marketing', Component: MarketingIcon, label: 'Marketing' },

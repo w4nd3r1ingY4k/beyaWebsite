@@ -45,6 +45,12 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   const [isComposeOpen, setIsComposeOpen] = useState(false);
   const [composeMode, setComposeMode] = useState<'new' | 'reply'>('new');
   const [showReminderModal, setShowReminderModal] = useState(false);
+  const [replyContext, setReplyContext] = useState<{
+    subject?: string;
+    to?: string[];
+    cc?: string[];
+    from?: string;
+  } | undefined>(undefined);
 
   // View state for switching between Inbox and Discussions
   const [currentView, setCurrentView] = useState<'inbox' | 'discussions'>('inbox');
@@ -186,9 +192,16 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                 const data = await response.json();
                 const messagesArray = data.messages || [];
                 
-                if (messagesArray.length > 0) {
+                // Filter out thread summary records for preloading too
+                const filteredMessages = messagesArray.filter(msg => 
+                  msg.MessageId !== 'THREAD_SUMMARY' && 
+                  msg.Timestamp !== 0 && 
+                  msg.Direction
+                );
+                
+                if (filteredMessages.length > 0) {
                   // Sort messages by timestamp to get the true last message
-                  const sortedMessages = [...messagesArray].sort((a, b) => {
+                  const sortedMessages = [...filteredMessages].sort((a, b) => {
                     const timestampA = a.Timestamp || a.timestamp || 0;
                     const timestampB = b.Timestamp || b.timestamp || 0;
                     return timestampB - timestampA; // Most recent first
@@ -349,17 +362,26 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
       
       const messagesArray = data.messages || [];
+      
+      // Filter out thread summary records (these are for backend processing only)
+      const filteredMessages = messagesArray.filter(msg => 
+        msg.MessageId !== 'THREAD_SUMMARY' && 
+        msg.Timestamp !== 0 && 
+        msg.Direction // Must have a direction (incoming/outgoing)
+      );
+      
       if (!fromPolling) {
-        console.log('📥 Processed messages array:', messagesArray);
-        console.log('📥 Setting messages count:', messagesArray.length);
+        console.log('📥 Raw messages count:', messagesArray.length);
+        console.log('📥 Filtered messages count:', filteredMessages.length);
+        console.log('📥 Filtered out:', messagesArray.length - filteredMessages.length, 'thread summary records');
       }
       
-      setMessages(messagesArray);
+      setMessages(filteredMessages);
       
       // Update the flow with the actual last message content
-      if (messagesArray.length > 0) {
+      if (filteredMessages.length > 0) {
         // Sort messages by timestamp to get the true last message
-        const sortedMessages = [...messagesArray].sort((a, b) => {
+        const sortedMessages = [...filteredMessages].sort((a, b) => {
           const timestampA = a.Timestamp || a.timestamp || 0;
           const timestampB = b.Timestamp || b.timestamp || 0;
           return timestampB - timestampA; // Most recent first
@@ -656,7 +678,9 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     subject: string,
     plainText: string,
     htmlContent: string,
-    originalMessageId?: string
+    originalMessageId?: string,
+    cc?: string[],
+    bcc?: string[]
   ) {
     // IMPORTANT: Extract actual email address from flowId if needed (same logic as WhatsApp)
     let actualRecipient = to;
@@ -684,6 +708,14 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
 
     if (originalMessageId) {
       payload.originalMessageId = originalMessageId;
+    }
+
+    // Add CC/BCC if provided
+    if (cc && cc.length > 0) {
+      payload.cc = cc;
+    }
+    if (bcc && bcc.length > 0) {
+      payload.bcc = bcc;
     }
 
     const res = await fetch(`${apiBase}/send/email`, {
@@ -760,7 +792,9 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           messageData.subject || 'No subject',
           messageData.content, // plain text
           messageData.html || messageData.content, // HTML content
-          messageData.originalMessageId // Pass original Message-ID for threading
+          messageData.originalMessageId, // Pass original Message-ID for threading
+          messageData.cc, // CC recipients
+          messageData.bcc // BCC recipients
         );
       }
       
@@ -827,6 +861,58 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   };
 
   const handleReply = () => {
+    if (!selectedThreadId) return;
+    
+    // Find the flow and messages for this thread
+    const flow = flows.find(f => f.flowId === selectedThreadId);
+    const threadMessages = messages.filter(m => m.ThreadId === selectedThreadId);
+    const latestMessage = threadMessages[threadMessages.length - 1];
+    
+    if (flow && latestMessage) {
+      // Generate reply context based on the flow participants and latest message
+      const context: {
+        subject?: string;
+        to?: string[];
+        cc?: string[];
+        from?: string;
+      } = {};
+      
+      // Set subject from flow or latest message
+      if (flow.subject) {
+        context.subject = flow.subject;
+      } else if ((latestMessage as any).Subject) {
+        context.subject = (latestMessage as any).Subject;
+      }
+      
+      // Set reply recipients based on participants
+      if (flow.participants && Array.isArray(flow.participants)) {
+        // Get all participants except current user
+        const otherParticipants = flow.participants.filter((p: string) => p !== user?.subscriber_email);
+        
+        if (otherParticipants.length > 0) {
+          // Primary recipient is the sender of the latest message or first participant
+          const primaryRecipient = (latestMessage as any).From || otherParticipants[0];
+          context.to = [primaryRecipient];
+          
+          // CC are other participants (excluding primary recipient)
+          const ccRecipients = otherParticipants.filter((p: string) => p !== primaryRecipient);
+          if (ccRecipients.length > 0) {
+            context.cc = ccRecipients;
+          }
+        }
+      } else {
+        // Fallback: Use flow contact info
+        if (flow.contactIdentifier) {
+          context.to = [flow.contactIdentifier];
+        } else if ((latestMessage as any).From) {
+          context.to = [(latestMessage as any).From];
+        }
+      }
+      
+      console.log('Generated reply context:', context);
+      setReplyContext(context);
+    }
+    
     setComposeMode('reply');
     setIsComposeOpen(true);
   };
@@ -2462,6 +2548,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         mode={composeMode}
         replyToId={selectedThreadId ?? undefined}
         onCreateDiscussion={handleCreateDiscussion}
+        replyContext={replyContext}
       />
 
       {/* Reminder Modal */}

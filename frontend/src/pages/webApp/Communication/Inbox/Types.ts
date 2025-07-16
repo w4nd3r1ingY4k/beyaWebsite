@@ -12,6 +12,11 @@ export interface Message {
   timestamp: string;     // ISO date
   isClosed: boolean;     // conversation status
   originalMessageId: string; // ID from original provider (e.g. WhatsApp, email)
+  // Email participant fields
+  from?: string;         // Sender email address
+  to?: string[];         // To recipients array
+  cc?: string[];         // CC recipients array
+  bcc?: string[];        // BCC recipients array (only visible to sender)
   // Base64 attachment metadata
   isBase64?: boolean;    // whether the original body was Base64 encoded
   contentType?: string;  // detected content type for Base64 content

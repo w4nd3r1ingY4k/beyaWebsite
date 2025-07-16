@@ -20,6 +20,14 @@ const isBase64 = (str: string): boolean => {
   if (typeof str !== 'string' || str.length === 0) return false;
   if (str.length % 4 !== 0) return false;
   
+  // Must be reasonably long to be a real Base64 attachment (at least 100 chars)
+  if (str.length < 100) return false;
+  
+  // Should contain some variety of Base64 characters, not just letters
+  const hasNumbers = /\d/.test(str);
+  const hasSpecialChars = /[+/=]/.test(str);
+  if (!hasNumbers && !hasSpecialChars) return false;
+  
   // Character set check
   const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
   if (!base64Regex.test(str)) return false;
@@ -87,8 +95,10 @@ interface APIMessage {
   Body?: string;
   Text?: string;
   Subject?: string;
-  From?: string;
-  To?: string;
+  From?: string | string[];
+  To?: string | string[];
+  CC?: string[];
+  BCC?: string[];
   Direction: 'incoming' | 'outgoing';
   Timestamp: number;
   Channel?: 'whatsapp' | 'email';
@@ -188,6 +198,9 @@ const MessageView: React.FC<MessageViewProps> = ({
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [replySubject, setReplySubject] = useState('');
+  const [replyTo, setReplyTo] = useState('');
+  const [replyCc, setReplyCc] = useState('');
+  const [replyBcc, setReplyBcc] = useState('');
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
   const [teamChatInput, setTeamChatInput] = useState('');
   const [emailEditorState, setEmailEditorState] = useState<EditorState>(
@@ -455,14 +468,14 @@ const MessageView: React.FC<MessageViewProps> = ({
         const htmlContent = draftToHtml(rawContentState);
         const plainText = emailEditorState.getCurrentContent().getPlainText();
         
-        // Get recipient from flow or use the decoded threadId as fallback
-        let recipient = flow?.contactEmail || flow?.contactIdentifier || flow?.fromEmail || decodeURIComponent(selectedThreadId);
+        // Use the replyTo field that was auto-populated (fallback to flow contact if empty)
+        let recipient = replyTo || flow?.contactEmail || flow?.contactIdentifier || flow?.fromEmail || decodeURIComponent(selectedThreadId);
         
         // IMPORTANT: Extract actual email address from flowId if needed
         if (selectedThreadId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
           // If selectedThreadId is a UUID (flowId), look up the actual email address
-          if (flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail) {
-            recipient = flow.contactIdentifier || flow.contactEmail || flow.fromEmail;
+          if (replyTo || flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail) {
+            recipient = replyTo || flow.contactIdentifier || flow.contactEmail || flow.fromEmail;
             console.log(`🔄 Converted flowId ${selectedThreadId} to email address ${recipient}`);
           } else {
             console.error('❌ Could not find email address for flowId:', selectedThreadId);
@@ -489,11 +502,17 @@ const MessageView: React.FC<MessageViewProps> = ({
           note: 'Backend will automatically find correct Message-ID for threading'
         });
         
+        // Parse CC and BCC fields into arrays
+        const ccArray = replyCc.trim() ? replyCc.split(',').map(email => email.trim()).filter(Boolean) : [];
+        const bccArray = replyBcc.trim() ? replyBcc.split(',').map(email => email.trim()).filter(Boolean) : [];
+        
         // DON'T pass originalMessageId - let the backend look it up automatically!
         // The backend has the correct logic to find the Message-ID from Headers
         await onSendMessage?.({
           channel: 'email',
           to: recipient,
+          cc: ccArray,
+          bcc: bccArray,
           subject: finalSubject || 'Re: (no subject)',
           content: plainText,
           html: htmlContent
@@ -502,6 +521,9 @@ const MessageView: React.FC<MessageViewProps> = ({
         
         setEmailEditorState(EditorState.createEmpty());
         setReplySubject('');
+        setReplyTo('');
+        setReplyCc('');
+        setReplyBcc('');
       } else {
         // For WhatsApp, pass the flowId (selectedThreadId) so routing logic can detect personal vs business
         await onSendMessage?.({
@@ -1050,6 +1072,11 @@ const MessageView: React.FC<MessageViewProps> = ({
       text: isHtmlContent ? (msg.Snippet || 'HTML Email') : processedMessage.body,
       sender: msg.FromAddress,
       recipient: msg.ToAddress,
+      // Email participant information
+      from: Array.isArray(msg.From) ? msg.From[0] : msg.From,
+      to: Array.isArray(msg.To) ? msg.To : (msg.To ? [msg.To] : []),
+      cc: msg.CC || [],
+      bcc: msg.BCC || [],
       flowId: msg.FlowId,
       messageId: msg.MessageId,
       isUnread: msg.IsUnread || false,
@@ -1983,6 +2010,71 @@ const MessageView: React.FC<MessageViewProps> = ({
                           e.stopPropagation();
                           setActiveMessageId(chat.id);
                           setIsReplying(true);
+                          
+                          console.log('🔍 Debug reply auto-fill:', {
+                            chatDirection: chat.direction,
+                            chatFrom: chat.from,
+                            chatTo: chat.to,
+                            chatCc: chat.cc,
+                            flowParticipants: flow?.participants,
+                            userEmail: user?.subscriber_email
+                          });
+                          
+                          // Auto-populate reply fields based on message participants
+                          let replyToEmail = '';
+                          let replyCcEmails: string[] = [];
+                          
+                          if (chat.direction === 'incoming') {
+                            // Replying to incoming message: Reply to sender, CC others if any
+                            replyToEmail = chat.from || '';
+                            
+                            // For incoming messages, check if there were CC recipients
+                            if (chat.cc && chat.cc.length > 0) {
+                              replyCcEmails = chat.cc.filter((email: string) => email !== user?.subscriber_email);
+                            }
+                          } else {
+                            // Replying to outgoing message: Reply to original recipients
+                            if (chat.to && chat.to.length > 0) {
+                              // Primary recipient is first in To field
+                              replyToEmail = chat.to[0] || '';
+                              
+                              // CC includes remaining To recipients + original CC (excluding self)
+                              const remainingTo = chat.to.slice(1);
+                              const originalCc = chat.cc || [];
+                              replyCcEmails = [...remainingTo, ...originalCc].filter((email: string) => email !== user?.subscriber_email);
+                            }
+                          }
+                          
+                          // Fallback to flow participants if message doesn't have participant info
+                          if (!replyToEmail && flow && flow.participants && Array.isArray(flow.participants)) {
+                            const otherParticipants = flow.participants.filter((p: string) => p !== user?.subscriber_email);
+                            if (otherParticipants.length > 0) {
+                              replyToEmail = otherParticipants[0];
+                              replyCcEmails = otherParticipants.slice(1);
+                            }
+                          }
+                          
+                          // Final fallback to flow contact info
+                          if (!replyToEmail) {
+                            replyToEmail = flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail || '';
+                          }
+                          
+                          setReplyTo(replyToEmail);
+                          setReplyCc(replyCcEmails.join(', '));
+                          
+                          console.log('✅ Reply fields populated:', {
+                            replyTo: replyToEmail,
+                            replyCc: replyCcEmails.join(', ')
+                          });
+                          
+                          // Auto-populate subject
+                          let subjectToUse = chat.subject || flow?.subject || '';
+                          if (subjectToUse) {
+                            const replySubj = subjectToUse.startsWith('Re:') ? subjectToUse : `Re: ${subjectToUse}`;
+                            setReplySubject(replySubj);
+                          } else {
+                            setReplySubject('Re: (no subject)');
+                          }
                         }}
                         style={{
                           background: '#FDE7F1', // Light pink background same as secondary tag
@@ -2027,6 +2119,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                         Subject: {chat.subject}
                       </p>
                     )}
+
+                    {/* Participant info removed - now shown in thread title */}
                     
                     <div style={{
                       margin: '8px 0 0',
@@ -2062,6 +2156,74 @@ const MessageView: React.FC<MessageViewProps> = ({
                           onClick={(e) => {
                             e.stopPropagation();
                             setIsReplying(!isReplying);
+                            
+                            // Add the same autofill logic as the hover reply button
+                            if (!isReplying) {
+                              console.log('🔍 Debug reply auto-fill (bottom button):', {
+                                chatDirection: chat.direction,
+                                chatFrom: chat.from,
+                                chatTo: chat.to,
+                                chatCc: chat.cc,
+                                flowParticipants: flow?.participants,
+                                userEmail: user?.subscriber_email
+                              });
+                              
+                              // Auto-populate reply fields based on message participants
+                              let replyToEmail = '';
+                              let replyCcEmails: string[] = [];
+                              
+                              if (chat.direction === 'incoming') {
+                                // Replying to incoming message: Reply to sender, CC others if any
+                                replyToEmail = chat.from || '';
+                                
+                                // For incoming messages, check if there were CC recipients
+                                if (chat.cc && chat.cc.length > 0) {
+                                  replyCcEmails = chat.cc.filter((email: string) => email !== user?.subscriber_email);
+                                }
+                              } else {
+                                // Replying to outgoing message: Reply to original recipients
+                                if (chat.to && chat.to.length > 0) {
+                                  // Primary recipient is first in To field
+                                  replyToEmail = chat.to[0] || '';
+                                  
+                                  // CC includes remaining To recipients + original CC (excluding self)
+                                  const remainingTo = chat.to.slice(1);
+                                  const originalCc = chat.cc || [];
+                                  replyCcEmails = [...remainingTo, ...originalCc].filter((email: string) => email !== user?.subscriber_email);
+                                }
+                              }
+                              
+                              // Fallback to flow participants if message doesn't have participant info
+                              if (!replyToEmail && flow && flow.participants && Array.isArray(flow.participants)) {
+                                const otherParticipants = flow.participants.filter((p: string) => p !== user?.subscriber_email);
+                                if (otherParticipants.length > 0) {
+                                  replyToEmail = otherParticipants[0];
+                                  replyCcEmails = otherParticipants.slice(1);
+                                }
+                              }
+                              
+                              // Final fallback to flow contact info
+                              if (!replyToEmail) {
+                                replyToEmail = flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail || '';
+                              }
+                              
+                              setReplyTo(replyToEmail);
+                              setReplyCc(replyCcEmails.join(', '));
+                              
+                              console.log('✅ Reply fields populated (bottom button):', {
+                                replyTo: replyToEmail,
+                                replyCc: replyCcEmails.join(', ')
+                              });
+                              
+                              // Auto-populate subject
+                              let subjectToUse = chat.subject || flow?.subject || '';
+                              if (subjectToUse) {
+                                const replySubj = subjectToUse.startsWith('Re:') ? subjectToUse : `Re: ${subjectToUse}`;
+                                setReplySubject(replySubj);
+                              } else {
+                                setReplySubject('Re: (no subject)');
+                              }
+                            }
                           }}
                           style={{
                             background: '#DE1785',
@@ -2112,6 +2274,7 @@ const MessageView: React.FC<MessageViewProps> = ({
               onClick={() => {
                 setIsReplying(false);
                 setShowTonalityWarning(false); // Reset warning when closing
+                setReplyBcc(''); // Reset BCC field
               }}
               style={{
                 background: 'none',
@@ -2235,6 +2398,58 @@ const MessageView: React.FC<MessageViewProps> = ({
 
           {selectedThreadId && getChannel(selectedThreadId) === 'email' && (
             <>
+              {/* To Field */}
+              <input
+                type="text"
+                value={replyTo}
+                onChange={e => setReplyTo(e.target.value)}
+                placeholder="To"
+                style={{
+                  width: '100%',
+                  marginBottom: 8,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  boxSizing: 'border-box',
+                  fontSize: '14px'
+                }}
+              />
+              
+              {/* CC Field */}
+              <input
+                type="text"
+                value={replyCc}
+                onChange={e => setReplyCc(e.target.value)}
+                placeholder="CC"
+                style={{
+                  width: '100%',
+                  marginBottom: 8,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  boxSizing: 'border-box',
+                  fontSize: '14px'
+                }}
+              />
+              
+              {/* BCC Field */}
+              <input
+                type="text"
+                value={replyBcc}
+                onChange={e => setReplyBcc(e.target.value)}
+                placeholder="BCC"
+                style={{
+                  width: '100%',
+                  marginBottom: 8,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  boxSizing: 'border-box',
+                  fontSize: '14px'
+                }}
+              />
+              
+              {/* Subject Field */}
               <input
                 type="text"
                 value={replySubject}
@@ -2316,6 +2531,7 @@ const MessageView: React.FC<MessageViewProps> = ({
               onClick={() => {
                 setIsReplying(false);
                 setShowTonalityWarning(false); // Reset warning when canceling
+                setReplyBcc(''); // Reset BCC field
               }}
               style={{
                 background: '#f3f4f6',

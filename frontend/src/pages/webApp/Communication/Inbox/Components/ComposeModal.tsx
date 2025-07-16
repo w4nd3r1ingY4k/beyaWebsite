@@ -10,6 +10,12 @@ interface Props {
   replyToId?: string;
   initialChannel?: 'email' | 'whatsapp' | 'whatsapp-personal' | 'discussion';
   onCreateDiscussion?: (discussionData: any) => void;
+  replyContext?: {
+    subject?: string;
+    to?: string[];
+    cc?: string[];
+    from?: string;
+  };
 }
 
 const ComposeModal: React.FC<Props> = ({
@@ -19,11 +25,15 @@ const ComposeModal: React.FC<Props> = ({
   mode,
   replyToId,
   initialChannel = 'email',
-  onCreateDiscussion
+  onCreateDiscussion,
+  replyContext
 }) => {
   // State
   const [channel, setChannel] = useState(initialChannel);
   const [to, setTo] = useState('');
+  const [cc, setCc] = useState('');
+  const [bcc, setBcc] = useState('');
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -43,17 +53,37 @@ const ComposeModal: React.FC<Props> = ({
     }
   }, [channel]);
 
-  // Reset form when modal opens/closes
+  // Reset form when modal opens/closes and handle reply context
   useEffect(() => {
     if (!isOpen) {
       setTo('');
+      setCc('');
+      setBcc('');
+      setShowCcBcc(false);
       setSubject('');
       setContent('');
       setShowTemplateSelector(false);
       setDiscussionTitle('');
       setDiscussionParticipants('');
+    } else if (isOpen && mode === 'reply' && replyContext) {
+      // Auto-fill reply fields
+      if (replyContext.subject) {
+        const replySubject = replyContext.subject.startsWith('Re:') 
+          ? replyContext.subject 
+          : `Re: ${replyContext.subject}`;
+        setSubject(replySubject);
+      }
+      
+      if (replyContext.from) {
+        setTo(replyContext.from);
+      }
+      
+      if (replyContext.cc && replyContext.cc.length > 0) {
+        setCc(replyContext.cc.join(', '));
+        setShowCcBcc(true); // Show CC/BCC fields when there are CC recipients
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, mode, replyContext]);
 
   // Handle WhatsApp template selection
   const handleTemplateSelect = async (template: any, templateParams?: any) => {
@@ -138,13 +168,22 @@ const ComposeModal: React.FC<Props> = ({
         to: to.trim(),
         subject: subject.trim(),
         content: content.trim(),
-        replyToId: mode === 'reply' ? replyToId : undefined
+        text: content.trim(),
+        html: content.trim(),
+        replyToId: mode === 'reply' ? replyToId : undefined,
+        ...(channel === 'email' && { 
+          ...(cc.trim() && { cc: cc.split(',').map(email => email.trim()).filter(Boolean) }),
+          ...(bcc.trim() && { bcc: bcc.split(',').map(email => email.trim()).filter(Boolean) })
+        })
       };
 
       await onSend(messageData);
       
       // Reset form
       setTo('');
+      setCc('');
+      setBcc('');
+      setShowCcBcc(false);
       setSubject('');
       setContent('');
       setShowTemplateSelector(false);
@@ -473,16 +512,32 @@ const ComposeModal: React.FC<Props> = ({
             {/* To Field (only for new messages and not discussions) */}
             {mode === 'new' && channel !== 'discussion' && (
               <div>
-                <label style={{
-                  display: 'block',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  color: '#374151',
-                  marginBottom: '8px',
-                  letterSpacing: '-0.025em'
-                }}>
-                  To {channel === 'email' ? '(Email)' : '(Phone Number)'}
-                </label>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    letterSpacing: '-0.025em'
+                  }}>
+                    To {channel === 'email' ? '(Email)' : '(Phone Number)'}
+                  </label>
+                  {channel === 'email' && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCcBcc(!showCcBcc)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#de1785',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      {showCcBcc ? 'Hide CC/BCC' : 'Add CC/BCC'}
+                    </button>
+                  )}
+                </div>
                 <input
                   type={channel === 'email' ? 'email' : 'tel'}
                   value={to}
@@ -510,6 +565,101 @@ const ComposeModal: React.FC<Props> = ({
                   }}
                 />
               </div>
+            )}
+
+            {/* CC/BCC Fields (only for email when shown) */}
+            {channel === 'email' && showCcBcc && (
+              <>
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    marginBottom: '8px',
+                    letterSpacing: '-0.025em'
+                  }}>
+                    CC (Carbon Copy)
+                  </label>
+                  <input
+                    type="email"
+                    value={cc}
+                    onChange={(e) => setCc(e.target.value)}
+                    placeholder="Enter CC email addresses (comma-separated)"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      backgroundColor: '#ffffff',
+                      transition: 'border-color 0.2s ease',
+                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#de1785';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(222, 23, 133, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#e2e8f0';
+                      e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                    }}
+                  />
+                  <div style={{
+                    marginTop: '4px',
+                    fontSize: '12px',
+                    color: '#64748b'
+                  }}>
+                    CC recipients will see each other's email addresses
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{
+                    display: 'block',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#374151',
+                    marginBottom: '8px',
+                    letterSpacing: '-0.025em'
+                  }}>
+                    BCC (Blind Carbon Copy)
+                  </label>
+                  <input
+                    type="email"
+                    value={bcc}
+                    onChange={(e) => setBcc(e.target.value)}
+                    placeholder="Enter BCC email addresses (comma-separated)"
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      backgroundColor: '#ffffff',
+                      transition: 'border-color 0.2s ease',
+                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#de1785';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(222, 23, 133, 0.1)';
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#e2e8f0';
+                      e.target.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
+                    }}
+                  />
+                  <div style={{
+                    marginTop: '4px',
+                    fontSize: '12px',
+                    color: '#64748b'
+                  }}>
+                    BCC recipients won't see each other's email addresses
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Subject Field (only for email) */}

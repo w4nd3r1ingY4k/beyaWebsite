@@ -11,7 +11,7 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge";
 import { simpleParser } from "mailparser";
 import { v4 as uuidv4 } from "uuid";
-import { generateOrGetFlowId, updateFlowMetadata } from "../lib/flowUtils.js";
+import { generateOrGetFlowId, generateOrGetEmailFlowId, updateFlowMetadata, parseEmailList, extractEmailAddress } from "../lib/flowUtils.js";
 
 const REGION      = process.env.AWS_REGION;
 const MSG_TABLE   = process.env.MSG_TABLE;
@@ -46,14 +46,7 @@ function streamToString(stream) {
   })();
 }
 
-// Helper function to extract email address from various formats
-function extractEmailAddress(emailString) {
-  if (!emailString) return null;
-  
-  // Handle formats like "Name <email@domain.com>" or just "email@domain.com"
-  const match = emailString.match(/<([^>]+)>/) || emailString.match(/([^\s<>]+@[^\s<>]+)/);
-  return match ? match[1] : emailString;
-}
+// extractEmailAddress function is now imported from flowUtils.js
 
 // Helper function to find user by email address (works for both Gmail and SES)
 async function findUserByEmail(emailAddress) {
@@ -98,6 +91,8 @@ async function persistEmailMessage(messageData) {
     ownerUserId, 
     fromAddress, 
     toAddress, 
+    ccAddresses = [],
+    bccAddresses = [],
     subject, 
     textBody, 
     htmlBody, 
@@ -110,8 +105,18 @@ async function persistEmailMessage(messageData) {
   const internalId = messageId || uuidv4();
 
   try {
-    // Generate or get unique flowId for this user+contact combination
-    const flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, ownerUserId, fromAddress);
+    // Prepare all participants for threading
+    const toAddresses = Array.isArray(toAddress) ? toAddress : [toAddress];
+    const allParticipants = [fromAddress, ...toAddresses, ...ccAddresses].filter(Boolean);
+    
+    // Generate or get unique flowId using enhanced email threading
+    const flowId = await generateOrGetEmailFlowId(docClient, FLOWS_TABLE, ownerUserId, fromAddress, subject, {
+      headers,
+      participants: allParticipants,
+      cc: ccAddresses,
+      bcc: bccAddresses,
+      messageId: internalId
+    });
     
     // Clean headers to remove any undefined values
     const cleanHeaders = cleanUndefinedValues(headers) || {};
@@ -128,6 +133,11 @@ async function persistEmailMessage(messageData) {
       Headers:   cleanHeaders,
       Provider:  provider,  // Track which email provider received this
       IsUnread:  true,      // Mark incoming messages as unread by default
+      // ✅ PARTICIPANT INFORMATION
+      From:      fromAddress,
+      To:        toAddresses,
+      CC:        ccAddresses,
+      BCC:       bccAddresses,
       // ✅ ADD GSI FIELDS FOR USER ISOLATION
       userId:    ownerUserId,
       ThreadIdTimestamp: `${flowId}#${ts}`  // Use flowId for consistency
@@ -255,6 +265,18 @@ export async function handler(event) {
         // Extract Gmail message data
         const messageId = gmailMessage.id;
         const snippet = gmailMessage.snippet || "";
+        const gmailThreadId = gmailMessage.threadId; // Extract Gmail Thread ID
+        
+        // DEBUG: Log the actual Gmail webhook structure
+        console.log('🔍 DEBUG Gmail Webhook:', {
+          messageId,
+          threadId: gmailThreadId,
+          gmailMessageKeys: Object.keys(gmailMessage || {}),
+          hasThreadId: 'threadId' in gmailMessage,
+          fullGmailMessage: gmailMessage
+        });
+        
+        console.log(`📧 Gmail message data: id=${messageId}, threadId=${gmailThreadId}`);
         
         // Extract headers from Gmail payload
         const headers = {};
@@ -266,12 +288,19 @@ export async function handler(event) {
           headers[header.name] = header.value;
         });
         
+        // Add Gmail Thread ID to headers for threading lookup
+        if (gmailThreadId) {
+          headers['Gmail-Thread-ID'] = gmailThreadId;
+        }
+        
         const fromAddress = extractEmailAddress(headers['From']);
         const toAddress = extractEmailAddress(headers['To']);
+        const ccAddresses = parseEmailList(headers['Cc'] || headers['CC']);
+        const bccAddresses = parseEmailList(headers['Bcc'] || headers['BCC']);
         const subject = headers['Subject'] || "(no subject)";
         const messageIdHeader = headers['Message-ID'];
         
-        console.log(`📧 Gmail webhook: From ${fromAddress} → To ${toAddress}`);
+        console.log(`📧 Gmail webhook: From ${fromAddress} → To ${toAddress}, CC: [${ccAddresses.join(', ')}], BCC: [${bccAddresses.join(', ')}]`);
         
         if (!fromAddress || !toAddress) {
           console.warn("Missing from/to addresses in Gmail webhook");
@@ -332,12 +361,18 @@ export async function handler(event) {
         if (headers['In-Reply-To']) {
           standardHeaders['In-Reply-To'] = headers['In-Reply-To'];
         }
+        // Include Gmail Thread ID for reliable threading
+        if (headers['Gmail-Thread-ID']) {
+          standardHeaders['Gmail-Thread-ID'] = headers['Gmail-Thread-ID'];
+        }
         
         // Persist the Gmail message
         await persistEmailMessage({
           ownerUserId,
           fromAddress,
           toAddress,
+          ccAddresses,
+          bccAddresses,
           subject,
           textBody,
           htmlBody,
@@ -393,11 +428,19 @@ export async function handler(event) {
     const parsed   = await simpleParser(rawEmail);
     const textBody = parsed.text?.trim() || "(no text)";
 
+    // Extract participants from parsed email
+    const sesFromAddress = extractEmailAddress(parsed.from?.text || fromAddress);
+    const sesToAddress = extractEmailAddress(parsed.to?.text || toAddress);
+    const sesCcAddresses = parseEmailList(parsed.cc?.text || '');
+    const sesBccAddresses = parseEmailList(parsed.bcc?.text || '');
+
     // Extract headers for threading
     const headers = {
       'Message-ID': parsed.messageId || messageId,
       'From': parsed.from?.text || fromAddress,
       'To': parsed.to?.text || toAddress,
+      'Cc': parsed.cc?.text || '',
+      'Bcc': parsed.bcc?.text || '',
       'Subject': subject,
       'Date': parsed.date?.toISOString() || new Date().toISOString()
     };
@@ -420,8 +463,10 @@ export async function handler(event) {
     // Persist the SES message
     await persistEmailMessage({
       ownerUserId,
-      fromAddress,
-      toAddress,
+      fromAddress: sesFromAddress,
+      toAddress: sesToAddress,
+      ccAddresses: sesCcAddresses,
+      bccAddresses: sesBccAddresses,
       subject,
       textBody,
       htmlBody: parsed.html || "",
@@ -479,6 +524,8 @@ export async function handler(event) {
       ownerUserId,
       fromAddress: from,
       toAddress,
+      ccAddresses: [], // Legacy HTTP posts don't include CC/BCC
+      bccAddresses: [],
       subject,
       textBody: text,
       htmlBody: body.html || "",

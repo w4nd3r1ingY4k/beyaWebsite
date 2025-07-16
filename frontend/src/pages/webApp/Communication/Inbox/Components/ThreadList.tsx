@@ -552,10 +552,7 @@ const ThreadList: React.FC<Props> = ({
   const formatEmailAddress = (email: string): string => {
     if (!email) return email;
     
-    // Log full email for debugging
-    if (email.length > 20) {
-      console.log('🔍 Full email being truncated:', email);
-    }
+
     
     // If email is 20 characters or less, show it as-is
     if (email.length <= 20) {
@@ -569,6 +566,21 @@ const ThreadList: React.FC<Props> = ({
   const getThreadTitle = (threadId: string): string => {
     const flow = flows.find(f => f.flowId === threadId);
     
+    // NEW: Multi-participant email threads - show all participants
+    if (flow?.participants && Array.isArray(flow.participants) && flow.participants.length > 1) {
+      const uniqueParticipants = [...new Set(flow.participants)];
+      const formattedParticipants = uniqueParticipants
+        .filter((p): p is string => typeof p === 'string' && p !== userId) // Exclude current user and ensure string type
+        .map(p => formatEmailAddress(p))
+        .slice(0, 3); // Show max 3 participants
+      
+      if (formattedParticipants.length > 0) {
+        const participantString = formattedParticipants.join(', ');
+        const extraCount = uniqueParticipants.length - 1 - formattedParticipants.length;
+        return extraCount > 0 ? `${participantString} +${extraCount}` : participantString;
+      }
+    }
+    
     // First priority: Use the new contactIdentifier field
     if (flow?.contactIdentifier) {
       // Handle WhatsApp group chats specially
@@ -579,7 +591,6 @@ const ThreadList: React.FC<Props> = ({
       }
       
       const formatted = formatEmailAddress(flow.contactIdentifier);
-      console.log('ThreadList - Using contactIdentifier:', flow.contactIdentifier, '→', formatted);
       return formatted;
     }
     

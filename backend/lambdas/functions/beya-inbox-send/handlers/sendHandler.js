@@ -1,7 +1,7 @@
 // handlers/sendHandler.js
 
 import { sendWhatsApp, sendWhatsAppTemplate } from '../lib/whatsapp.js';
-import { sendEmail, replyEmail } from '../lib/email.js';
+// SES email removed - using Gmail MCP only
 import { GmailMCPSender } from '../lib/gmail-mcp.js';
 import { generateOrGetFlowId, generateOrGetEmailFlowId, updateFlowMetadata } from '../lib/flowUtils.js';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -9,7 +9,8 @@ import {
   DynamoDBDocumentClient,
   PutCommand,
   UpdateCommand,
-  QueryCommand
+  QueryCommand,
+  ScanCommand
 } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
@@ -162,6 +163,8 @@ export async function handler(event) {
   // pull out the usual fields + optional originalMessageId
   const {
     to,
+    cc,          // NEW: CC recipients array
+    bcc,         // NEW: BCC recipients array
     subject,
     text,
     html,
@@ -359,33 +362,28 @@ export async function handler(event) {
               originalMessageId: replyId,
               threadId: to,
               to,
+              cc: cc || [],
+              bcc: bcc || [],
               subject,
               body: html || text
             });
           } else {
             resp = await gmailSender.sendEmail(userId, {
               to,
+              cc: cc || [],
+              bcc: bcc || [],
               subject,
               body: html || text
             });
           }
           console.log('✅ Email sent via Gmail MCP');
         } catch (gmailError) {
-          console.error('❌ Gmail MCP send failed, falling back to SES:', gmailError.message);
-          // Fall back to SES
-          if (replyId) {
-            resp = await replyEmail(to, subject, text, html, replyId);
-          } else {
-            resp = await sendEmail(to, subject, text, html);
-          }
+          console.error('❌ Gmail MCP send failed:', gmailError.message);
+          throw gmailError; // No SES fallback, just fail
         }
       } else {
-        // ➌ Send via SES (original logic)
-        if (replyId) {
-          resp = await replyEmail(to, subject, text, html, replyId);
-        } else {
-          resp = await sendEmail(to, subject, text, html);
-        }
+        // ➌ No Gmail connected - require Gmail connection
+        throw new Error('Gmail account required for sending emails. Please connect your Gmail account.');
       }
 
     } else {
@@ -396,19 +394,60 @@ export async function handler(event) {
       };
     }
 
-    // ─── 5) Generate or get unique flowId for this user+contact combination FIRST ───
+    // ─── 5) Generate messageId and flowId ───
+    const timestamp = Date.now();
+    const messageId = uuidv4();
     let flowId;
+    
     if (channel === "email") {
-      // Use email-specific threading that considers subject lines
-      flowId = await generateOrGetEmailFlowId(docClient, FLOWS_TABLE, userId, to, subject, {});
+      // For replies, try to find the existing thread first
+      if (replyId) {
+        console.log(`📧 This is a reply, searching for original thread with replyId: ${replyId}`);
+        
+        // Search for the original message to get its ThreadId
+        try {
+          const originalMessageQuery = {
+            TableName: MSG_TABLE,
+            FilterExpression: 'userId = :userId AND (Headers.#msgId = :replyId OR MessageId = :replyId)',
+            ExpressionAttributeNames: {
+              '#msgId': 'Message-ID'
+            },
+            ExpressionAttributeValues: {
+              ':userId': userId,
+              ':replyId': replyId
+            }
+          };
+          
+          const originalResult = await docClient.send(new ScanCommand(originalMessageQuery));
+          if (originalResult.Items && originalResult.Items.length > 0) {
+            const originalMessage = originalResult.Items[0];
+            flowId = originalMessage.ThreadId;
+            console.log(`📧 Found original thread for reply: ${flowId}`);
+          }
+        } catch (error) {
+          console.log(`⚠️ Could not find original thread for reply, creating new thread:`, error.message);
+        }
+      }
+      
+      // If we didn't find an existing thread (new email or failed reply lookup), generate a new one
+      if (!flowId) {
+        // Prepare all participants for email threading (EXCLUDING BCC - they're invisible for threading)
+        const threadingParticipants = [to, ...(cc || [])].filter(Boolean);
+        
+        // Use email-specific threading that considers subject lines and participants
+        flowId = await generateOrGetEmailFlowId(docClient, FLOWS_TABLE, userId, to, subject, {
+          participants: threadingParticipants,  // BCC excluded from threading calculation
+          cc: cc || [],
+          bcc: bcc || [],  // Still pass BCC for participant history tracking
+          messageId: messageId // Will be used for participant history
+        });
+      }
     } else {
       // Use contact-based threading for other channels (WhatsApp, etc.)
       flowId = await generateOrGetFlowId(docClient, FLOWS_TABLE, userId, to);
     }
     
     // ─── 6) Persist outgoing message in Messages table using flowId as ThreadId ───
-    const timestamp = Date.now();
-    const messageId = uuidv4();
     const messageItem = {
       ThreadId:   flowId,  // ✅ Use flowId as ThreadId for consistency
       Timestamp:  timestamp,
@@ -418,7 +457,14 @@ export async function handler(event) {
       Body:       text || `[Template: ${templateName}]`,
       Result:     {},
       userId:     userId,
-      ThreadIdTimestamp: `${flowId}#${timestamp}`  // ✅ Use flowId here too
+      ThreadIdTimestamp: `${flowId}#${timestamp}`,  // ✅ Use flowId here too
+      // ✅ PARTICIPANT INFORMATION FOR EMAIL
+      ...(channel === "email" && {
+        To:  Array.isArray(to) ? to : [to],
+        CC:  cc || [],
+        BCC: bcc || [],
+        Subject: subject
+      })
     };
     
     // Add template info if this was a template message
@@ -436,11 +482,30 @@ export async function handler(event) {
       };
     } else {
       // Handle both Gmail MCP response and SES response
+      const gmailMessageId = resp?.messageId || resp?.MessageId || resp?.id || resp || 'email-sent';
+      const gmailThreadId = resp?.threadId; // Capture Gmail Thread ID
+      
+      // DEBUG: Log the actual Gmail response structure
+      console.log('🔍 DEBUG Gmail MCP Response:', {
+        fullResponse: resp,
+        messageId: gmailMessageId,
+        threadId: gmailThreadId,
+        responseKeys: Object.keys(resp || {})
+      });
+      
       messageItem.Result = { 
-        MessageId: resp?.messageId || resp?.MessageId || resp?.id || resp || 'email-sent'
+        MessageId: gmailMessageId,
+        ThreadId: gmailThreadId // Store Gmail Thread ID
       };
+      
+      // Store the Gmail Thread ID in Headers for threading lookup
+      messageItem.Headers = messageItem.Headers || {};
+      messageItem.Headers['Message-ID'] = gmailMessageId;
+      messageItem.Headers['Gmail-Thread-ID'] = gmailThreadId; // NEW: Store Gmail Thread ID
+      
       if (replyId) {
         messageItem.InReplyTo = replyId;
+        messageItem.Headers['In-Reply-To'] = replyId;
       }
     }
 
@@ -465,8 +530,8 @@ export async function handler(event) {
 
     // ─── 8) Build rawEvent envelope for context engine ────────────────────
     // Determine the sender email based on provider and available user info
-    let senderEmail = "akbar@usebeya.com"; // Default SES sender
-    let provider = "ses"; // Default provider
+    let senderEmail = userEmailAddress || "gmail-user@connected.com";
+    let provider = "gmail"; // Gmail MCP only
     
     if (channel === "whatsapp") {
       // WhatsApp message handling
@@ -475,13 +540,7 @@ export async function handler(event) {
       // Gmail MCP was used - use the email from the response
       senderEmail = resp.from || userEmailAddress || gmailAccount?.external_id || "gmail-user@connected.com";
       provider = "gmail";
-    } else if (userEmailAddress) {
-      // User has Gmail connected but we're using SES - still show their Gmail address
-      senderEmail = userEmailAddress;
-      provider = "ses-with-gmail-identity";
-      console.log(`📧 Using user's Gmail address with SES: ${senderEmail}`);
     }
-    // If no Gmail account connected, falls back to default SES sender
 
     const rawEvent = {
       eventId: uuidv4(),
@@ -497,6 +556,8 @@ export async function handler(event) {
           bodyText: text,
           bodyHtml: html,
           to: Array.isArray(to) ? to : [to],
+          cc: cc || [],
+          bcc: bcc || [],
           from: senderEmail,
         }),
         ...(channel === "whatsapp" && {
