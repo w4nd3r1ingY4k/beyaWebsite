@@ -1,7 +1,7 @@
 import React from 'react';
 import { ReactComponent as HomeIcon } from './Assets/Icons/HomeIcon.svg';
-import { ReactComponent as CRMIcon } from './Assets/Icons/CRMIcon.svg';
-import { ReactComponent as DataIcon } from './Assets/Icons/DataIcon.svg';
+import { ReactComponent as CommunicationIcon } from './Assets/Icons/CommunicationIcon.svg';
+import { ReactComponent as AutomationIcon } from './Assets/Icons/AutomationIcon.svg';
 import { ReactComponent as LogisticsIcon } from './Assets/Icons/LogisticsIcon.svg';
 import { ReactComponent as MarketingIcon } from './Assets/Icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from './Assets/Icons/CommerceIcon.svg';
@@ -35,9 +35,9 @@ const PADDING = 30;
 const icons: IconItem[] = [
     { id: 'home', Component: HomeIcon, label: 'Home' },
     { 
-      id: 'crm', 
-      Component: CRMIcon, 
-      label: 'CRM',
+      id: 'communication', 
+      Component: CommunicationIcon, 
+      label: 'Communication',
       submenu: [
         { id: 'contacts', label: 'Contacts' },
         { id: 'inbox', label: 'Inbox' },
@@ -45,10 +45,21 @@ const icons: IconItem[] = [
         { id: 'tickets', label: 'Tickets' }
       ]
     },
+    { 
+      id: 'commerce', 
+      Component: CommerceIcon, 
+      label: 'Commerce',
+      submenu: [
+        { id: 'payments', label: 'Payments' },
+        { id: 'products', label: 'Products' },
+        { id: 'orders', label: 'Orders' },
+        { id: 'website', label: 'Website' },
+        { id: 'attribution', label: 'Attribution' }
+      ]
+    },
     { id: 'marketing', Component: MarketingIcon, label: 'Marketing' },
     { id: 'logistics', Component: LogisticsIcon, label: 'Logistics' },
-    { id: 'commerce', Component: CommerceIcon, label: 'Commerce' },
-    { id: 'data', Component: DataIcon, label: 'Data' },
+    { id: 'automation', Component: AutomationIcon, label: 'Automation' },
     { id: 'settings', Component: SettingsIcon, label: 'Settings' },
 ];
 
@@ -103,7 +114,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
         activeIndex * (ICON_SIZE + GAP + activeIndex * getIndexMultiplier(activeIndex)) +
         ICON_SIZE / 2;
     
-    const spineX = 30 + ICON_SIZE + OFFSET_X;
+    const spineX = 38 + ICON_SIZE + OFFSET_X;
     
     const bulgeYSpan = ICON_SIZE * 2; // adjust 1.1-1.4 for tightness
     const bulgeStartY = centerY - bulgeYSpan / 1.6;
@@ -152,7 +163,7 @@ export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, o
     ].join(' ');
 
   return (
-    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative', marginRight: 48 }}>
+    <div style={{ backgroundColor: '#FBF7F7', height: '100vh', zIndex: 9999, position: 'relative' }}>
     <div style={{ zIndex: 1, position: 'absolute', top: 0, left: spineX }}>
         <svg
             width={svgWidth}

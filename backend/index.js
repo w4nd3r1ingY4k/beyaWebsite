@@ -1,13 +1,24 @@
+// Environment variables are loaded from AWS Secrets Manager in production
+// Only use dotenv for local development
 import dotenv from "dotenv";
-dotenv.config({ path: "./.env" });
+if (process.env.NODE_ENV !== 'production') {
+  dotenv.config({ path: "./.env" });
+}
 
 import express from "express";
-import { createBackendClient } from "@pipedream/sdk";
+import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
+<<<<<<< HEAD
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect/connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
 import { MultiServicePollingManager } from './services/multi-user-polling.js';
+=======
+import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect/connect.js';
+import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
+import { MultiServicePollingManager } from './services/multi-user-polling.js';
+import { normalizeNumber } from './services/normalizePhone.js';
+>>>>>>> main
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -139,6 +150,36 @@ const toolManifest = {
       "create_associations": "HUBSPOT-CREATE-ASSOCIATIONS",
       "batch_create_or_update_contact": "HUBSPOT-BATCH-CREATE-OR-UPDATE-CONTACT",
       "add_contact_to_list": "HUBSPOT-ADD-CONTACT-TO-LIST"
+    }
+  },
+  whatsapp_business: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
+    }
+  },
+  WhatsApp_Business: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
+    }
+  },
+  WhatsApp: {
+    app_slug: "whatsapp_business",
+    app_label: "WhatsApp Business",
+    actions: {
+      "send_text_message": "WHATSAPP-BUSINESS-SEND-TEXT-MESSAGE",
+      "send_voice_message": "WHATSAPP-BUSINESS-SEND-VOICE-MESSAGE",
+      "send_text_using_template": "WHATSAPP-BUSINESS-SEND-TEXT-USING-TEMPLATE",
+      "list_message_templates": "WHATSAPP-BUSINESS-LIST-MESSAGE-TEMPLATES"
     }
   },
   OpenAI: {
@@ -512,6 +553,7 @@ Example output:
 - Slack: send_message, create_channel, list_users
 - Google_Sheets: add_single_row, get_values, update_row, create_spreadsheet
 - HubSpot: search_crm, update_lead, update_deal, update_custom_object, update_contact, update_company, get_meeting, get_file_public_url, get_deal, get_contact, get_company, get_associated_meetings, enroll_contact_into_workflow, create_ticket, create_task, create_or_update_contact, create_meeting, create_lead, create_engagement, create_deal, create_custom_object, create_company, create_communication, create_associations, batch_create_or_update_contact, add_contact_to_list
+- whatsapp_business: send_text_message, send_voice_message, send_text_using_template, list_message_templates
 - OpenAI: chat.completions.create
 
 **Important Rules:**
@@ -964,6 +1006,140 @@ app.post("/gmail/connect", async (req, res) => {
   await handleGmailConnect(req, res);
 });
 
+// WhatsApp Business Connect endpoint
+app.post("/whatsapp/connect", async (req, res) => {
+  await handleWhatsAppConnect(req, res);
+});
+
+// WhatsApp Business webhook setup endpoint
+app.post("/whatsapp/setup-webhooks", async (req, res) => {
+  try {
+    const { userId, whatsappAccountId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    console.log(`📱 Setting up WhatsApp webhooks for user ${userId}`);
+    
+    // Get WhatsApp credentials from Pipedream
+    const { WhatsAppConnectService } = await import('./services/whatsapp-connect.js');
+    const whatsappService = new WhatsAppConnectService();
+    const credentials = await whatsappService.getCredentials(userId);
+    
+    if (!credentials) {
+      throw new Error('No WhatsApp Business credentials found');
+    }
+
+    const accessToken = credentials.permanent_access_token || credentials.access_token;
+    const businessAccountId = credentials.business_account_id;
+    
+    if (!accessToken || !businessAccountId) {
+      throw new Error('Missing WhatsApp access token or business account ID');
+    }
+
+    // Get phone number ID
+    const phoneNumbersResponse = await fetch(
+      `https://graph.facebook.com/v17.0/${businessAccountId}/phone_numbers`,
+      {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      }
+    );
+    
+    if (!phoneNumbersResponse.ok) {
+      throw new Error('Failed to fetch phone numbers');
+    }
+    
+    const phoneNumbersData = await phoneNumbersResponse.json();
+    const phoneNumberId = phoneNumbersData.data?.[0]?.id;
+    const displayPhoneNumber = phoneNumbersData.data?.[0]?.display_phone_number;
+    
+    if (!phoneNumberId || !displayPhoneNumber) {
+      throw new Error('No phone numbers found for this WhatsApp Business account');
+    }
+
+    console.log(`📱 Found phone number: ${displayPhoneNumber} (ID: ${phoneNumberId})`);
+
+    // Subscribe to webhooks for WABA
+    const wabaSubscription = await fetch(
+      `https://graph.facebook.com/v17.0/${businessAccountId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `access_token=${accessToken}`
+      }
+    );
+
+    // Subscribe to webhooks for phone number
+    const phoneSubscription = await fetch(
+      `https://graph.facebook.com/v17.0/${phoneNumberId}/subscribed_apps`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: `access_token=${accessToken}`
+      }
+    );
+
+    console.log(`📱 WABA subscription status: ${wabaSubscription.status}`);
+    console.log(`📱 Phone subscription status: ${phoneSubscription.status}`);
+
+    // Update user record with the display phone number for webhook matching
+    try {
+      // Normalize phone number to match receive lambda format
+      const normalizedPhoneNumber = normalizeNumber(displayPhoneNumber);
+      console.log(`📱 Updating user ${userId} with normalized phone number: ${normalizedPhoneNumber} (original: ${displayPhoneNumber})`);
+      
+      // Call CreateUserFunction Lambda to update the phone number
+      const CREATE_USER_LAMBDA_URL = process.env.CREATE_USER_LAMBDA_URL || 'https://qfk6yjyzg6utzok6gpels4cyhy0vhrmg.lambda-url.us-east-1.on.aws/';
+      
+      const updateResponse = await fetch(CREATE_USER_LAMBDA_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          userId,
+          connectedAccounts: {
+            whatsappBusiness: normalizedPhoneNumber
+          }
+        })
+      });
+      
+      if (updateResponse.ok) {
+        console.log(`✅ Updated user ${userId} with WhatsApp phone number: ${normalizedPhoneNumber}`);
+      } else {
+        console.error(`⚠️ Failed to update user record: ${updateResponse.status}`);
+      }
+    } catch (updateError) {
+      console.error(`⚠️ Error updating user record:`, updateError);
+      // Don't fail the whole process if user update fails
+    }
+
+    return res.status(200).json({
+      success: true,
+      businessAccountId,
+      phoneNumberId,
+      displayPhoneNumber,
+      wabaSubscribed: wabaSubscription.ok,
+      phoneSubscribed: phoneSubscription.ok
+    });
+
+  } catch (error) {
+    console.error('❌ WhatsApp webhook setup error:', error);
+    return res.status(500).json({ 
+      error: 'Failed to setup WhatsApp webhooks',
+      message: error.message 
+    });
+  }
+});
+
 // Gmail workflow management endpoint
 app.post("/gmail/workflow", async (req, res) => {
   const { action, userId, gmailAccountId, userEmail, workflowId } = req.body;
@@ -974,7 +1150,7 @@ app.post("/gmail/workflow", async (req, res) => {
 
   try {
     // Call the Gmail workflow manager Lambda function
-    const lambdaUrl = 'https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/';
+    const lambdaUrl = process.env.GMAIL_WORKFLOW_LAMBDA_URL || 'https://cgnlysnk3cw75hjql3ay4zvuma0oqrqz.lambda-url.us-east-1.on.aws/';
     
     const response = await fetch(lambdaUrl, {
       method: 'POST',
@@ -1028,7 +1204,7 @@ app.post("/debug/test-gmail-send", async (req, res) => {
   }
 
   try {
-    const { GmailMCPSender } = await import('./lambdas/functions/beya-inbox-send/lib/gmail-mcp.js');
+    const { GmailMCPSender } = await import('./LambdaFunctions/functions/beya-inbox-send/lib/gmail-mcp.js');
     const gmailSender = new GmailMCPSender();
     
     const result = await gmailSender.sendEmail(userId, {
@@ -1217,13 +1393,56 @@ app.post("/api/gmail/setup-watch", async (req, res) => {
 
 // Setup integration polling for any service (Gmail, WhatsApp, Slack, etc.)
 app.post("/api/integrations/setup-polling", async (req, res) => {
-  const { userId, serviceType, webhookUrl, pollingIntervalMs } = req.body;
+  const { userId, serviceType, pollingIntervalMs } = req.body;
+  let { webhookUrl } = req.body; // Changed to let so it can be reassigned
+  
+  // DEBUG: Log the received parameters
+  console.log('🔍 DEBUG setup-polling received:');
+  console.log('  userId:', userId, typeof userId);
+  console.log('  serviceType:', serviceType, typeof serviceType);
+  console.log('  webhookUrl:', webhookUrl, typeof webhookUrl);
+  console.log('  webhookUrl truthiness:', !!webhookUrl);
+  console.log('  condition (!webhookUrl):', !webhookUrl);
+  console.log('  full req.body:', JSON.stringify(req.body, null, 2));
   
   if (!userId || !serviceType || !webhookUrl) {
     return res.status(400).json({ error: "userId, serviceType, and webhookUrl are required" });
   }
 
   try {
+    // For Gmail, only create the Pipedream workflow if no webhookUrl is provided
+    if (serviceType === 'gmail' && !webhookUrl) {
+      console.log(`🔧 Creating Pipedream workflow for Gmail user ${userId}`);
+      
+      const lambdaUrl = 'https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws/';
+      
+      const workflowResponse = await fetch(lambdaUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'auto_create_for_user',
+          userId: userId
+        })
+      });
+      
+      if (!workflowResponse.ok) {
+        const errorText = await workflowResponse.text();
+        console.error(`❌ Failed to create Pipedream workflow: ${workflowResponse.status} - ${errorText}`);
+        throw new Error(`Failed to create Pipedream workflow: ${workflowResponse.status}`);
+      }
+      
+      const workflowData = await workflowResponse.json();
+      console.log(`✅ Pipedream workflow created: ${workflowData.workflow?.workflowId}`);
+      
+      // Use the webhook URL from the created workflow
+      webhookUrl = workflowData.workflow?.webhook_url || workflowData.workflow?.webhookUrl;
+      
+      if (!webhookUrl) {
+        throw new Error('No webhook URL returned from workflow creation');
+      }
+    }
+    
+    // Start the polling
     const result = await multiServicePollingManager.startPollingForUser(
       userId, 
       serviceType, 
@@ -1271,6 +1490,35 @@ app.post("/api/integrations/stop-polling", async (req, res) => {
   }
 
   try {
+    // For Gmail, also delete the Pipedream workflow via Lambda
+    if (serviceType === 'gmail') {
+      console.log(`🗑️ Deleting Pipedream workflow for Gmail user ${userId}`);
+      
+      const lambdaUrl = 'https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws/';
+      
+      try {
+        const workflowResponse = await fetch(lambdaUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'delete_workflow',
+            userId: userId
+          })
+        });
+        
+        if (workflowResponse.ok) {
+          console.log(`✅ Pipedream workflow deleted for user ${userId}`);
+        } else {
+          console.error(`⚠️ Failed to delete Pipedream workflow: ${workflowResponse.status}`);
+          // Continue with polling stop even if workflow deletion fails
+        }
+      } catch (workflowError) {
+        console.error(`⚠️ Error deleting Pipedream workflow:`, workflowError);
+        // Continue with polling stop even if workflow deletion fails
+      }
+    }
+    
+    // Stop the polling
     const result = await multiServicePollingManager.stopPollingForUser(userId, serviceType, true);
     
     return res.status(200).json(result);
@@ -1390,7 +1638,7 @@ app.post("/api/gmail/complete-setup", async (req, res) => {
     // Step 1: Create Pipedream workflow
     console.log(`🔧 Step 1: Creating Pipedream workflow for user ${userId}`);
     
-    const workflowResponse = await fetch('https://jt7emnbtqyd5cndtarbg5jr43u0esrao.lambda-url.us-east-1.on.aws/', {
+    const workflowResponse = await fetch('https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1748,29 +1996,130 @@ app.post("/api/v1/suggest-reply", async (req, res) => {
   }
 });
 
-// Hybrid search endpoint (semantic + metadata filtering)
-app.post("/api/v1/hybrid-search", async (req, res) => {
-  /**
-   * Request body:
-   * {
-   *   query: string, // required
-   *   filters: object, // optional metadata filters (e.g., { emailParticipant, threadId, timestamp, label })
-   *   topK: number, // optional, default 10
-   *   userId: string // optional
-   * }
-   */
-  const { query, filters = {}, topK = 10, userId = null } = req.body;
-  if (!query) {
-    return res.status(400).json({ error: "query is required" });
-  }
+// OpenWA Local Service Proxy Endpoints
+const OPENWA_LOCAL_URL = process.env.OPENWA_LOCAL_URL || 'http://localhost:3001';
+
+// Start OpenWA session
+app.post("/openwa/start-session", async (req, res) => {
   try {
-    const results = await semanticSearch(query, filters, topK, userId);
-    return res.status(200).json(results);
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    console.log(`📱 Starting OpenWA session for user: ${userId}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/start-session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to start OpenWA session');
+    }
+
+    res.json(result);
   } catch (error) {
-    console.error("🔥 Hybrid search error:", error);
-    return res.status(500).json({
-      error: error.message || "Hybrid search failed",
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    console.error('❌ Error starting OpenWA session:', error);
+    res.status(500).json({ 
+      error: 'Failed to start OpenWA session',
+      message: error.message 
+    });
+  }
+});
+
+// Get OpenWA session status
+app.get("/openwa/session-status/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`📱 Getting OpenWA session status for user: ${userId}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/session-status/${userId}`);
+    const result = await response.json();
+    
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error getting OpenWA session status:', error);
+    res.status(500).json({ 
+      error: 'Failed to get session status',
+      message: error.message 
+    });
+  }
+});
+
+// Send message via OpenWA
+app.post("/openwa/send-message", async (req, res) => {
+  try {
+    const { userId, phoneNumber, message } = req.body;
+    
+    if (!userId || !phoneNumber || !message) {
+      return res.status(400).json({ 
+        error: 'userId, phoneNumber, and message are required' 
+      });
+    }
+
+    console.log(`📱 Sending OpenWA message from user ${userId} to ${phoneNumber}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/send-message`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, phoneNumber, message })
+    });
+
+    const result = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(result.error || 'Failed to send message');
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error sending OpenWA message:', error);
+    res.status(500).json({ 
+      error: 'Failed to send message',
+      message: error.message 
+    });
+  }
+});
+
+// Disconnect OpenWA session
+app.post("/openwa/disconnect/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    console.log(`📱 Disconnecting OpenWA session for user: ${userId}`);
+    
+    const response = await fetch(`${OPENWA_LOCAL_URL}/disconnect/${userId}`, {
+      method: 'POST'
+    });
+
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    console.error('❌ Error disconnecting OpenWA session:', error);
+    res.status(500).json({ 
+      error: 'Failed to disconnect session',
+      message: error.message 
+    });
+  }
+});
+
+// Check OpenWA local service health
+app.get("/openwa/health", async (req, res) => {
+  try {
+    const response = await fetch(`${OPENWA_LOCAL_URL}/health`);
+    const result = await response.json();
+    res.json(result);
+  } catch (error) {
+    console.error('❌ OpenWA local service not available:', error);
+    res.status(503).json({ 
+      error: 'OpenWA local service unavailable',
+      message: error.message 
     });
   }
 });
@@ -1783,6 +2132,364 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (error) => {
   console.error('🔥 Uncaught Exception:', error);
   process.exit(1);
+});
+
+// Add these routes after the existing routes, before the PORT definition
+
+// Business Central API routes
+app.post("/api/business-central/token", async (req, res) => {
+  const { tenantId, clientId, clientSecret } = req.body;
+  
+  if (!tenantId || !clientId || !clientSecret) {
+    return res.status(400).json({ error: "Missing required parameters" });
+  }
+
+  try {
+    const tokenUrl = `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`;
+    
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+    params.append('scope', 'https://api.businesscentral.dynamics.com/.default');
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+
+    if (!response.ok) {
+      throw new Error(`Token request failed: ${response.status}`);
+    }
+
+    const tokenData = await response.json();
+    return res.status(200).json(tokenData);
+
+  } catch (error) {
+    console.error("Business Central token error:", error);
+    return res.status(500).json({ 
+      error: "Failed to get Business Central token",
+      details: error.message
+    });
+  }
+});
+
+app.get("/api/business-central/companies", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+
+  try {
+    const companiesUrl = "https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/safiyaaPublisher/safiyaGroup/v1.0/companies";
+    
+    const response = await fetch(companiesUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central companies error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central companies",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Sales Orders endpoint
+app.get("/api/business-central/sales-orders", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const salesOrdersUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesOrders`;
+    
+    const response = await fetch(salesOrdersUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central sales orders error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central sales orders",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Sales Invoices endpoint (for actual revenue data)
+app.get("/api/business-central/sales-invoices", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const salesInvoicesUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesInvoices`;
+    
+    const response = await fetch(salesInvoicesUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central sales invoices error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central sales invoices",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Company Revenue endpoint - aggregates all revenue data
+app.get("/api/business-central/revenue", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const authHeaders = {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/json'
+    };
+
+    // Fetch multiple revenue-related endpoints in parallel
+    const [salesInvoicesRes, salesOrdersRes, itemsRes] = await Promise.all([
+      fetch(`https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesInvoices`, { headers: authHeaders }),
+      fetch(`https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/salesOrders`, { headers: authHeaders }),
+      fetch(`https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/items`, { headers: authHeaders })
+    ]);
+
+    const [salesInvoicesData, salesOrdersData, itemsData] = await Promise.all([
+      salesInvoicesRes.ok ? salesInvoicesRes.json() : { value: [] },
+      salesOrdersRes.ok ? salesOrdersRes.json() : { value: [] },
+      itemsRes.ok ? itemsRes.json() : { value: [] }
+    ]);
+
+    // Calculate revenue metrics
+    const salesInvoices = salesInvoicesData.value || [];
+    const salesOrders = salesOrdersData.value || [];
+    const items = itemsData.value || [];
+
+    // Calculate total revenue from invoices (actual completed sales)
+    const totalInvoiceRevenue = salesInvoices.reduce((total, invoice) => {
+      return total + (invoice.totalAmountIncludingTax || invoice.totalAmountExcludingTax || 0);
+    }, 0);
+
+    // Calculate pending revenue from orders (future revenue)
+    const pendingOrderRevenue = salesOrders.reduce((total, order) => {
+      return total + (order.totalAmountIncludingTax || order.totalAmountExcludingTax || 0);
+    }, 0);
+
+    // Revenue metrics
+    const revenueMetrics = {
+      totalRevenue: totalInvoiceRevenue,
+      pendingRevenue: pendingOrderRevenue,
+      totalSalesInvoices: salesInvoices.length,
+      totalSalesOrders: salesOrders.length,
+      totalProducts: items.length,
+      
+      // Recent invoices (last 5)
+      recentInvoices: salesInvoices.slice(-5).map(invoice => ({
+        id: invoice.id,
+        number: invoice.number,
+        customerName: invoice.customerName,
+        amount: invoice.totalAmountIncludingTax || invoice.totalAmountExcludingTax,
+        currency: invoice.currencyCode,
+        date: invoice.invoiceDate || invoice.documentDate,
+        status: invoice.status
+      })),
+
+      // Product performance (items with sales data if available)
+      topProducts: items.slice(0, 5).map(item => ({
+        id: item.id,
+        number: item.number,
+        displayName: item.displayName,
+        unitPrice: item.unitPrice,
+        inventory: item.inventory
+      }))
+    };
+
+    return res.status(200).json(revenueMetrics);
+
+  } catch (error) {
+    console.error("Business Central revenue error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central revenue data",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Items (Products) endpoint
+app.get("/api/business-central/items", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const itemsUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/items`;
+    
+    const response = await fetch(itemsUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central items error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central items",
+      details: error.message
+    });
+  }
+});
+
+// Business Central Customers endpoint
+app.get("/api/business-central/customers", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: "Missing or invalid authorization header" });
+  }
+
+  const accessToken = authHeader.substring(7);
+  const companyId = req.query.companyId || '2b5bb75b-b5d4-ef11-8eec-00224842ddca';
+
+  try {
+    const customersUrl = `https://api.businesscentral.dynamics.com/v2.0/67051142-4b70-4ae9-8992-01d17e991da9/Production/api/v2.0/companies(${companyId})/customers`;
+    
+    const response = await fetch(customersUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Business Central API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Business Central customers error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Business Central customers",
+      details: error.message
+    });
+  }
+});
+
+// Hyros API routes
+app.post("/api/hyros/journeys", async (req, res) => {
+  const { apiKey, fromDate, toDate, pageSize, pageId, ids, emails } = req.body;
+  
+  if (!apiKey) {
+    return res.status(400).json({ error: "API key is required" });
+  }
+
+  try {
+    // Build the query parameters
+    const params = new URLSearchParams();
+    if (fromDate) params.append('fromDate', fromDate);
+    if (toDate) params.append('toDate', toDate);
+    if (pageSize) params.append('pageSize', pageSize.toString());
+    if (pageId !== undefined) params.append('pageId', pageId.toString());
+    
+    // For demo purposes, use the sample IDs and emails if none provided
+    const defaultIds = "8ce3695840d2aa5548e00914aa1cb9ecb9a750ad14db16ade5a633bf756fd305,a823d3fcf322d5ac4185deea1e3337dcb076802f74af431b46e214861a7e90b7";
+    const defaultEmails = "evandunnagan@yahoo.com,assoom1000@gmail.com";
+    
+    if (ids || !ids) params.append('ids', ids || defaultIds);
+    if (emails || !emails) params.append('emails', emails || defaultEmails);
+
+    const url = `https://api.hyros.com/v1/api/v1.0/leads/journey?${params.toString()}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'API-Key': apiKey,
+        'Accept': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Hyros API failed: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Hyros journeys error:", error);
+    return res.status(500).json({ 
+      error: "Failed to fetch Hyros journey data",
+      details: error.message
+    });
+  }
 });
 
 const PORT = process.env.PORT || 2074;

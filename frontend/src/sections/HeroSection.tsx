@@ -10,7 +10,6 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
   return (
     <section
-      id="mission"
       style={{
         marginTop: -30,
         width: "100%",

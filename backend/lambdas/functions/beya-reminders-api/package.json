@@ -2,14 +2,14 @@
   "name": "beya-reminders-api",
   "version": "1.0.0",
   "type": "module",
-  "description": "Lambda function for creating and sending scheduled reminders via SES",
+  "description": "Lambda function for creating and sending scheduled reminders via inbox API",
   "main": "handlers/remindersHandler.js",
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.450.0",
     "@aws-sdk/lib-dynamodb": "^3.450.0",
     "@aws-sdk/client-eventbridge": "^3.450.0",
-    "@aws-sdk/client-ses": "^3.450.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "node-fetch": "^3.3.0"
   },
   "scripts": {
     "deploy": "npm run package && aws lambda update-function-code --function-name beya-reminders-api --zip-file fileb://beya-reminders-api.zip --region us-east-1",

@@ -69,7 +69,7 @@ export class GmailMCPSender {
    * Send email directly via Gmail MCP tool using Pipedream SDK
    */
   async sendEmail(userId, emailData) {
-    const { to, subject, body, replyTo = null, threadId = null } = emailData;
+    const { to, subject, body, cc = [], bcc = [], replyTo = null, threadId = null } = emailData;
 
     try {
       // Check if Gmail is connected
@@ -91,6 +91,16 @@ export class GmailMCPSender {
         body: body,
         bodyType: "html", // Default to HTML
       };
+
+      // Add CC/BCC if provided
+      if (cc && cc.length > 0) {
+        actionParams.cc = cc.join(',');
+        console.log(`📧 Adding CC recipients: ${actionParams.cc}`);
+      }
+      if (bcc && bcc.length > 0) {
+        actionParams.bcc = bcc.join(',');
+        console.log(`📧 Adding BCC recipients: ${actionParams.bcc}`);
+      }
 
       // Only add inReplyTo if it's a valid Message-ID (not a UUID fallback)
       if (replyTo && !replyTo.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
@@ -162,7 +172,9 @@ export class GmailMCPSender {
       threadId, 
       to, 
       subject, 
-      body 
+      body,
+      cc = [],
+      bcc = []
     } = replyData;
 
     // Ensure subject has "Re:" prefix if it's a reply
@@ -172,6 +184,8 @@ export class GmailMCPSender {
       to,
       subject: replySubject,
       body,
+      cc,
+      bcc,
       replyTo: originalMessageId,
       threadId
     });

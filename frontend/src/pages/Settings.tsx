@@ -43,7 +43,12 @@ const SettingsPage = () => {
   const handleSignOut = () => {
     if (window.confirm('Are you sure you want to sign out?')) {
       console.log('Signing out...');
-      // Add sign out logic here
+      // Call logout from auth context
+      if (logout) {
+        logout();
+      }
+      // Redirect to home page
+      window.location.href = '/';
     }
   };
 
@@ -60,21 +65,18 @@ const SettingsPage = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#FAFAFA',
-      padding: '40px 20px',
+      backgroundColor: '#FFFFFF',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       <div style={{
-        maxWidth: '800px',
-        margin: '0 auto',
+        width: '100%',
+        minHeight: '100vh',
         backgroundColor: '#FFFFFF',
-        borderRadius: '12px',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
         overflow: 'hidden'
       }}>
         {/* Header */}
         <div style={{
-          padding: '32px',
+          padding: '32px 40px',
           borderBottom: '1px solid #F0F0F0',
           display: 'flex',
           justifyContent: 'space-between',
@@ -150,7 +152,7 @@ const SettingsPage = () => {
         <div style={{
           display: 'flex',
           borderBottom: '1px solid #F0F0F0',
-          padding: '0 32px'
+          padding: '0 40px'
         }}>
           <button
             onClick={() => setActiveTab('contact')}
@@ -206,7 +208,7 @@ const SettingsPage = () => {
         </div>
 
         {/* Content */}
-        <div style={{ padding: '32px' }}>
+        <div style={{ padding: '32px 40px' }}>
           {/* Contact Tab */}
           {activeTab === 'contact' && (
             <div>
@@ -325,14 +327,14 @@ const SettingsPage = () => {
           {/* Integrations Tab */}
           {activeTab === 'integrations' && (
         <div>
-          <h2>Connected Accounts for {user!.userId}</h2>
-          {Object.entries(user!.connectedAccounts).length === 0
+          <h2>Connected Accounts{user ? ` for ${user.userId}` : ''}</h2>
+          {!user || !user.connectedAccounts || Object.entries(user.connectedAccounts).length === 0
             ? <p>No integrations connected.</p>
             : (
               <ul style={{ listStyle: 'none', padding: 0 }}>
-                {Object.entries(user!.connectedAccounts).map(([key, value]) => (
+                {Object.entries(user.connectedAccounts).map(([key, value]) => (
                   <li key={key} style={{ margin: '8px 0' }}>
-                    <strong>{key}</strong>: {value}
+                    <strong>{key}</strong>: {String(value)}
                   </li>
                 ))}
               </ul>
@@ -379,7 +381,7 @@ const SettingsPage = () => {
                     fontSize: '15px',
                     color: '#1A1A1A',
                     margin: '6px 0 0 0'
-                  }}>{user!.email}</p>
+                  }}>{user?.email || 'Not available'}</p>
                 </div>
                 
                 <div>

@@ -36,6 +36,9 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy source files from builder
 COPY --from=builder /app/*.js ./
+COPY --from=builder /app/connect ./connect/
+COPY --from=builder /app/services ./services/
+COPY --from=builder /app/scripts ./scripts/
 
 # Change ownership to nodejs user
 RUN chown -R nodejs:nodejs /app

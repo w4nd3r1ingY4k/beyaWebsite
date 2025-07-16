@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../AuthContext';
+import { API_ENDPOINTS } from '../../config/api';
 
 interface Message {
   id: number;
@@ -8,10 +10,12 @@ interface Message {
 }
 
 const AIChatCircle: React.FC = () => {
+  const { user } = useAuth();
   const [isExpanded, setIsExpanded] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [messageId, setMessageId] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -49,8 +53,8 @@ const AIChatCircle: React.FC = () => {
     setIsExpanded(!isExpanded);
   };
 
-  const handleSendMessage = () => {
-    if (!inputValue.trim()) return;
+  const handleSendMessage = async () => {
+    if (!inputValue.trim() || isLoading) return;
 
     const userMessage: Message = {
       id: messageId,
@@ -61,18 +65,53 @@ const AIChatCircle: React.FC = () => {
 
     setMessages(prev => [...prev, userMessage]);
     setMessageId(prev => prev + 1);
+    const currentQuery = inputValue;
     setInputValue('');
+    setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // Call the AI API exactly like the working curl
+      const response = await fetch(API_ENDPOINTS.QUERY_AI, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: currentQuery,
+          userId: user?.userId || null,
+          topK: 5
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API request failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
       const aiMessage: Message = {
         id: messageId + 1,
-        text: `I received your message: "${inputValue}". How can I help you further?`,
+        text: data.aiResponse || 'I found some relevant information, but couldn\'t generate a response. Please try rephrasing your question.',
         sender: 'ai',
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiMessage]);
       setMessageId(prev => prev + 1);
-    }, 1000);
+
+    } catch (error) {
+      console.error('❌ AI API call failed:', error);
+      
+      const errorMessage: Message = {
+        id: messageId + 1,
+        text: 'Sorry, I\'m having trouble connecting to the AI service right now. Please try again.',
+        sender: 'ai',
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      setMessageId(prev => prev + 1);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
