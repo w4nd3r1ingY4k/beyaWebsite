@@ -1,6 +1,7 @@
 import React from "react";
 import Slider from "react-slick";
 import { TeamMember } from "../components/TeamMember";
+import styles from '../styles/TeamSection.module.css';
 
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
@@ -46,35 +47,10 @@ export const TeamSection: React.FC<TeamProps> = ({ teamMembers }) => {
             },
         ],
     };
-
     return (
-        <section
-            id="our-team"
-            style={{
-                paddingTop: 80,
-                paddingBottom: 80,
-                background: "#FCFCFC",
-            }}
-        >
-            <div
-                style={{
-                    maxWidth: 1200,
-                    margin: "0 auto",
-                    paddingLeft: 40,
-                    paddingRight: 40,
-                }}
-            >
-                <h2
-                    style={{
-                        fontSize: 32,
-                        fontWeight: "bold",
-                        textAlign: "center",
-                        marginBottom: 48,
-                        color: "#3A3A3A",
-                    }}
-                >
-                    Our Team
-                </h2>
+        <section id="our-team" className={styles.section}>
+            <div className={styles.container}>
+                <h2 className={styles.header}>Our Team</h2>
                 <Slider {...settings}>
                     {teamMembers.map((member, index) => (
                         <div key={index}>

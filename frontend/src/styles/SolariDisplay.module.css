@@ -1,0 +1,15 @@
+.container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: linear-gradient(to bottom, #ea580c, #ec4899);
+  color: white;
+  overflow: hidden;
+}
+.solariWord {
+  display: flex;
+  margin: 8px 0;
+} 

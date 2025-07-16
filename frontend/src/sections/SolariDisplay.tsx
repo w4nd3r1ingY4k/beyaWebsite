@@ -1,28 +1,12 @@
 // SolariDisplay.tsx
 import React, { useEffect, useState } from "react";
 import SplitFlap from "../components/SplitFlap";
+import styles from '../styles/SolariDisplay.module.css';
 
 type SolariDisplayProps = {
   phrases: string[];
   speed?: number;
   phraseDelay?: number;
-};
-
-const containerStyle: React.CSSProperties = {
-  position: "relative",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  height: "100vh",
-  background: "linear-gradient(to bottom, #ea580c, #ec4899)",
-  color: "white",
-  overflow: "hidden",
-};
-
-const solariWordStyle: React.CSSProperties = {
-  display: "flex",
-  margin: "8px 0",
 };
 
 const SolariDisplay: React.FC<SolariDisplayProps> = ({
@@ -55,9 +39,9 @@ const SolariDisplay: React.FC<SolariDisplayProps> = ({
   }, [currentPhraseIndex, phrases]);
 
   return (
-    <div style={containerStyle}>
+    <div className={styles.container}>
       {currentPhrase.split(" ").map((word, index) => (
-        <div key={index} style={solariWordStyle}>
+        <div key={index} className={styles.solariWord}>
           {word.split("").map((char, idx) => (
             <SplitFlap key={idx} targetChar={char} speed={speed} />
           ))}

@@ -1,0 +1,18 @@
+.section {
+  padding-top: 80px;
+  padding-bottom: 80px;
+  background: #FCFCFC;
+}
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: 40px;
+  padding-right: 40px;
+}
+.header {
+  font-size: 32px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 48px;
+  color: #3A3A3A;
+} 
