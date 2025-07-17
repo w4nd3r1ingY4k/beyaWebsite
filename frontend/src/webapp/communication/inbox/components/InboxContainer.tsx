@@ -85,15 +85,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   // API Base URL
   const apiBase = API_ENDPOINTS.INBOX_API_BASE;
   
-  // Debug: Log the API base URL
-  console.log('🔍 DEBUG: API_ENDPOINTS.INBOX_API_BASE =', API_ENDPOINTS.INBOX_API_BASE);
-  console.log('🔍 DEBUG: apiBase =', apiBase);
-  console.log('🔍 DEBUG: All API_ENDPOINTS =', API_ENDPOINTS);
-  
-  // Debug: Test environment variable loading
-  console.log('🔍 ENV TEST: process.env.REACT_APP_TEST_VAR =', process.env.REACT_APP_TEST_VAR);
-  console.log('🔍 ENV TEST: process.env.REACT_APP_INBOX_API_BASE =', process.env.REACT_APP_INBOX_API_BASE);
-  console.log('🔍 ENV TEST: process.env.NODE_ENV =', process.env.NODE_ENV);
+
   
   // Department options
   const primaryTagOptions = ['sales', 'logistics', 'support'];
@@ -129,11 +121,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
 
       // Load flows
-      const flowsUrl = `${apiBase}/flows`;
-      console.log('🔍 DEBUG: Calling flows URL:', flowsUrl);
-      const flowsResponse = await fetch(flowsUrl);
-      console.log('🔍 DEBUG: Response status:', flowsResponse.status);
-      console.log('🔍 DEBUG: Response headers:', flowsResponse.headers);
+git      const flowsResponse = await fetch(`${apiBase}/flows`);
       if (!flowsResponse.ok) throw new Error('Failed to load conversations');
       
       const flowsData = await flowsResponse.json();
