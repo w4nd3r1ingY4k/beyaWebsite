@@ -1730,24 +1730,43 @@ const MessageView: React.FC<MessageViewProps> = ({
                   {/* Display secondary tags */}
                   {(() => {
                     const secondaryTags = Array.isArray(localFlow?.secondaryTags) ? localFlow.secondaryTags : [];
-                    return secondaryTags.slice(0, 2).map((tag: string, index: number) => (
-                      <span
-                        key={index}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSecondaryTagSelect(tag);
-                        }}
-                        style={{
-                          background: '#DE1785',
-                          color: '#fff',
-                          padding: '2px 6px',
-                          borderRadius: '3px',
-                          fontSize: '12px',
-                          marginLeft: '4px',
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '3px',
+                    
+                    // Color mapping for different secondary tags
+                    const getTagColors = (tagName: string) => {
+                      const tagColors: Record<string, { bg: string; color: string; border: string }> = {
+                        'urgent': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                        'vip': { bg: '#F3E8FF', color: '#7C3AED', border: '#7C3AED' }, // Purple
+                        'complex': { bg: '#FEF3C7', color: '#D97706', border: '#D97706' }, // Amber
+                        'enterprise': { bg: '#ECFDF5', color: '#059669', border: '#059669' }, // Green
+                        'follow-up': { bg: '#EFF6FF', color: '#2563EB', border: '#2563EB' }, // Blue
+                        'escalated': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                        'deleted': { bg: '#F3F4F6', color: '#6B7280', border: '#6B7280' }, // Gray
+                      };
+                      return tagColors[tagName.toLowerCase()] || { bg: '#FDE7F1', color: '#DE1785', border: '#DE1785' }; // Default pink
+                    };
+                    
+                    return secondaryTags.slice(0, 2).map((tag: string, index: number) => {
+                      const colors = getTagColors(tag);
+                      
+                      return (
+                        <span
+                          key={index}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSecondaryTagSelect(tag);
+                          }}
+                          style={{
+                            background: colors.bg,
+                            color: colors.color,
+                            border: `1px solid ${colors.border}`,
+                            padding: '2px 6px',
+                            borderRadius: '3px',
+                            fontSize: '12px',
+                            marginLeft: '4px',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
                           transition: 'background 0.2s'
                         }}
                         onMouseEnter={(e) => {
@@ -1760,7 +1779,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                         {tag.charAt(0).toUpperCase() + tag.slice(1)}
                         <span style={{ fontSize: '10px', fontWeight: 'bold' }}>×</span>
                       </span>
-                    ));
+                      );
+                    });
                   })()}
                   {(() => {
                     const secondaryTags = Array.isArray(localFlow?.secondaryTags) ? localFlow.secondaryTags : [];

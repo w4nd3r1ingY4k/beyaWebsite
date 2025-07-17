@@ -1847,18 +1847,37 @@ const ThreadList: React.FC<Props> = ({
                     )}
                     
                     {/* Secondary tags */}
-                    {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.slice(0, 3).map((tag: string, index: number) => (
-                      <div key={index} style={{
-                        fontSize: '10px',
-                        color: '#DE1785',
-                        background: '#FDE7F1',
-                        padding: '2px 6px',
-                        borderRadius: '10px',
-                        display: 'inline-block'
-                      }}>
-                        {tag}
-                      </div>
-                    ))}
+                    {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.slice(0, 3).map((tag: string, index: number) => {
+                      // Color mapping for different secondary tags
+                      const getTagColors = (tagName: string) => {
+                        const tagColors = {
+                          'urgent': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                          'vip': { bg: '#F3E8FF', color: '#7C3AED', border: '#7C3AED' }, // Purple
+                          'complex': { bg: '#FEF3C7', color: '#D97706', border: '#D97706' }, // Amber
+                          'enterprise': { bg: '#ECFDF5', color: '#059669', border: '#059669' }, // Green
+                          'follow-up': { bg: '#EFF6FF', color: '#2563EB', border: '#2563EB' }, // Blue
+                          'escalated': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                          'deleted': { bg: '#F3F4F6', color: '#6B7280', border: '#6B7280' }, // Gray
+                        };
+                        return tagColors[tagName.toLowerCase()] || { bg: '#FDE7F1', color: '#DE1785', border: '#DE1785' }; // Default pink
+                      };
+                      
+                      const colors = getTagColors(tag);
+                      
+                      return (
+                        <div key={index} style={{
+                          fontSize: '10px',
+                          color: colors.color,
+                          background: colors.bg,
+                          border: `1px solid ${colors.border}`,
+                          padding: '2px 6px',
+                          borderRadius: '10px',
+                          display: 'inline-block'
+                        }}>
+                          {tag}
+                        </div>
+                      );
+                    })}
                     
                     {/* Show +X more if there are more than 3 secondary tags */}
                     {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.length > 3 && (
