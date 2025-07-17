@@ -121,7 +121,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
 
       // Load flows
-git      const flowsResponse = await fetch(`${apiBase}/flows`);
+      const flowsResponse = await fetch(`${apiBase}/flows`);
       if (!flowsResponse.ok) throw new Error('Failed to load conversations');
       
       const flowsData = await flowsResponse.json();

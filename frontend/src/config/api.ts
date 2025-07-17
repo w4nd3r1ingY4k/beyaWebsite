@@ -7,11 +7,8 @@ interface APIConfig {
 }
 
 // Helper to get env variable or fallback
-const env = (key: string, fallback: string) => {
-  const value = process.env[key] || fallback;
-  console.log(`🔍 ENV DEBUG: ${key} = "${value}" (process.env.${key} = "${process.env[key]}")`);
-  return value;
-}
+const env = (key: string, fallback: string) =>
+  process.env[key] || fallback;
 
 
 // Environment-based configuration using .env variables
