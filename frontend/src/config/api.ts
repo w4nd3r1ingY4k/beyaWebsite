@@ -37,22 +37,22 @@ export const API_ENDPOINTS = {
   AI_HEALTH: `${config.AI_SERVICE_URL}/health`,
 
   // Lambda Function URLs (from .env or fallback)
-  GET_USER: env('REACT_APP_GET_USER_URL', ''),
-  CREATE_USER: env('REACT_APP_CREATE_USER_URL', ''),
-  UPDATE_USER: env('REACT_APP_UPDATE_USER_URL', ''),
-  GMAIL_WORKFLOW_MANAGER: env('REACT_APP_GMAIL_WORKFLOW_MANAGER_URL', ''),
-  FLOW_COMMENTS: env('REACT_APP_FLOW_COMMENTS_URL', ''),
-  DISCUSSIONS: env('REACT_APP_DISCUSSIONS_URL', ''),
-  FLOW_STATUS_UPDATE: env('REACT_APP_FLOW_STATUS_UPDATE_URL', ''),
+  GET_USER: env('REACT_APP_GET_USER_URL', 'https://qyb7x6hp2fhypw5gf7kjk3hf7a0hmoev.lambda-url.us-east-1.on.aws'),
+  CREATE_USER: env('REACT_APP_CREATE_USER_URL', 'https://qfk6yjyzg6utzok6gpels4cyhy0vhrmg.lambda-url.us-east-1.on.aws'),
+  UPDATE_USER: env('REACT_APP_UPDATE_USER_URL', 'https://srt2mvwqmhos6pbp5kbj6vbsfy0aycvl.lambda-url.us-east-1.on.aws'),
+  GMAIL_WORKFLOW_MANAGER: env('REACT_APP_GMAIL_WORKFLOW_MANAGER_URL', 'https://4it3sblmdni33lnj6no3ptsglu0yahsw.lambda-url.us-east-1.on.aws'),
+  FLOW_COMMENTS: env('REACT_APP_FLOW_COMMENTS_URL', 'https://pndg7ad6xttoa2qm645ryd6bii0cugff.lambda-url.us-east-1.on.aws'),
+  DISCUSSIONS: env('REACT_APP_DISCUSSIONS_URL', 'https://45lcjloxwa2wt2hfmbltw42dqm0kiaue.lambda-url.us-east-1.on.aws'),
+  FLOW_STATUS_UPDATE: env('REACT_APP_FLOW_STATUS_UPDATE_URL', 'https://spizyylamz3oavcuay5a3hrmsi0eairh.lambda-url.us-east-1.on.aws'),
 
   // API Gateway endpoints for inbox/messaging services
-  INBOX_API_BASE: env('REACT_APP_INBOX_API_BASE', ''),
-  CONTACTS_API_BASE: env('REACT_APP_CONTACTS_API_BASE', ''),
-  SCHEDULE_API_BASE: env('REACT_APP_SCHEDULE_API_BASE', ''),
+  INBOX_API_BASE: env('REACT_APP_INBOX_API_BASE', 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod'),
+  CONTACTS_API_BASE: env('REACT_APP_CONTACTS_API_BASE', 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod'),
+  SCHEDULE_API_BASE: env('REACT_APP_SCHEDULE_API_BASE', 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod'),
 
   // Specific endpoints
-  TEMPLATES: env('REACT_APP_TEMPLATES_URL', ''),
-  REMINDERS: env('REACT_APP_REMINDERS_URL', ''),
+  TEMPLATES: env('REACT_APP_TEMPLATES_URL', 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/templates'),
+  REMINDERS: env('REACT_APP_REMINDERS_URL', 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/reminders'),
 } as const;
 
 export default config; 
