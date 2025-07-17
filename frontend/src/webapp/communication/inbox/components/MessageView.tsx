@@ -328,6 +328,14 @@ const MessageView: React.FC<MessageViewProps> = ({
   const loadTeamMessages = async (threadId: string) => {
     try {
       console.log('Loading team messages for thread:', threadId);
+      
+      // Check if FLOW_COMMENTS endpoint is configured
+      if (!API_ENDPOINTS.FLOW_COMMENTS) {
+        console.log('Flow comments endpoint not configured, skipping team messages load');
+        setTeamMessages([]);
+        return;
+      }
+      
       const response = await fetch(`${API_ENDPOINTS.FLOW_COMMENTS}/flows/${encodeURIComponent(threadId)}/comments`);
       if (!response.ok) throw new Error('Failed to load team messages');
       

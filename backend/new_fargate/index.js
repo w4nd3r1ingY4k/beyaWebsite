@@ -19,7 +19,7 @@ let contextManager;
 try {
   contextManager = new ContextManager();
   console.log("✅ Context Manager initialized");
-} catch (error) {
+  } catch (error) {
   console.error("❌ Failed to initialize Context Manager:", error);
   contextManager = null;
 }
@@ -38,7 +38,7 @@ app.get("/health", (req, res) => {
   res.json({ 
     status: "healthy", 
     service: "beya-ai-service",
-    timestamp: new Date().toISOString() 
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -87,8 +87,8 @@ app.get("/debug/vector-metadata", async (req, res) => {
     });
 
     const metadata = queryResponse.matches.map(match => ({
-      id: match.id,
-      score: match.score,
+        id: match.id,
+        score: match.score,
       metadata: match.metadata
     }));
 
@@ -159,7 +159,7 @@ app.post("/api/v1/query-with-ai", async (req, res) => {
     if (contextManager) {
       try {
         context = await contextManager.getContextForPrompt(userId);
-      } catch (error) {
+  } catch (error) {
         console.warn('⚠️ Context manager error:', error.message);
         context = "";
       }
@@ -171,7 +171,7 @@ app.post("/api/v1/query-with-ai", async (req, res) => {
     if (contextManager && result.response) {
       try {
         await contextManager.addAIResponse(userId, query, result.response);
-      } catch (error) {
+  } catch (error) {
         console.warn('⚠️ Context manager error:', error.message);
       }
     }
@@ -240,7 +240,7 @@ app.get("/api/v1/thread/:threadId", async (req, res) => {
     console.error('Error searching by thread ID:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: error.message
     });
   }
 });
@@ -289,7 +289,7 @@ app.post("/api/v1/analyze-draft", async (req, res) => {
     if (contextManager) {
       try {
         userContext = await contextManager.getContextForPrompt(userId);
-      } catch (error) {
+  } catch (error) {
         console.warn('⚠️ Context manager error:', error.message);
         userContext = "";
       }
@@ -362,7 +362,7 @@ app.post("/api/v1/suggest-reply", async (req, res) => {
     if (contextManager) {
       try {
         userContext = await contextManager.getContextForPrompt(userId);
-      } catch (error) {
+  } catch (error) {
         console.warn('⚠️ Context manager error:', error.message);
         userContext = "";
       }
@@ -485,7 +485,7 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
   // Don't exit in development, just log
   if (process.env.NODE_ENV === 'production') {
-    process.exit(1);
+  process.exit(1);
   }
 });
 

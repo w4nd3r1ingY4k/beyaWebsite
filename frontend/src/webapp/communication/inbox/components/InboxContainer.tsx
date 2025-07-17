@@ -85,6 +85,16 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
   // API Base URL
   const apiBase = API_ENDPOINTS.INBOX_API_BASE;
   
+  // Debug: Log the API base URL
+  console.log('🔍 DEBUG: API_ENDPOINTS.INBOX_API_BASE =', API_ENDPOINTS.INBOX_API_BASE);
+  console.log('🔍 DEBUG: apiBase =', apiBase);
+  console.log('🔍 DEBUG: All API_ENDPOINTS =', API_ENDPOINTS);
+  
+  // Debug: Test environment variable loading
+  console.log('🔍 ENV TEST: process.env.REACT_APP_TEST_VAR =', process.env.REACT_APP_TEST_VAR);
+  console.log('🔍 ENV TEST: process.env.REACT_APP_INBOX_API_BASE =', process.env.REACT_APP_INBOX_API_BASE);
+  console.log('🔍 ENV TEST: process.env.NODE_ENV =', process.env.NODE_ENV);
+  
   // Department options
   const primaryTagOptions = ['sales', 'logistics', 'support'];
 
@@ -119,7 +129,11 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       }
 
       // Load flows
-      const flowsResponse = await fetch(`${apiBase}/flows`);
+      const flowsUrl = `${apiBase}/flows`;
+      console.log('🔍 DEBUG: Calling flows URL:', flowsUrl);
+      const flowsResponse = await fetch(flowsUrl);
+      console.log('🔍 DEBUG: Response status:', flowsResponse.status);
+      console.log('🔍 DEBUG: Response headers:', flowsResponse.headers);
       if (!flowsResponse.ok) throw new Error('Failed to load conversations');
       
       const flowsData = await flowsResponse.json();
@@ -193,10 +207,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
                 const messagesArray = data.messages || [];
                 
                 // Filter out thread summary records for preloading too
-                const filteredMessages = messagesArray.filter(msg => 
+                const filteredMessages = messagesArray.filter((msg: any) => 
                   msg.MessageId !== 'THREAD_SUMMARY' && 
                   msg.Timestamp !== 0 && 
-                  msg.Direction
+                  msg.Direction // Must have a direction (incoming/outgoing)
                 );
                 
                 if (filteredMessages.length > 0) {
@@ -364,7 +378,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       const messagesArray = data.messages || [];
       
       // Filter out thread summary records (these are for backend processing only)
-      const filteredMessages = messagesArray.filter(msg => 
+      const filteredMessages = messagesArray.filter((msg: any) => 
         msg.MessageId !== 'THREAD_SUMMARY' && 
         msg.Timestamp !== 0 && 
         msg.Direction // Must have a direction (incoming/outgoing)
@@ -427,6 +441,13 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
 
   const loadTeamMessages = async (threadId: string) => {
     try {
+      // Check if FLOW_COMMENTS endpoint is configured
+      if (!API_ENDPOINTS.FLOW_COMMENTS) {
+        console.log('Flow comments endpoint not configured, skipping team messages load');
+        setTeamMessages([]);
+        return;
+      }
+      
       // Use the team messages endpoint from original code
       const response = await fetch(`${API_ENDPOINTS.FLOW_COMMENTS}/flows/${encodeURIComponent(threadId)}/comments`);
       if (!response.ok) throw new Error('Failed to load team messages');
@@ -436,6 +457,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       setTeamMessages(Array.isArray(data.comments) ? data.comments : []);
     } catch (err) {
       console.error('Error loading team messages:', err);
+      setTeamMessages([]);
     }
   };
 
