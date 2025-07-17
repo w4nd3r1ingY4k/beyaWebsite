@@ -256,7 +256,7 @@ const navigate = useNavigate();
       />
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
+      <div style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', minWidth: 0, marginTop: 45 }}>
         {/* Page Content */}
         <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
         {/* <AIChatCircle /> */}

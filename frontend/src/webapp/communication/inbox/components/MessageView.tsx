@@ -277,6 +277,26 @@ const MessageView: React.FC<MessageViewProps> = ({
     setLocalFlow(flow);
   }, [flow]);
 
+  // Effect to automatically expand the last message when thread is opened
+  useEffect(() => {
+    if (selectedThreadId && messages.length > 0) {
+      // Find the last message (most recent by timestamp)
+      const sortedMessages = [...messages].sort((a, b) => {
+        const timestampA = a.Timestamp || 0;
+        const timestampB = b.Timestamp || 0;
+        return timestampB - timestampA; // Most recent first
+      });
+      
+      const lastMessage = sortedMessages[0];
+      if (lastMessage && lastMessage.MessageId) {
+        setActiveMessageId(lastMessage.MessageId);
+      }
+    } else {
+      // Clear active message when no thread selected
+      setActiveMessageId(null);
+    }
+  }, [selectedThreadId, messages]);
+
   // Cleanup message scroll timeout on unmount
   useEffect(() => {
     return () => {
@@ -1246,10 +1266,45 @@ const MessageView: React.FC<MessageViewProps> = ({
       clearTimeout(messageScrollTimeoutRef.current);
     }
 
-    // Hide scrollbar after 500ms of no scrolling
+    // Hide scrollbar after 3000ms of no scrolling (increased for more forgiving UX)
     messageScrollTimeoutRef.current = setTimeout(() => {
       container.classList.remove('scrolling');
-    }, 500);
+    }, 3000);
+  };
+
+  // Handle mouse enter on scroll container
+  const handleMessageMouseEnter = () => {
+    const container = messageScrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when hovering
+    if (messageScrollTimeoutRef.current) {
+      clearTimeout(messageScrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse move to keep scrollbar visible during interaction
+  const handleMessageMouseMove = () => {
+    const container = messageScrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when moving mouse
+    if (messageScrollTimeoutRef.current) {
+      clearTimeout(messageScrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse leave on scroll container
+  const handleMessageMouseLeave = () => {
+    const container = messageScrollContainerRef.current;
+    if (!container) return;
+
+    // Only hide if not actively scrolling - longer delay for easier scrollbar interaction
+    messageScrollTimeoutRef.current = setTimeout(() => {
+      container.classList.remove('scrolling');
+    }, 2000);
   };
 
   // Handle resize start
@@ -1580,20 +1635,24 @@ const MessageView: React.FC<MessageViewProps> = ({
       {/* Custom scrollbar styles for messages */}
       <style>{`
         .message-custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+          width: 6px;
         }
         .message-custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .message-custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(222, 23, 133, 0.3);
-          border-radius: 2px;
+          background: rgba(222, 23, 133, 0.4);
+          border-radius: 3px;
           min-height: 40px;
           opacity: 0;
-          transition: opacity 0.2s ease;
+          transition: opacity 0.15s ease, background 0.2s ease;
         }
+        .message-custom-scrollbar:hover::-webkit-scrollbar-thumb,
         .message-custom-scrollbar.scrolling::-webkit-scrollbar-thumb {
           opacity: 1;
+        }
+        .message-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(222, 23, 133, 0.8);
         }
         .message-custom-scrollbar.scrolling::-webkit-scrollbar-thumb:hover {
           background: #C91476;
@@ -1641,13 +1700,13 @@ const MessageView: React.FC<MessageViewProps> = ({
               display: 'flex',
               justifyContent: 'flex-end',
               alignItems: 'center',
-              padding: '0 16px',
+              padding: '14px 16px 0 16px', // Add top padding for spacing from status bar
               gap: '8px',
               position: 'sticky',
               top: 0,
               backgroundColor: 'transparent',
               zIndex: 10,
-              marginBottom: '10px'
+              marginBottom: '3px'
             }}>
               {/* Secondary Tags dropdown */}
               <div style={{ position: 'relative' }} ref={secondaryTagDropdownRef}>
@@ -1935,6 +1994,9 @@ const MessageView: React.FC<MessageViewProps> = ({
             <div 
               ref={messageScrollContainerRef}
               onScroll={handleMessageScroll}
+              onMouseEnter={handleMessageMouseEnter}
+              onMouseMove={handleMessageMouseMove}
+              onMouseLeave={handleMessageMouseLeave}
               style={{
                 flex: 1,
                 overflowY: 'auto',

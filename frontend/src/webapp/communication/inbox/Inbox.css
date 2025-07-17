@@ -23,7 +23,6 @@ body, html {
 }
 
 .main {
-  margin-top: 5vh; /* Increased from 4vh to clear the SideMenu header line (45px + some padding) */
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -44,7 +43,6 @@ body, html {
 }
 
 .content {
-  height: calc(100vh - 5vh); /* Subtract the .main margin-top to fit properly */
   display: flex;
   overflow: hidden;
   position: relative;

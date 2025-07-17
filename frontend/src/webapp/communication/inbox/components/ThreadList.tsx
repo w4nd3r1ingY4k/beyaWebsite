@@ -487,10 +487,45 @@ const ThreadList: React.FC<Props> = ({
       clearTimeout(scrollTimeoutRef.current);
     }
 
-    // Hide scrollbar after 500ms of no scrolling
+    // Hide scrollbar after 3000ms of no scrolling (increased for more forgiving UX)
     scrollTimeoutRef.current = setTimeout(() => {
       container.classList.remove('scrolling');
-    }, 500);
+    }, 3000);
+  };
+
+  // Handle mouse enter on scroll container
+  const handleMouseEnter = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when hovering
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse move to keep scrollbar visible during interaction
+  const handleMouseMove = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when moving mouse
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse leave on scroll container
+  const handleMouseLeave = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Only hide if not actively scrolling - longer delay for easier scrollbar interaction
+    scrollTimeoutRef.current = setTimeout(() => {
+      container.classList.remove('scrolling');
+    }, 2000);
   };
 
   // Effects
@@ -754,18 +789,25 @@ const ThreadList: React.FC<Props> = ({
       {/* Custom scrollbar styles */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+          width: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: transparent;
-          border-radius: 2px;
+          background: rgba(222, 23, 133, 0.4);
+          border-radius: 3px;
           min-height: 40px;
+          opacity: 0;
+          transition: opacity 0.15s ease, background 0.2s ease;
         }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb,
         .custom-scrollbar.scrolling::-webkit-scrollbar-thumb {
+          opacity: 1;
           background: #DE1785;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(222, 23, 133, 0.8);
         }
         .custom-scrollbar.scrolling::-webkit-scrollbar-thumb:hover {
           background: #C91476;
@@ -800,7 +842,8 @@ const ThreadList: React.FC<Props> = ({
         display: 'flex',
         flexDirection: 'column',
         background: '#FFFBFA',
-        position: 'relative'
+        position: 'relative',
+        paddingTop: '20px' // Add top padding to push content down
       }}>
 
         {/* Compose Button - Moved to top */}
@@ -1356,6 +1399,7 @@ const ThreadList: React.FC<Props> = ({
         {/* Thread List Header */}
         <div style={{
           padding: '10px',
+          paddingTop: '20px', // Add extra top padding for spacing from status bar
           background: '#FBF7F7' // Match the thread list container background
         }}>
           <div style={{
@@ -1620,6 +1664,9 @@ const ThreadList: React.FC<Props> = ({
         <div 
           ref={scrollContainerRef}
           onScroll={handleScroll}
+          onMouseEnter={handleMouseEnter}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
           style={{
             flex: 1,
             overflowY: 'auto',

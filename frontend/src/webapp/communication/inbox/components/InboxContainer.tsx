@@ -303,7 +303,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         }
         
         const participantNames = discussion.participants.map(id => 
-          id === user.userId ? (user.displayName || 'You') : `User ${id.slice(-4)}`
+          id === user.userId || id === user.subscriber_email ? (user.displayName || 'You') : id
         );
         
         const finalStatus = discussion.status || 'open'; // Default to 'open' if no status
@@ -589,18 +589,26 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     
     setParticipantsLoading(true);
     try {
-      const namePromises = participantIds.map(async (userId: string) => {
-        if (participantNames[userId]) {
-          return { userId, name: participantNames[userId] };
+      const namePromises = participantIds.map(async (participantId: string) => {
+        if (participantNames[participantId]) {
+          return { userId: participantId, name: participantNames[participantId] };
+        }
+        
+        // Check if participant is already an email address
+        if (participantId.includes('@')) {
+          // It's an email address, display it directly
+          return { userId: participantId, name: participantId };
         }
         
         try {
-          const userInfo = await getUserById(userId);
-          const displayName = userInfo.displayName || userInfo.subscriber_email || `User ${userId.slice(-4)}`;
-          return { userId, name: displayName };
+          // It might be a user ID, try to fetch user info
+          const userInfo = await getUserById(participantId);
+          const displayName = userInfo.displayName || userInfo.subscriber_email || participantId;
+          return { userId: participantId, name: displayName };
         } catch (error) {
-          console.error(`Error fetching user ${userId}:`, error);
-          return { userId, name: `User ${userId.slice(-4)}` };
+          console.error(`Error fetching user ${participantId}:`, error);
+          // If it's not an email and getUserById fails, it might still be some contact identifier
+          return { userId: participantId, name: participantId };
         }
       });
       
@@ -1660,10 +1668,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       return [];
     }
     
-    return currentFlow.participants.map((userId: string) => ({
-      userId,
-      name: participantNames[userId] || `User ${userId.slice(-4)}`,
-      isCurrentUser: userId === user?.userId
+    return currentFlow.participants.map((participantId: string) => ({
+      userId: participantId,
+      name: participantNames[participantId] || participantId, // Show the actual email/identifier instead of "User XXXX"
+      isCurrentUser: participantId === user?.userId || participantId === user?.subscriber_email
     }));
   };
 
@@ -1905,28 +1913,27 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
         background: '#f9fafb',
         width: '100%',
         position: 'relative',
         overflow: 'hidden'
       }}>
         {/* Status Filter Bar positioned absolutely to span ThreadList's right column + MessageView */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: '179px', // Adjusted to overlap by 1px for seamless border connection
-        right: 0, // Extend to the end
-        padding: '0 16px', // Uniform padding for vertical centering
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottom: '1px solid #e5e7eb',
-        borderLeft: '1px solid #e5e7eb', // Add left border to connect with vertical line
-        background: '#FFFBFA',
-        zIndex: 1002,
-        height: '60px', // Fixed height for the status bar
-        boxSizing: 'border-box'
+              <div style={{
+          position: 'absolute',
+          top: '15px', // Small gap from the top edge
+          left: '179px', // Adjusted to overlap by 1px for seamless border connection
+          right: 0, // Extend to the end
+          padding: '0 16px', // Uniform padding for vertical centering
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid #e5e7eb',
+          borderLeft: '1px solid #e5e7eb', // Add left border to connect with vertical line
+          background: '#FFFBFA',
+          zIndex: 1002,
+          height: '60px', // Fixed height for the status bar
+          boxSizing: 'border-box'
       }}>
         {currentView === 'discussions' ? (
           <div style={{
