@@ -12,8 +12,8 @@ import whatsappLogo from '@/webapp/assets/logos/whatsapp-icon logo.png';
 import hyrosLogo from '@/webapp/assets/logos/hyrosLogo.png';
 import msTeamsLogo from '@/webapp/assets/logos/msTeamsLogo.png';
 
-// Fargate service URL - using DNS name instead of IP for stability
-const FARGATE_SERVICE_URL = config.FARGATE_SERVICE_URL;
+// Use proper API endpoints instead of undefined FARGATE_SERVICE_URL
+// const FARGATE_SERVICE_URL = config.FARGATE_SERVICE_URL; // This was undefined
 
 interface Integration {
   id: string;
@@ -353,7 +353,7 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
       // ========================================
       if (integrationId === 'whatsapp') {
         // 1. Get Pipedream Connect token for WhatsApp Business
-        result = await safeFetch(`${FARGATE_SERVICE_URL}/whatsapp/connect`, { userId, action: 'create_token' });
+        result = await safeFetch(API_ENDPOINTS.WHATSAPP_CONNECT, { userId, action: 'create_token' });
         
         // 2. Open Pipedream Connect modal for user to authenticate
         await createFrontendClient().connectAccount({
@@ -367,7 +367,7 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
               // 3. Set up WhatsApp webhook subscriptions for receiving messages
               console.log('📱 Setting up WhatsApp webhook subscriptions...');
               
-              const webhookResult = await safeFetch(`${FARGATE_SERVICE_URL}/whatsapp/setup-webhooks`, {
+              const webhookResult = await safeFetch(`${API_ENDPOINTS.BACKEND_URL}/whatsapp/setup-webhooks`, {
                 userId,
                 whatsappAccountId: (account as any)?.id
               });
@@ -388,7 +388,7 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
       } else if (integrationId === 'gmail') {
         // PHASE A: GET PIPEDREAM CONNECT TOKEN
         // Get a token to initiate Pipedream Connect flow for Gmail
-        result = await safeFetch(`${FARGATE_SERVICE_URL}/gmail/connect`, { userId, action: 'create_token' });
+        result = await safeFetch(API_ENDPOINTS.GMAIL_CONNECT, { userId, action: 'create_token' });
         
         // PHASE B: OPEN PIPEDREAM CONNECT MODAL
         // User authenticates with Google and grants Gmail permissions
@@ -461,7 +461,7 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
               console.log('📌 Using webhook URL:', webhookUrl);
               
               // Call Fargate service to start persistent Gmail polling
-              const pollingResult = await safeFetch(`${FARGATE_SERVICE_URL}/api/integrations/setup-polling`, { 
+              const pollingResult = await safeFetch(API_ENDPOINTS.INTEGRATIONS_SETUP, { 
                 userId, 
                 serviceType: 'gmail',
                 webhookUrl: webhookUrl
@@ -583,7 +583,7 @@ const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ width = 280 }) =>
         const userId = user?.userId;
         if (userId) {
           console.log('🛑 Stopping Gmail polling...');
-          await safeFetch(`${FARGATE_SERVICE_URL}/api/integrations/stop-polling`, { 
+          await safeFetch(`${API_ENDPOINTS.BACKEND_URL}/api/integrations/stop-polling`, { 
             userId, 
             serviceType: 'gmail' 
           });
