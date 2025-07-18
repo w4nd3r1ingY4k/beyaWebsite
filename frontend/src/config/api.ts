@@ -14,9 +14,9 @@ const env = (key: string, fallback: string) =>
 // Environment-based configuration using .env variables
 const config: APIConfig = {
   // Integration service (port 2074)
-  API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074'),
+  API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'https://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074'),
   // AI service (port 2075)
-  AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL', 'http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2075'),
+  AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL', 'https://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2075'),
 };
 
 // Export individual endpoints for easy importing
@@ -34,6 +34,7 @@ export const API_ENDPOINTS = {
   CUSTOMER_CONTEXT: `${config.AI_SERVICE_URL}/api/v1/customer-context`,
   ANALYZE_DRAFT: `${config.AI_SERVICE_URL}/api/v1/analyze-draft`,
   SUGGEST_REPLY: `${config.AI_SERVICE_URL}/api/v1/suggest-reply`,
+  PROACTIVE_INSIGHTS: `${config.AI_SERVICE_URL}/api/v1/proactive-insights`,
   AI_HEALTH: `${config.AI_SERVICE_URL}/health`,
 
   // Lambda Function URLs (from .env or fallback)

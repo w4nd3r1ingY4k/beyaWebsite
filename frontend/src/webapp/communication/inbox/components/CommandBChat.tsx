@@ -161,7 +161,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
     const fetchInsights = async () => {
       if (!user?.userId) return;
       try {
-        const res = await fetch(`http://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2075/api/v1/proactive-insights?userId=${user.userId}`);
+        const res = await fetch(`https://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2075/api/v1/proactive-insights?userId=${user.userId}`);
         const data = await res.json();
         if (data.insights) {
           setProactiveInsights(data.insights);
