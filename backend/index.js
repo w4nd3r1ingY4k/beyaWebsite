@@ -9,16 +9,10 @@ import express from "express";
 import { createBackendClient } from "@pipedream/sdk/server";
 import OpenAI from "openai";
 import cors from "cors";
-<<<<<<< HEAD
-import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect } from './connect/connect.js';
-import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
-import { MultiServicePollingManager } from './services/multi-user-polling.js';
-=======
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect/connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
 import { MultiServicePollingManager } from './services/multi-user-polling.js';
 import { normalizeNumber } from './services/normalizePhone.js';
->>>>>>> main
 
 // Initialize SDKs
 const pd = createBackendClient({

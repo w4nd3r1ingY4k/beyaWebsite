@@ -1,0 +1,288 @@
+.tasksContainer {
+  height: 100vh;
+  background-color: #FFFBFA;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  padding: 24px 40px 16px 40px;
+  background-color: #FFFBFA;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 8px 0;
+  letter-spacing: -0.025em;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: #64748b;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.content {
+  flex: 1;
+  padding: 24px 40px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.searchBar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 12px 16px;
+  background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.searchInput {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  color: #374151;
+}
+
+.searchInput::placeholder {
+  color: #9ca3af;
+}
+
+.filtersButton {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #374151;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.filtersButton:hover {
+  background-color: #f3f4f6;
+}
+
+.newTaskButton {
+  padding: 8px 16px;
+  background-color: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.newTaskButton:hover {
+  background-color: #2563eb;
+}
+
+.kanbanBoard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  flex: 1;
+  min-height: 0;
+}
+
+.column {
+  background-color: #f9fafb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 400px;
+}
+
+.columnHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.columnTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.columnCount {
+  background-color: #e5e7eb;
+  color: #6b7280;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.taskCard {
+  background-color: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.taskCard:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-1px);
+}
+
+.taskHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.taskTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  flex: 1;
+}
+
+.taskPriority {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.priorityHigh {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
+.priorityMedium {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+.priorityLow {
+  background-color: #e0e7ff;
+  color: #7c3aed;
+}
+
+.priorityUrgent {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.taskType {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.taskTypeIcon {
+  width: 12px;
+  height: 12px;
+}
+
+.taskTypeLabel {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.taskDescription {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+}
+
+.taskTags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.taskTag {
+  padding: 2px 8px;
+  background-color: #f3f4f6;
+  color: #374151;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.taskMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.taskAssignee {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.taskTime {
+  font-size: 11px;
+}
+
+.emptyColumn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: #9ca3af;
+  font-size: 14px;
+  border: 2px dashed #e5e7eb;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .kanbanBoard {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 16px 20px;
+  }
+  
+  .content {
+    padding: 16px 20px;
+  }
+  
+  .kanbanBoard {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+} 

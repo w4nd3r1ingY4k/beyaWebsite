@@ -1,0 +1,132 @@
+/* Task Management Dashboard Styles */
+.dashboard {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f8fafc;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+/* Header Styles */
+.header {
+  background-color: white;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 16px 24px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  z-index: 10;
+}
+
+.headerContent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.viewModeSelector {
+  display: flex;
+  background-color: #f1f5f9;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 2px;
+}
+
+.viewModeButton {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewModeButton:hover {
+  background-color: #e2e8f0;
+  color: #475569;
+}
+
+.viewModeButton.active {
+  background-color: white;
+  color: #1e293b;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Main Content Styles */
+.mainContent {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.boardContainer {
+  flex: 1;
+  overflow: hidden;
+  padding: 24px;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .headerContent {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  
+  .headerLeft {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .mainContent {
+    flex-direction: column;
+  }
+  
+  .boardContainer {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    padding: 12px 16px;
+  }
+  
+  .title {
+    font-size: 20px;
+  }
+  
+  .boardContainer {
+    padding: 12px;
+  }
+  
+  .viewModeSelector {
+    width: 100%;
+    justify-content: center;
+  }
+} 

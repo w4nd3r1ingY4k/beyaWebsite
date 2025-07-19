@@ -1,0 +1,96 @@
+/* Kanban View Styles */
+.container {
+  height: 100%;
+  overflow: hidden;
+}
+
+.columns {
+  display: flex;
+  height: 100%;
+  gap: 16px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.column {
+  min-width: 280px;
+  max-width: 280px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #e2e8f0;
+}
+
+.columnHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background-color: white;
+  border-radius: 8px 8px 0 0;
+}
+
+.columnTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+}
+
+.taskCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background-color: #e5e7eb;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.columnContent {
+  flex: 1;
+  padding: 8px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .columns {
+    gap: 12px;
+    padding: 12px;
+  }
+  
+  .column {
+    min-width: 240px;
+    max-width: 240px;
+  }
+}
+
+@media (max-width: 768px) {
+  .columns {
+    gap: 8px;
+    padding: 8px;
+  }
+  
+  .column {
+    min-width: 200px;
+    max-width: 200px;
+  }
+  
+  .columnHeader {
+    padding: 8px 12px;
+  }
+  
+  .columnContent {
+    padding: 6px;
+  }
+} 

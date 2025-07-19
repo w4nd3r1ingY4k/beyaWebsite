@@ -75,6 +75,9 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
   useEffect(() => {
     let isActive = true;
     const animate = async () => {
+      // Add a small delay to ensure component is fully mounted
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       while (isActive) {
         await controls.start({ x: -setWidth, transition: { duration: 6, ease: "linear" } });
         await controls.set({ x: 0 });
