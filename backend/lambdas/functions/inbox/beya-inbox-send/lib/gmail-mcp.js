@@ -73,7 +73,7 @@ export class GmailMCPSender {
    * Send email directly via Gmail MCP tool using Pipedream SDK
    */
   async sendEmail(userId, emailData) {
-    const { to, subject, body, cc = [], bcc = [], replyTo = null, threadId = null } = emailData;
+    const { to, subject, body, cc = [], bcc = [], replyTo = null, threadId = null, attachments = [] } = emailData;
 
     try {
       // Check if Gmail is connected
@@ -96,7 +96,8 @@ export class GmailMCPSender {
           body,
           cc,
           bcc,
-          replyTo
+          replyTo,
+          attachments
         });
         
         console.log(`✅ Email sent successfully via direct Gmail API!`);
@@ -209,7 +210,8 @@ export class GmailMCPSender {
       subject, 
       body,
       cc = [],
-      bcc = []
+      bcc = [],
+      attachments = []
     } = replyData;
 
     // Ensure subject has "Re:" prefix if it's a reply
@@ -222,7 +224,8 @@ export class GmailMCPSender {
       cc,
       bcc,
       replyTo: originalMessageId,
-      threadId
+      threadId,
+      attachments
     });
   }
 }

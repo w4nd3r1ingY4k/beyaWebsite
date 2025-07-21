@@ -16,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { createBackendClient } from "@pipedream/sdk/server";
 import fetch from 'node-fetch';
+import Busboy from 'busboy';
 
 // ─── 0) Load & validate env vars ──────────────────────────────────────────────
 const REGION      = process.env.AWS_REGION;
@@ -37,6 +38,69 @@ const docClient = DynamoDBDocumentClient.from(ddbClient, {
 
 // ─── 1b) EventBridge client ──────────────────────────────────────────────────
 const eventBridgeClient = new EventBridgeClient({ region: REGION });
+
+// ─── 1c) Multipart form parser ──────────────────────────────────────────────
+async function parseMultipartForm(event) {
+  return new Promise((resolve, reject) => {
+    const fields = {};
+    const files = [];
+    
+    // Extract boundary from content-type header
+    const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
+    const boundary = contentType.split('boundary=')[1];
+    
+    if (!boundary) {
+      reject(new Error('No boundary found in multipart content-type'));
+      return;
+    }
+    
+    // Create busboy instance
+    const busboy = Busboy({
+      headers: {
+        'content-type': contentType
+      }
+    });
+    
+    // Handle fields
+    busboy.on('field', (fieldname, value) => {
+      fields[fieldname] = value;
+    });
+    
+    // Handle files
+    busboy.on('file', (fieldname, file, info) => {
+      const { filename, encoding, mimeType } = info;
+      const chunks = [];
+      
+      file.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      
+      file.on('end', () => {
+        files.push({
+          fieldname,
+          filename,
+          mimeType,
+          encoding,
+          buffer: Buffer.concat(chunks)
+        });
+      });
+    });
+    
+    // Handle completion
+    busboy.on('finish', () => {
+      resolve({ fields, files });
+    });
+    
+    busboy.on('error', reject);
+    
+    // Process the body
+    const bodyBuffer = event.isBase64Encoded 
+      ? Buffer.from(event.body, 'base64')
+      : Buffer.from(event.body);
+      
+    busboy.end(bodyBuffer);
+  });
+}
 
 // ─── 1a) Helper: fetch any MessageId for a given ThreadId (incoming first, then outgoing) ──────
 async function getFirstIncomingMessageId(threadId) {
@@ -175,17 +239,55 @@ export async function handler(event) {
     };
   }
 
-  // 3c) Extract path‐parameter and JSON payload
+  // 3c) Extract path‐parameter and parse payload (JSON or multipart)
   const channel = event.pathParameters?.channel; // "whatsapp" or "email"
   let payload;
-  try {
-    payload = JSON.parse(event.body || '{}');
-  } catch {
-    return {
-      statusCode: 400,
-      headers:    CORS,
-      body:       'Invalid JSON'
-    };
+  let attachments = [];
+
+  // Check if this is multipart/form-data
+  const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
+  
+  if (contentType.includes('multipart/form-data')) {
+    // Parse multipart form data
+    try {
+      const result = await parseMultipartForm(event);
+      payload = result.fields;
+      attachments = result.files;
+      
+      // Parse JSON fields that were stringified
+      if (payload.cc && typeof payload.cc === 'string') {
+        try {
+          payload.cc = JSON.parse(payload.cc);
+        } catch {
+          payload.cc = [];
+        }
+      }
+      if (payload.bcc && typeof payload.bcc === 'string') {
+        try {
+          payload.bcc = JSON.parse(payload.bcc);
+        } catch {
+          payload.bcc = [];
+        }
+      }
+    } catch (err) {
+      console.error('Multipart parsing error:', err);
+      return {
+        statusCode: 400,
+        headers: CORS,
+        body: JSON.stringify({ error: 'Invalid multipart data', details: err.message })
+      };
+    }
+  } else {
+    // Parse as JSON
+    try {
+      payload = JSON.parse(event.body || '{}');
+    } catch {
+      return {
+        statusCode: 400,
+        headers:    CORS,
+        body:       'Invalid JSON'
+      };
+    }
   }
 
   // pull out the usual fields + optional originalMessageId
@@ -203,6 +305,13 @@ export async function handler(event) {
     templateLanguage,
     templateComponents
   } = payload;
+  
+  // Log attachment info
+  if (attachments && attachments.length > 0) {
+    console.log(`📎 Received ${attachments.length} attachments:`, 
+      attachments.map(f => ({ filename: f.filename, size: f.buffer?.length || 0, mimeType: f.mimeType }))
+    );
+  }
 
   // 3d) Validate required fields
   if (!channel || !to || !userId) {
@@ -457,7 +566,8 @@ export async function handler(event) {
               cc: cc || [],
               bcc: bcc || [],
               subject,
-              body: html || text
+              body: html || text,
+              attachments: attachments
             });
           } else {
             resp = await gmailSender.sendEmail(userId, {
@@ -465,7 +575,8 @@ export async function handler(event) {
               cc: cc || [],
               bcc: bcc || [],
               subject,
-              body: html || text
+              body: html || text,
+              attachments: attachments
             });
           }
           console.log('✅ Email sent via Gmail MCP');
@@ -633,6 +744,16 @@ export async function handler(event) {
         CC:  cc || [],
         BCC: bcc || [],
         Subject: subject
+      }),
+      // ✅ STORE ATTACHMENTS for outgoing emails
+      ...(attachments && attachments.length > 0 && {
+        Attachments: attachments.map((attachment, index) => ({
+          Id: `outgoing-${messageId}-${index}`, // Generate unique ID for outgoing attachments
+          Name: attachment.filename || `attachment_${index}`,
+          MimeType: attachment.mimeType || 'application/octet-stream',
+          SizeBytes: attachment.buffer ? attachment.buffer.length : 0,
+          Url: `data:${attachment.mimeType || 'application/octet-stream'};base64,${attachment.buffer ? attachment.buffer.toString('base64') : ''}` // Store as data URL for outgoing attachments
+        }))
       })
     };
     

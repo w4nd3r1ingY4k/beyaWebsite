@@ -89,7 +89,7 @@ export class GmailDirectClient {
    * Send email via Pipedream Proxy API (maintains threading support)
    */
   async sendEmail(userId, emailData) {
-    const { to, subject, body, cc = [], bcc = [], replyTo = null } = emailData;
+    const { to, subject, body, cc = [], bcc = [], replyTo = null, attachments = [] } = emailData;
     
     try {
       // Get user's Gmail account (no credentials needed for proxy)
@@ -105,7 +105,6 @@ export class GmailDirectClient {
         `Subject: ${subject}`,
         `Message-ID: ${messageId}`,
         `MIME-Version: 1.0`,
-        `Content-Type: text/html; charset=UTF-8`,
         `Date: ${new Date().toUTCString()}`
       ];
       
@@ -124,12 +123,53 @@ export class GmailDirectClient {
         console.log(`📧 Adding threading headers - In-Reply-To: ${replyTo}`);
       }
       
-      // Build the raw email
-      const rawEmail = [
-        ...headers,
-        '', // Empty line between headers and body
-        body
-      ].join('\r\n');
+      let rawEmail;
+      
+      if (attachments && attachments.length > 0) {
+        // Build multipart message with attachments
+        const boundary = `----=_Part_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
+        
+        const parts = [
+          ...headers,
+          '', // Empty line between headers and body
+          `--${boundary}`,
+          'Content-Type: text/html; charset=UTF-8',
+          'Content-Transfer-Encoding: base64',
+          '',
+          Buffer.from(body).toString('base64'),
+          ''
+        ];
+        
+        // Add attachments
+        for (const attachment of attachments) {
+          const filename = attachment.filename || 'attachment';
+          const mimeType = attachment.mimeType || 'application/octet-stream';
+          const content = attachment.buffer ? attachment.buffer.toString('base64') : '';
+          
+          parts.push(
+            `--${boundary}`,
+            `Content-Type: ${mimeType}; name="${filename}"`,
+            `Content-Disposition: attachment; filename="${filename}"`,
+            'Content-Transfer-Encoding: base64',
+            '',
+            content,
+            ''
+          );
+        }
+        
+        parts.push(`--${boundary}--`, '');
+        rawEmail = parts.join('\r\n');
+        
+      } else {
+        // Simple message without attachments
+        headers.push(`Content-Type: text/html; charset=UTF-8`);
+        rawEmail = [
+          ...headers,
+          '', // Empty line between headers and body
+          body
+        ].join('\r\n');
+      }
       
       // Encode to base64 (Gmail API format)
       const encodedEmail = Buffer.from(rawEmail)

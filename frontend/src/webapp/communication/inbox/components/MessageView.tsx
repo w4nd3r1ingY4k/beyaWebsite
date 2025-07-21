@@ -316,6 +316,10 @@ const MessageView: React.FC<MessageViewProps> = ({
   const [pendingSendInterval, setPendingSendInterval] = useState<NodeJS.Timeout | null>(null);
   const [tempMessage, setTempMessage] = useState<any | null>(null);
 
+  // Attachment support
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
+
   useEffect(() => {
     if (selectedThreadId) {
       if (currentView === 'discussions') {
@@ -569,6 +573,42 @@ const MessageView: React.FC<MessageViewProps> = ({
     }
   }
 
+  // Attachment functions
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Check file size (max 25MB per file)
+    const maxSize = 25 * 1024 * 1024;
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        console.warn(`File ${file.name} is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 25MB.`);
+        return false;
+      }
+      return true;
+    });
+
+    // Add to attachments
+    setAttachments(prev => [...prev, ...validFiles]);
+    
+    // Reset input
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   // Undo send functions
   const handleUndoSend = () => {
     if (pendingSendMessageId) {
@@ -712,7 +752,8 @@ const MessageView: React.FC<MessageViewProps> = ({
           content: plainText,
           html: htmlContent,
           originalMessageId: originalMessageId,
-          MessageId: tempMessageId
+          MessageId: tempMessageId,
+          attachments: attachments
         };
 
         // Create temporary message for immediate UI display
@@ -790,6 +831,8 @@ const MessageView: React.FC<MessageViewProps> = ({
       setShowCcBcc(false);
       setReplyingToMessageId(null);
       setReplyText('');
+      setAttachments([]);
+      setUploadProgress({});
       
       console.log('📧 Email queued for sending - undo available for', UNDO_DELAY, 'seconds');
       
@@ -1478,6 +1521,8 @@ const MessageView: React.FC<MessageViewProps> = ({
       setIsReplying(false);
       setShowCcBcc(false);
       setReplyingToMessageId(null);
+      setAttachments([]);
+      setUploadProgress({});
       
     } catch (err) {
       console.error('Error sending template:', err);
@@ -3058,6 +3103,122 @@ const MessageView: React.FC<MessageViewProps> = ({
                 </>
               )}
 
+              {/* Attachment Section */}
+              <div style={{ marginBottom: '16px' }}>
+                {/* Attachment Button */}
+                <div style={{ marginBottom: '8px' }}>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                    id="email-attachment-input"
+                    accept="*/*"
+                  />
+                  <label
+                    htmlFor="email-attachment-input"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: '#f9fafb',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '13px',
+                      color: '#374151',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f3f4f6';
+                      e.currentTarget.style.borderColor = '#9ca3af';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#f9fafb';
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                    }}
+                  >
+                    📎 Add Attachments
+                  </label>
+                </div>
+
+                {/* Attachment List */}
+                {attachments.length > 0 && (
+                  <div style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    padding: '8px',
+                    background: '#fafafa'
+                  }}>
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      marginBottom: '8px',
+                      fontWeight: '500'
+                    }}>
+                      Attachments ({attachments.length})
+                    </div>
+                    {attachments.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 8px',
+                          background: '#fff',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '4px',
+                          marginBottom: index < attachments.length - 1 ? '4px' : '0'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#374151',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {file.name}
+                          </div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#6b7280'
+                          }}>
+                            {formatFileSize(file.size)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => removeAttachment(index)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            marginLeft: '8px'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#fef2f2';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'none';
+                          }}
+                          title="Remove attachment"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Original Message Reference (when replying) */}
               {isReplying && (() => {
                 const originalMessage = normalizedMessages.find(msg => msg.id === replyingToMessageId);
@@ -3154,6 +3315,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                 setReplyBcc(''); // Reset BCC field
                 setShowCcBcc(false); // Reset CC/BCC visibility
                 setReplyingToMessageId(null); // Reset replying to message
+                setAttachments([]);
+                setUploadProgress({});
               }}
               style={{
                 background: '#f3f4f6',

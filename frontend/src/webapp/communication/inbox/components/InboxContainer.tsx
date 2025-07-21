@@ -781,7 +781,8 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     htmlContent: string,
     originalMessageId?: string,
     cc?: string[],
-    bcc?: string[]
+    bcc?: string[],
+    attachments?: File[]
   ) {
     // IMPORTANT: Extract actual email address from flowId if needed (same logic as WhatsApp)
     let actualRecipient = to;
@@ -819,6 +820,45 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       payload.bcc = bcc;
     }
 
+    // Handle attachments if provided
+    if (attachments && attachments.length > 0) {
+      // Use FormData for file uploads
+      const formData = new FormData();
+      
+      // Add text fields
+      formData.append('to', actualRecipient);
+      formData.append('subject', subject);
+      formData.append('text', plainText);
+      formData.append('html', htmlContent);
+      formData.append('userId', user!.userId);
+      
+      if (originalMessageId) {
+        formData.append('originalMessageId', originalMessageId);
+      }
+      if (cc && cc.length > 0) {
+        formData.append('cc', JSON.stringify(cc));
+      }
+      if (bcc && bcc.length > 0) {
+        formData.append('bcc', JSON.stringify(bcc));
+      }
+      
+      // Add attachments
+      attachments.forEach((file, index) => {
+        formData.append(`attachment_${index}`, file);
+      });
+      
+      const res = await fetch(`${apiBase}/send/email`, {
+        method: 'POST',
+        body: formData, // No Content-Type header - browser will set multipart/form-data
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      return res.json();
+    }
+
+    // No attachments - use JSON
     const res = await fetch(`${apiBase}/send/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -895,7 +935,8 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           messageData.html || messageData.content, // HTML content
           messageData.originalMessageId, // Pass original Message-ID for threading
           messageData.cc, // CC recipients
-          messageData.bcc // BCC recipients
+          messageData.bcc, // BCC recipients
+          messageData.attachments // File attachments
         );
       }
       
