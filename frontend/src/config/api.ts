@@ -45,6 +45,7 @@ export const API_ENDPOINTS = {
   FLOW_COMMENTS: env('REACT_APP_FLOW_COMMENTS_URL', 'https://pndg7ad6xttoa2qm645ryd6bii0cugff.lambda-url.us-east-1.on.aws'),
   DISCUSSIONS: env('REACT_APP_DISCUSSIONS_URL', 'https://45lcjloxwa2wt2hfmbltw42dqm0kiaue.lambda-url.us-east-1.on.aws'),
   FLOW_STATUS_UPDATE: env('REACT_APP_FLOW_STATUS_UPDATE_URL', 'https://spizyylamz3oavcuay5a3hrmsi0eairh.lambda-url.us-east-1.on.aws'),
+  ATTACHMENT_DOWNLOAD: env('REACT_APP_ATTACHMENT_DOWNLOAD_URL', 'https://mmvron2wc6spg7edstenj7ls2m0iuesz.lambda-url.us-east-1.on.aws'),
 
   // API Gateway endpoints for inbox/messaging services
   INBOX_API_BASE: env('REACT_APP_INBOX_API_BASE', 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod'),

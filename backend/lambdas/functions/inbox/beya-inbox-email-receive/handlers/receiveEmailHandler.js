@@ -100,7 +100,8 @@ async function persistEmailMessage(messageData) {
     htmlBody, 
     headers, 
     messageId,
-    provider = 'ses' // 'ses' or 'gmail-mcp'
+    provider = 'ses', // 'ses' or 'gmail-mcp'
+    attachments = [] // Add attachments parameter
   } = messageData;
 
   const ts = Date.now();
@@ -157,7 +158,15 @@ async function persistEmailMessage(messageData) {
       userId:    ownerUserId,
       ThreadIdTimestamp: `${flowId}#${ts}`,  // Use flowId for consistency
       // ✅ STORE ORIGINAL CONTENT FOR AUDITING (optional)
-      OriginalBody: hasQuotes ? textBody : undefined  // Store original only if quotes were removed
+      OriginalBody: hasQuotes ? textBody : undefined,  // Store original only if quotes were removed
+      // ✅ STORE ATTACHMENTS
+      Attachments: attachments.map(attachment => ({
+        Id: attachment.id,
+        Name: attachment.name,
+        MimeType: attachment.mimeType,
+        SizeBytes: attachment.sizeBytes,
+        Url: attachment.url
+      }))
     };
     
     // Add cleaned HTML body if it exists
@@ -349,6 +358,7 @@ export async function handler(event) {
         // Extract email body
         let textBody = snippet;
         let htmlBody = "";
+        const attachments = [];
         
         // Try to extract full body from Gmail payload
         if (payload.body?.data) {
@@ -360,9 +370,23 @@ export async function handler(event) {
               textBody = Buffer.from(part.body.data, 'base64').toString('utf-8');
             } else if (part.mimeType === 'text/html' && part.body?.data) {
               htmlBody = Buffer.from(part.body.data, 'base64').toString('utf-8');
+            } else if (part.filename && part.body?.attachmentId) {
+              // This is an attachment
+              console.log(`📎 Found attachment: ${part.filename} (${part.mimeType})`);
+              attachments.push({
+                id: part.body.attachmentId,
+                name: part.filename,
+                mimeType: part.mimeType || 'application/octet-stream',
+                sizeBytes: part.body.size || 0,
+                // For Gmail attachments, we'll need to fetch them separately using the attachment ID
+                // For now, we'll store the Gmail attachment ID as the URL
+                url: `gmail-attachment://${messageId}/${part.body.attachmentId}`
+              });
             }
           }
         }
+        
+        console.log(`📎 Total attachments found: ${attachments.length}`);
         
         // Clean up the text body
         textBody = textBody?.trim() || snippet || "(no text)";
@@ -400,7 +424,8 @@ export async function handler(event) {
           htmlBody,
           headers: standardHeaders,
           messageId: messageIdHeader || messageId,
-          provider: 'gmail-mcp'
+          provider: 'gmail-mcp',
+          attachments: attachments // Pass attachments to persistEmailMessage
         });
         
         return { statusCode: 200, headers: CORS, body: JSON.stringify({ success: true, provider: 'gmail-mcp' }) };
