@@ -1865,17 +1865,17 @@ const ThreadList: React.FC<Props> = ({
                       const colors = getTagColors(tag);
                       
                       return (
-                        <div key={index} style={{
-                          fontSize: '10px',
+                      <div key={index} style={{
+                        fontSize: '10px',
                           color: colors.color,
                           background: colors.bg,
                           border: `1px solid ${colors.border}`,
-                          padding: '2px 6px',
-                          borderRadius: '10px',
-                          display: 'inline-block'
-                        }}>
-                          {tag}
-                        </div>
+                        padding: '2px 6px',
+                        borderRadius: '10px',
+                        display: 'inline-block'
+                      }}>
+                        {tag}
+                      </div>
                       );
                     })}
                     

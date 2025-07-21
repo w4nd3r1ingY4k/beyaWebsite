@@ -12,6 +12,7 @@ import { EventBridgeClient, PutEventsCommand } from "@aws-sdk/client-eventbridge
 import { simpleParser } from "mailparser";
 import { v4 as uuidv4 } from "uuid";
 import { generateOrGetFlowId, generateOrGetEmailFlowId, updateFlowMetadata, parseEmailList, extractEmailAddress } from "../lib/flowUtils.js";
+import { extractReplyContent, hasQuotedContent } from "../lib/emailUtils.js";
 
 const REGION      = process.env.AWS_REGION;
 const MSG_TABLE   = process.env.MSG_TABLE;
@@ -106,6 +107,19 @@ async function persistEmailMessage(messageData) {
   const internalId = messageId || uuidv4();
 
   try {
+    // Clean email content to remove quoted replies and signatures
+    const hasQuotes = hasQuotedContent(textBody);
+    const cleanedContent = extractReplyContent(textBody, htmlBody);
+    
+    // Log quote detection for debugging
+    if (hasQuotes) {
+      console.log(`📧 Detected and removed quoted content from email ${internalId}`, {
+        originalLength: textBody?.length || 0,
+        cleanedLength: cleanedContent.text?.length || 0,
+        reduction: `${Math.round(((textBody?.length || 0) - (cleanedContent.text?.length || 0)) / (textBody?.length || 1) * 100)}%`
+      });
+    }
+
     // Prepare all participants for threading
     const toAddresses = Array.isArray(toAddress) ? toAddress : [toAddress];
     const allParticipants = [fromAddress, ...toAddresses, ...ccAddresses].filter(Boolean);
@@ -122,7 +136,7 @@ async function persistEmailMessage(messageData) {
     // Clean headers to remove any undefined values
     const cleanHeaders = cleanUndefinedValues(headers) || {};
     
-    // Persist message
+    // Persist message with cleaned content
     const messageItem = {
       ThreadId:  flowId,  // Use unique flowId instead of fromAddress
       Timestamp: ts,
@@ -130,7 +144,7 @@ async function persistEmailMessage(messageData) {
       Channel:   "email",
       Direction: "incoming",
       Subject:   subject || "(no subject)",
-      Body:      textBody || "(no content)",
+      Body:      cleanedContent.text || "(no content)",  // Use cleaned text content
       Headers:   cleanHeaders,
       Provider:  provider,  // Track which email provider received this
       IsUnread:  true,      // Mark incoming messages as unread by default
@@ -141,11 +155,16 @@ async function persistEmailMessage(messageData) {
       BCC:       bccAddresses,
       // ✅ ADD GSI FIELDS FOR USER ISOLATION
       userId:    ownerUserId,
-      ThreadIdTimestamp: `${flowId}#${ts}`  // Use flowId for consistency
+      ThreadIdTimestamp: `${flowId}#${ts}`,  // Use flowId for consistency
+      // ✅ STORE ORIGINAL CONTENT FOR AUDITING (optional)
+      OriginalBody: hasQuotes ? textBody : undefined  // Store original only if quotes were removed
     };
     
-    // Add HTML body only if it exists
-    if (htmlBody) {
+    // Add cleaned HTML body if it exists
+    if (htmlBody && cleanedContent.html) {
+      messageItem.HtmlBody = cleanedContent.html;
+    } else if (htmlBody) {
+      // If no cleaning was applied to HTML, store original
       messageItem.HtmlBody = htmlBody;
     }
     
@@ -158,7 +177,7 @@ async function persistEmailMessage(messageData) {
     // Update flow metadata (flowId was already generated above)
     await updateFlowMetadata(docClient, FLOWS_TABLE, ownerUserId, flowId, fromAddress, ts);
 
-    // Build and emit rawEvent for context engine
+    // Build and emit rawEvent for context engine with cleaned content
     const rawEvent = {
       eventId: uuidv4(),
       timestamp: new Date(ts).toISOString(),
@@ -169,12 +188,14 @@ async function persistEmailMessage(messageData) {
         messageId: headers['Message-ID'] || internalId,
         threadId: flowId,  // Use unique flowId instead of fromAddress
         subject: subject,
-        bodyText: textBody,
-        bodyHtml: htmlBody || "",
+        bodyText: cleanedContent.text,  // Use cleaned text for AI processing
+        bodyHtml: cleanedContent.html || htmlBody || "",  // Use cleaned HTML when available
+        originalBodyText: hasQuotes ? textBody : undefined,  // Include original if quotes were removed
         from: fromAddress,
         to: toAddress,
         headers: headers,
-        provider: provider
+        provider: provider,
+        quotesRemoved: hasQuotes  // Flag to indicate cleaning was applied
       }
     };
 

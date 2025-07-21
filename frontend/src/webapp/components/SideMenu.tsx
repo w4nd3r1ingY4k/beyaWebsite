@@ -57,10 +57,10 @@ const icons: IconItem[] = [
         { id: 'attribution', label: 'Attribution' }
       ]
     },
-    { id: 'marketing', Component: MarketingIcon, label: 'Marketing' },
-    { id: 'logistics', Component: LogisticsIcon, label: 'Logistics' },
-    { id: 'automation', Component: AutomationIcon, label: 'Automation' },
     { id: 'settings', Component: SettingsIcon, label: 'Settings' },
+    // { id: 'marketing', Component: MarketingIcon, label: 'Marketing' },
+    // { id: 'logistics', Component: LogisticsIcon, label: 'Logistics' },
+    // { id: 'automation', Component: AutomationIcon, label: 'Automation' },
 ];
 
 export const SideMenu: React.FC<SideMenuProps> = ({ activeIcon, activeSubmenu, onSelect }) => {

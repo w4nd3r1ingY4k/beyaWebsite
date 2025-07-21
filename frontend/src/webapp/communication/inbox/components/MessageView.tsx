@@ -209,6 +209,7 @@ const MessageView: React.FC<MessageViewProps> = ({
   
   // Mock tonality analysis feature
   const [showTonalityWarning, setShowTonalityWarning] = useState(false);
+  const [isReplySending, setIsReplySending] = useState(false);
 
   // Header controls state - use external filters if provided
   const statusFilter = externalStatusFilter;
@@ -488,13 +489,34 @@ const MessageView: React.FC<MessageViewProps> = ({
   const handleReplySend = async () => {
     if (!selectedThreadId) return;
 
+    setIsReplySending(true);
     try {
       const channel = getChannel(selectedThreadId);
       
       if (channel === 'email') {
-        const rawContentState = convertToRaw(emailEditorState.getCurrentContent());
-        const htmlContent = draftToHtml(rawContentState);
-        const plainText = emailEditorState.getCurrentContent().getPlainText();
+        // Validate editor state before conversion
+        if (!emailEditorState || !emailEditorState.getCurrentContent()) {
+          console.error('❌ Invalid editor state');
+          throw new Error('Editor state is invalid');
+        }
+        
+        let htmlContent: string;
+        let plainText: string;
+        
+        try {
+          const currentContent = emailEditorState.getCurrentContent();
+          const rawContentState = convertToRaw(currentContent);
+          htmlContent = draftToHtml(rawContentState);
+          plainText = currentContent.getPlainText();
+        } catch (draftError) {
+          console.error('❌ Draft.js conversion error:', draftError);
+          // Fallback: use plain text from editor if available
+          plainText = emailEditorState.getCurrentContent()?.getPlainText() || '';
+          if (!plainText.trim()) {
+            throw new Error('No content to send');
+          }
+          htmlContent = `<p>${plainText}</p>`;
+        }
         
         // Use the replyTo field that was auto-populated (fallback to flow contact if empty)
         let recipient = replyTo || flow?.contactEmail || flow?.contactIdentifier || flow?.fromEmail || decodeURIComponent(selectedThreadId);
@@ -534,8 +556,18 @@ const MessageView: React.FC<MessageViewProps> = ({
         const ccArray = replyCc.trim() ? replyCc.split(',').map(email => email.trim()).filter(Boolean) : [];
         const bccArray = replyBcc.trim() ? replyBcc.split(',').map(email => email.trim()).filter(Boolean) : [];
         
-        // DON'T pass originalMessageId - let the backend look it up automatically!
-        // The backend has the correct logic to find the Message-ID from Headers
+        // Find the Gmail Message-ID from the message being replied to for proper threading
+        let originalMessageId: string | undefined = undefined;
+        if (latestIncoming && latestIncoming.GmailMessageId) {
+          originalMessageId = latestIncoming.GmailMessageId;
+          console.log('📧 Found Gmail Message-ID for threading:', originalMessageId);
+        } else if (latestIncoming && latestIncoming.MessageId) {
+          originalMessageId = latestIncoming.MessageId;
+          console.log('📧 Using fallback Message-ID for threading:', originalMessageId);
+        } else {
+          console.log('📧 No Message-ID found for threading - backend will search automatically');
+        }
+        
         await onSendMessage?.({
           channel: 'email',
           to: recipient,
@@ -543,8 +575,8 @@ const MessageView: React.FC<MessageViewProps> = ({
           bcc: bccArray,
           subject: finalSubject || 'Re: (no subject)',
           content: plainText,
-          html: htmlContent
-          // No originalMessageId - backend will auto-detect from database!
+          html: htmlContent,
+          originalMessageId: originalMessageId // Pass the Gmail Message-ID for proper threading
         });
         
         setEmailEditorState(EditorState.createEmpty());
@@ -566,6 +598,8 @@ const MessageView: React.FC<MessageViewProps> = ({
       setIsReplying(false);
     } catch (err) {
       console.error('Error sending reply:', err);
+    } finally {
+      setIsReplySending(false);
     }
   };
 
@@ -1073,14 +1107,29 @@ const MessageView: React.FC<MessageViewProps> = ({
   };
 
   const normalizeMessage = (msg: APIMessage) => {
-    // Check if the Body field contains HTML content
+    // Enhanced HTML content detection
     const isHtmlContent = msg.Body && (
       msg.Body.includes('<!DOCTYPE') || 
       msg.Body.includes('<html') || 
       msg.Body.includes('<div') || 
       msg.Body.includes('<p>') ||
       msg.Body.includes('<table') ||
-      msg.Body.includes('<style')
+      msg.Body.includes('<style') ||
+      msg.Body.includes('<br') ||
+      msg.Body.includes('<span') ||
+      msg.Body.includes('<td') ||
+      msg.Body.includes('<tr') ||
+      msg.Body.includes('<th') ||
+      msg.Body.includes('<thead') ||
+      msg.Body.includes('<tbody') ||
+      msg.Body.includes('<strong') ||
+      msg.Body.includes('<em') ||
+      msg.Body.includes('<b>') ||
+      msg.Body.includes('<i>') ||
+      msg.Body.includes('<a ') ||
+      msg.Body.includes('<img') ||
+      // Also check if there's a separate HtmlBody field
+      !!msg.HtmlBody
     );
 
     // Process message body for Base64 detection
@@ -1090,7 +1139,7 @@ const MessageView: React.FC<MessageViewProps> = ({
     return {
       id: msg.MessageId || `${msg.Timestamp || Date.now()}`,
       body: isHtmlContent ? (msg.Snippet || 'HTML Email') : processedMessage.body,
-      htmlBody: isHtmlContent ? msg.Body : (msg.HtmlBody || ''),
+      htmlBody: isHtmlContent ? (msg.HtmlBody || msg.Body) : '',
       direction: msg.Direction || 'incoming',
       timestamp: formatTimestamp(msg.Timestamp),
       channel: msg.Channel || 'email',
@@ -1749,24 +1798,24 @@ const MessageView: React.FC<MessageViewProps> = ({
                       const colors = getTagColors(tag);
                       
                       return (
-                        <span
-                          key={index}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSecondaryTagSelect(tag);
-                          }}
-                          style={{
+                      <span
+                        key={index}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSecondaryTagSelect(tag);
+                        }}
+                        style={{
                             background: colors.bg,
                             color: colors.color,
                             border: `1px solid ${colors.border}`,
-                            padding: '2px 6px',
-                            borderRadius: '3px',
-                            fontSize: '12px',
-                            marginLeft: '4px',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '3px',
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          fontSize: '12px',
+                          marginLeft: '4px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
                           transition: 'background 0.2s'
                         }}
                         onMouseEnter={(e) => {
@@ -2226,7 +2275,10 @@ const MessageView: React.FC<MessageViewProps> = ({
                       color: isActive ? '#333' : '#666'
                     }}>
                       {chat.htmlBody ? (
-                        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(chat.htmlBody) }} />
+                        <div 
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(chat.htmlBody) }}
+                          className="email-html-content"
+                        />
                       ) : (
                         renderBase64Content(chat)
                       )}
@@ -2638,26 +2690,48 @@ const MessageView: React.FC<MessageViewProps> = ({
             </button>
             <button
               onClick={handleReplySend}
+              disabled={isReplySending}
               style={{
-                background: '#DE1785',
+                background: isReplySending ? '#9ca3af' : '#DE1785',
                 color: '#fff',
                 padding: '12px 24px',
                 border: 'none',
                 borderRadius: 8,
                 fontSize: '14px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 5px rgba(222,23,133,0.3)',
+                cursor: isReplySending ? 'not-allowed' : 'pointer',
+                boxShadow: isReplySending ? 'none' : '0 2px 5px rgba(222,23,133,0.3)',
                 fontWeight: '600',
-                transition: 'background 0.2s'
+                transition: 'background 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#c1166a';
+                if (!isReplySending) {
+                  e.currentTarget.style.background = '#c1166a';
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#DE1785';
+                if (!isReplySending) {
+                  e.currentTarget.style.background = '#DE1785';
+                }
               }}
             >
-              Send Reply
+              {isReplySending ? (
+                <>
+                  <div style={{
+                    width: '14px',
+                    height: '14px',
+                    border: '2px solid #fff',
+                    borderTop: '2px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Sending...
+                </>
+              ) : (
+                'Send Reply'
+              )}
             </button>
           </div>
         </div>
@@ -2887,6 +2961,15 @@ const MessageView: React.FC<MessageViewProps> = ({
         )}
       </div>
 
+      {/* CSS for loading spinner */}
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
 
     </div>
     </>

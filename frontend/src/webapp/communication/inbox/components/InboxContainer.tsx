@@ -179,12 +179,16 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       
       // Preload last messages for all flows for better preview
       if (!fromPolling && updatedFlows.length > 0) {
-        console.log('🔄 Preloading last messages for all flows...');
+        console.log('🔄 Smart preloading: loading first 15 visible conversations...');
         
-        // Process flows in batches to avoid overwhelming the API
-        const batchSize = 10;
-        for (let i = 0; i < updatedFlows.length; i += batchSize) {
-          const batch = updatedFlows.slice(i, i + batchSize);
+        // Only preload first 15 conversations (what's visible on screen)
+        const visibleFlows = updatedFlows.slice(0, 15);
+        const remainingFlows = updatedFlows.slice(15);
+        
+        // Process visible flows immediately in smaller batches
+        const batchSize = 5;
+        for (let i = 0; i < visibleFlows.length; i += batchSize) {
+          const batch = visibleFlows.slice(i, i + batchSize);
           
           // Process batch in parallel
           const batchPromises = batch.map(async (flow: any) => {
@@ -253,12 +257,91 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           }
           
           // Small delay between batches to be respectful to the API
-          if (i + batchSize < updatedFlows.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+          if (i + batchSize < visibleFlows.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
         }
         
-        console.log('✅ Finished preloading last messages');
+        console.log('✅ Finished preloading visible conversations');
+        
+        // Progressive loading: Load remaining conversations in background over time
+        if (remainingFlows.length > 0) {
+          console.log(`🔄 Starting background loading of ${remainingFlows.length} remaining conversations...`);
+          
+          setTimeout(async () => {
+            const backgroundBatchSize = 3; // Smaller batches for background loading
+            
+            for (let i = 0; i < remainingFlows.length; i += backgroundBatchSize) {
+              const batch = remainingFlows.slice(i, i + backgroundBatchSize);
+              
+              const batchPromises = batch.map(async (flow: any) => {
+                try {
+                  const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(flow.flowId)}?userId=${encodeURIComponent(user!.userId)}`);
+                  if (response.ok) {
+                    const data = await response.json();
+                    const messagesArray = data.messages || [];
+                    
+                    const filteredMessages = messagesArray.filter((msg: any) => 
+                      msg.MessageId !== 'THREAD_SUMMARY' && 
+                      msg.Timestamp !== 0 && 
+                      msg.Direction
+                    );
+                    
+                    if (filteredMessages.length > 0) {
+                      const sortedMessages = [...filteredMessages].sort((a, b) => {
+                        const timestampA = a.Timestamp || a.timestamp || 0;
+                        const timestampB = b.Timestamp || b.timestamp || 0;
+                        return timestampB - timestampA;
+                      });
+                      
+                      const lastMessage = sortedMessages[0];
+                      let messageContent = lastMessage.Body || lastMessage.Text || lastMessage.body || lastMessage.text || '';
+                      
+                      if (lastMessage.Channel === 'email' || lastMessage.channel === 'email') {
+                        const subject = lastMessage.Subject || lastMessage.subject || '';
+                        if (subject && (!messageContent || messageContent.length > 100)) {
+                          messageContent = subject;
+                        } else if (messageContent.length > 100) {
+                          messageContent = messageContent.substring(0, 100) + '...';
+                        }
+                      }
+                      
+                      if (messageContent.trim()) {
+                        const direction = lastMessage.Direction || lastMessage.direction || 'unknown';
+                        const indicator = direction === 'outgoing' ? '➤ ' : '← ';
+                        const finalContent = `${indicator}${messageContent.trim()}`;
+                        
+                        return { flowId: flow.flowId, lastMessage: finalContent };
+                      }
+                    }
+                  }
+                } catch (err) {
+                  // Silent fail for background loading
+                }
+                return null;
+              });
+              
+              const batchResults = await Promise.all(batchPromises);
+              const validResults = batchResults.filter(result => result !== null);
+              
+              if (validResults.length > 0) {
+                setFlows(prevFlows => 
+                  prevFlows.map(flow => {
+                    const result = validResults.find(r => r.flowId === flow.flowId);
+                    return result ? { ...flow, lastMessage: result.lastMessage } : flow;
+                  })
+                );
+              }
+              
+              // Longer delay for background loading to not impact user experience
+              if (i + backgroundBatchSize < remainingFlows.length) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+            }
+            
+            console.log('✅ Finished background loading of all conversations');
+          }, 1000); // Start background loading 1 second after visible ones are done
+        }
       }
       
       // Load discussions using the existing function
