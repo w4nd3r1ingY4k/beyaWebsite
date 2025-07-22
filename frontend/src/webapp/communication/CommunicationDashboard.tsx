@@ -36,9 +36,9 @@ const CommunicationOptions: CommunicationOption[] = [
     color: '#10B981'
   },
   {
-    id: 'tickets',
-    title: 'Tickets',
-    description: 'Support ticket tracking and resolution',
+    id: 'tasks',
+    title: 'Tasks',
+    description: 'Task management and tracking',
     icon: <Ticket size={32} />,
     color: '#F59E0B'
   }

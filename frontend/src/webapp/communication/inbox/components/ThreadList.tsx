@@ -146,7 +146,7 @@ const ThreadList: React.FC<Props> = ({
   // Derived data
   const ownedFlows = useMemo(() => {
     const result = Array.isArray(flows) ? flows.filter(f => f.contactId === userId) : [];
-    console.log('📋 ThreadList ownedFlows recalculated:', result.length, 'flows');
+    // console.log('📋 ThreadList ownedFlows recalculated:', result.length, 'flows');
     return result;
   }, [flows, userId]);
   
@@ -191,7 +191,7 @@ const ThreadList: React.FC<Props> = ({
       }
     });
     const result = Array.from(options).sort();
-    console.log('📋 ThreadList categoryFilterOptions recalculated:', result);
+    // console.log('📋 ThreadList categoryFilterOptions recalculated:', result);
     return result;
   }, [ownedFlows]);
 

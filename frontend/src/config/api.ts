@@ -16,24 +16,32 @@ const config: APIConfig = {
   // Integration service (port 2074)
   API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'https://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074'),
   // AI service - use API Gateway by default
-  AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL', env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com')),
+  AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
 };
 
 // Export individual endpoints for easy importing
 export const API_ENDPOINTS = {
-  // Integration service endpoints (port 2074)
-  WORKFLOW: `${config.API_GATEWAY_URL}/workflow`,
-  WHATSAPP_CONNECT: `${config.API_GATEWAY_URL}/whatsapp/connect`,
-  GMAIL_CONNECT: `${config.API_GATEWAY_URL}/gmail/connect`,
-  INTEGRATIONS_SETUP: `${config.API_GATEWAY_URL}/api/integrations/setup-polling`,
-  BACKEND_URL: config.API_GATEWAY_URL, // Export base URL for components that need it
+  // Main backend API
+  BACKEND_URL: env('REACT_APP_BACKEND_URL', 'http://localhost:2074'),
   
+  // AI Service with fallback chain
+  AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL') || env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
+  
+  // API Gateway endpoints
+  API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
+  
+  // Legacy contacts API
+  SCHEDULE_API_BASE: env('REACT_APP_SCHEDULE_API_BASE', 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod'),
+  
+  // New Contacts V2 API
+  CONTACTS_API_BASE: env('REACT_APP_CONTACTS_API_BASE', 'https://bij7as05n4.execute-api.us-east-1.amazonaws.com/prod'),
+
   // Sandbox server for local testing
   SANDBOX_URL: 'http://localhost:3001',
 
-  // AI service endpoints (port 2075)
-  QUERY_AI: `${config.AI_SERVICE_URL}/api/v1/query-with-ai`,
+  // AI service endpoints
   SEARCH_CONTEXT: `${config.AI_SERVICE_URL}/api/v1/search-context`,
+  QUERY_WITH_AI: `${config.AI_SERVICE_URL}/api/v1/query-with-ai`,
   CUSTOMER_CONTEXT: `${config.AI_SERVICE_URL}/api/v1/customer-context`,
   ANALYZE_DRAFT: `${config.AI_SERVICE_URL}/api/v1/analyze-draft`,
   SUGGEST_REPLY: `${config.AI_SERVICE_URL}/api/v1/suggest-reply`,
@@ -52,8 +60,6 @@ export const API_ENDPOINTS = {
 
   // API Gateway endpoints for inbox/messaging services
   INBOX_API_BASE: env('REACT_APP_INBOX_API_BASE', 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod'),
-  CONTACTS_API_BASE: env('REACT_APP_CONTACTS_API_BASE', 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod'),
-  SCHEDULE_API_BASE: env('REACT_APP_SCHEDULE_API_BASE', 'https://4enjn4ruh9.execute-api.us-east-1.amazonaws.com/prod'),
 
   // Specific endpoints
   TEMPLATES: env('REACT_APP_TEMPLATES_URL', 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/templates'),

@@ -2656,14 +2656,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                             {chat.attachments.map((attachment: any, index: number) => {
                               // Debug logging to see attachment structure
-                              console.log('🔍 Attachment debug:', {
-                                attachment,
-                                hasUrl: !!(attachment.url || attachment.Url),
-                                url: attachment.url || attachment.Url,
-                                urlStartsWithGmail: (attachment.url || attachment.Url)?.startsWith('gmail-attachment://'),
-                                attachmentId: attachment.id || attachment.Id,
-                                attachmentName: attachment.name || attachment.Name
-                              });
+                              // Debug logging disabled
                               
                               return (
                               <div

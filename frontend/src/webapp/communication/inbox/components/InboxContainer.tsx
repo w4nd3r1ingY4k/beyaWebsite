@@ -4,6 +4,7 @@ import ThreadList from './ThreadList';
 import MessageView from './MessageView';
 import ComposeModal from './ComposeModal';
 import LoadingScreen from '../../../components/LoadingScreen';
+import ContactLookupPanel from './ContactLookupPanel';
 import { discussionsService } from '../../../../services/discussionsService';
 import { getUserById } from '../../../../services/userService';
 import { Users, Plus } from 'lucide-react';
@@ -2679,6 +2680,13 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
             onDiscussionStatusSelect={currentView === 'discussions' ? handleDiscussionStatusSelect : undefined}
           />
         </div>
+
+        {/* Contact Lookup Panel */}
+        <ContactLookupPanel
+          selectedThreadId={currentView === 'discussions' ? selectedDiscussionId : selectedThreadId}
+          flow={currentView === 'discussions' ? discussions.find(d => d.discussionId === selectedDiscussionId) : currentFlow}
+          width={280}
+        />
       </div>
 
       {/* Compose Modal */}

@@ -12,9 +12,9 @@ import { ReactComponent as AutomationIcon } from './assets/icons/AutomationIcon.
 import { ReactComponent as SettingsIcon } from './assets/icons/SettingsIcon.svg';
 import { ReactComponent as TasksIcon } from './assets/icons/TasksIcon.svg';
 import InboxHome from './communication/inbox/Home';
-import ContactsCRM from './communication/contacts/Home';
+import ContactsHome from './communication/contacts/ContactsHome';
 import CalendarPage from './communication/schedule/ScheduleHome';
-import TicketsHome from './communication/tickets/TicketsHome';
+import TasksHome from './communication/tasks/TasksHome';
 import CommunicationDashboard from './communication/CommunicationDashboard';
 import PaymentsHome from './commerce/payments/PaymentsHome';
 import ProductsHome from './commerce/products/ProductsHome';
@@ -191,11 +191,11 @@ const navigate = useNavigate();
         case 'inbox':
           return <InboxHome onOpenAIChat={handleOpenAIChat} />;
         case 'contacts':
-          return <ContactsCRM />;
+          return <ContactsHome />;
         case 'schedule':
           return <CalendarPage />;
-        case 'tickets':
-          return <TicketsHome />;
+        case 'tasks':
+          return <TasksHome />;
         default:
           return (
             <CommunicationDashboard 

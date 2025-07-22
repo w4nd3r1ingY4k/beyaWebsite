@@ -1,0 +1,523 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from "../../../AuthContext";
+import contactsService, { Contact } from '../../../../services/contactsService';
+import { User, Mail, Phone, FileText, Plus, Edit, Clock } from 'lucide-react';
+
+interface ContactLookupPanelProps {
+  selectedThreadId: string | null;
+  flow: any; // Flow data containing contact information
+  width?: number;
+}
+
+const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({ 
+  selectedThreadId, 
+  flow, 
+  width = 280 
+}) => {
+  const { user } = useAuth();
+  const [contact, setContact] = useState<Contact | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchAttempted, setSearchAttempted] = useState(false);
+
+  // Extract email from flow data
+  const extractEmailFromFlow = (flowData: any): string | null => {
+    if (!flowData) return null;
+
+    // Priority order for email extraction
+    const emailFields = [
+      flowData.contactIdentifier,
+      flowData.contactEmail,
+      flowData.fromEmail,
+      flowData.flowId?.includes('@') ? flowData.flowId : null
+    ];
+
+    for (const email of emailFields) {
+      if (email && typeof email === 'string' && email.includes('@')) {
+        return email;
+      }
+    }
+
+    return null;
+  };
+
+  // Search for contact when thread changes
+  useEffect(() => {
+    const searchContact = async () => {
+      if (!selectedThreadId || !flow || !user?.userId) {
+        setContact(null);
+        setSearchAttempted(false);
+        setError(null);
+        return;
+      }
+
+      const email = extractEmailFromFlow(flow);
+      if (!email) {
+        setContact(null);
+        setSearchAttempted(true);
+        setError(null);
+        return;
+      }
+
+      setLoading(true);
+      setError(null);
+      setSearchAttempted(false);
+
+      try {
+        const result = await contactsService.findContactByEmail(email, user.userId);
+        
+        // Handle different possible response structures
+        let foundContact = null;
+        if (result && typeof result === 'object') {
+          // If result has a contacts array
+          if (result.contacts && Array.isArray(result.contacts) && result.contacts.length > 0) {
+            foundContact = result.contacts[0];
+          }
+          // If result has a contact property
+          else if (result.contact) {
+            foundContact = result.contact;
+          }
+          // If result is directly the contact (has contactId)
+          else if (result.contactId) {
+            foundContact = result;
+          }
+          // If result is an array and has items
+          else if (Array.isArray(result) && result.length > 0) {
+            foundContact = result[0];
+          }
+        }
+        
+        if (foundContact && foundContact.contactId) {
+          setContact(foundContact);
+        } else {
+          setContact(null);
+        }
+        setSearchAttempted(true);
+      } catch (err) {
+        console.error('Contact lookup error:', err.message);
+        setError(`Failed to search for contact: ${err.message}`);
+        setContact(null);
+        setSearchAttempted(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    searchContact();
+  }, [selectedThreadId, flow, user?.userId]);
+
+  // Format timestamp for display
+  const formatDate = (timestamp: string | number): string => {
+    try {
+      const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp * 1000);
+      return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch {
+      return 'Unknown date';
+    }
+  };
+
+  // Handle create new contact
+  const handleCreateContact = () => {
+    const email = extractEmailFromFlow(flow);
+    if (!email) return;
+
+    // You could open a modal or navigate to create contact page
+    // For now, we'll just log the action
+    console.log('Create new contact for email:', email);
+    // TODO: Implement contact creation modal or navigation
+  };
+
+  if (!selectedThreadId) {
+    return (
+      <div style={{ 
+        width, 
+        height: '100%', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        background: '#FFFBFA', 
+        borderLeft: '1px solid #e5e7eb' 
+      }}>
+        <div style={{ 
+          padding: '20px', 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          flex: 1,
+          color: '#6b7280',
+          textAlign: 'center'
+        }}>
+          <User size={48} style={{ marginBottom: '12px', opacity: 0.5 }} />
+          <p style={{ margin: 0, fontSize: '14px' }}>
+            Select a conversation to view contact information
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const email = extractEmailFromFlow(flow);
+
+  return (
+    <div style={{ 
+      width, 
+      height: '100%', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      background: '#FFFBFA', 
+      borderLeft: '1px solid #e5e7eb' 
+    }}>
+      {/* Header */}
+      <div style={{ 
+        padding: '16px', 
+        borderBottom: '1px solid #e5e7eb',
+        background: '#fff'
+      }}>
+        <h3 style={{ 
+          margin: 0, 
+          fontSize: '16px', 
+          fontWeight: '600', 
+          color: '#111827',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <User size={18} />
+          Contact Information
+        </h3>
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
+        {loading && (
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center',
+            padding: '20px',
+            color: '#6b7280'
+          }}>
+            <div style={{ 
+              width: '20px', 
+              height: '20px', 
+              border: '2px solid #e5e7eb', 
+              borderTop: '2px solid #DE1785',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+              marginRight: '8px'
+            }} />
+            Searching...
+          </div>
+        )}
+
+        {error && (
+          <div style={{ 
+            padding: '12px', 
+            background: '#fef2f2', 
+            border: '1px solid #fecaca',
+            borderRadius: '8px',
+            color: '#dc2626',
+            fontSize: '14px'
+          }}>
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && email && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '8px',
+              marginBottom: '8px'
+            }}>
+              <Mail size={16} style={{ color: '#6b7280' }} />
+              <span style={{ fontSize: '14px', color: '#374151', fontWeight: '500' }}>
+                {email}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {contact ? (
+          // Contact found - display information
+          <div>
+            <div style={{ 
+              background: '#f0fdf4', 
+              border: '1px solid #bbf7d0',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '16px'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                marginBottom: '8px'
+              }}>
+                <div style={{ 
+                  width: '8px', 
+                  height: '8px', 
+                  borderRadius: '50%', 
+                  background: '#10b981' 
+                }} />
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#065f46' }}>
+                  Contact Found
+                </span>
+              </div>
+            </div>
+
+            {/* Contact Details */}
+            <div style={{ 
+              background: '#fff', 
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '16px'
+            }}>
+              <h4 style={{ 
+                margin: '0 0 12px 0', 
+                fontSize: '18px', 
+                fontWeight: '600', 
+                color: '#111827' 
+              }}>
+                {contact.name}
+              </h4>
+
+              {contact.email && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <Mail size={14} style={{ color: '#6b7280' }} />
+                  <span style={{ fontSize: '14px', color: '#374151' }}>
+                    {contact.email}
+                  </span>
+                </div>
+              )}
+
+              {contact.phone && (
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px',
+                  marginBottom: '8px'
+                }}>
+                  <Phone size={14} style={{ color: '#6b7280' }} />
+                  <span style={{ fontSize: '14px', color: '#374151' }}>
+                    {contact.phone}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                marginTop: '12px'
+              }}>
+                <Clock size={14} style={{ color: '#6b7280' }} />
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>
+                  Created {formatDate(contact.createdAt)}
+                </span>
+              </div>
+            </div>
+
+            {/* Notes Section */}
+            {contact.notes && contact.notes.length > 0 && (
+              <div style={{ 
+                background: '#fff', 
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '16px'
+              }}>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px',
+                  marginBottom: '12px'
+                }}>
+                  <FileText size={16} style={{ color: '#6b7280' }} />
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                    Notes ({contact.notes.length})
+                  </span>
+                </div>
+                
+                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {contact.notes.slice(0, 3).map((note, index) => (
+                    <div key={index} style={{ 
+                      padding: '8px 0',
+                      borderBottom: index < Math.min(contact.notes!.length, 3) - 1 ? '1px solid #f3f4f6' : 'none'
+                    }}>
+                      <p style={{ 
+                        margin: '0 0 4px 0', 
+                        fontSize: '13px', 
+                        color: '#374151',
+                        lineHeight: '1.4'
+                      }}>
+                        {note.body}
+                      </p>
+                      <span style={{ fontSize: '11px', color: '#9ca3af' }}>
+                        {formatDate(note.createdAt)}
+                      </span>
+                    </div>
+                  ))}
+                  
+                  {contact.notes.length > 3 && (
+                    <div style={{ 
+                      padding: '8px 0',
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      fontStyle: 'italic'
+                    }}>
+                      +{contact.notes.length - 3} more notes
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Action Button */}
+            <button
+              onClick={() => {
+                // TODO: Open contact edit modal or navigate to contact details
+                console.log('Edit contact:', contact.contactId);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 16px',
+                border: '1px solid #DE1785',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                background: 'transparent',
+                color: '#DE1785',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#DE1785';
+                e.currentTarget.style.color = '#fff';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#DE1785';
+              }}
+            >
+              <Edit size={16} />
+              Edit Contact
+            </button>
+          </div>
+        ) : searchAttempted && email ? (
+          // No contact found - show option to create
+          <div>
+            <div style={{ 
+              background: '#fef3c7', 
+              border: '1px solid #fbbf24',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '16px'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                marginBottom: '8px'
+              }}>
+                <div style={{ 
+                  width: '8px', 
+                  height: '8px', 
+                  borderRadius: '50%', 
+                  background: '#f59e0b' 
+                }} />
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#92400e' }}>
+                  No Contact Found
+                </span>
+              </div>
+              <p style={{ 
+                margin: 0, 
+                fontSize: '13px', 
+                color: '#a16207',
+                lineHeight: '1.4'
+              }}>
+                No existing contact found for this email address.
+              </p>
+            </div>
+
+            {/* Create Contact Button */}
+            <button
+              onClick={handleCreateContact}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: 'none',
+                borderRadius: '6px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                background: '#DE1785',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'all 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#c21668';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#DE1785';
+                e.currentTarget.style.transform = 'translateY(0)';
+              }}
+            >
+              <Plus size={16} />
+              Create Contact
+            </button>
+          </div>
+        ) : !email && searchAttempted ? (
+          // No email found in thread
+          <div style={{ 
+            background: '#f3f4f6', 
+            border: '1px solid #d1d5db',
+            borderRadius: '8px',
+            padding: '16px',
+            textAlign: 'center',
+            color: '#6b7280'
+          }}>
+            <FileText size={24} style={{ marginBottom: '8px', opacity: 0.5 }} />
+            <p style={{ margin: 0, fontSize: '14px' }}>
+              No email address found for this conversation
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+// Add CSS animation for loading spinner
+const styles = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.type = 'text/css';
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
+}
+
+export default ContactLookupPanel; 
