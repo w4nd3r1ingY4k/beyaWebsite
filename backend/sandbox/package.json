@@ -1,0 +1,20 @@
+{
+  "name": "beya-business-central-sandbox",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "description": "Local sandbox server for testing Business Central API endpoints",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["business-central", "sandbox", "testing"],
+  "author": "Beya Team",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "node-fetch": "^3.3.2"
+  }
+} 
