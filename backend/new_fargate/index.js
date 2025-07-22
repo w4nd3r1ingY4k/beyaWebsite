@@ -31,8 +31,9 @@ const app = express();
 app.use(cors({ 
   origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "x-requested-with"],
-  credentials: false
+  allowedHeaders: ["Content-Type", "Authorization", "x-requested-with", "X-PD-External-User-ID"],
+  credentials: false,
+  optionsSuccessStatus: 200
 }));
 app.use(express.json({ limit: '50mb' }));
 
@@ -495,11 +496,12 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Start server
-const server = app.listen(port, () => {
+const server = app.listen(port, '0.0.0.0', () => {
   console.log(`🤖 Beya AI Service running on port ${port}`);
   console.log(`🔍 Semantic search and AI processing ready`);
   console.log(`💾 Context management active`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🌐 Server listening on 0.0.0.0:${port}`);
 });
 
 server.on('error', (error) => {
