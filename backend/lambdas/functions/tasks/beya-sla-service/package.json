@@ -1,0 +1,19 @@
+{
+  "name": "beya-sla-service",
+  "version": "1.0.0",
+  "description": "Beya SLA Service Lambda Function",
+  "main": "handlers/slaHandler.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.840.0",
+    "@aws-sdk/client-eventbridge": "^3.840.0",
+    "@aws-sdk/lib-dynamodb": "^3.840.0",
+    "uuid": "^11.1.0"
+  },
+  "keywords": ["beya", "sla", "lambda", "aws"],
+  "author": "Beya Team",
+  "license": "ISC"
+} 

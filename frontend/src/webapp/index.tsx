@@ -10,6 +10,7 @@ import { ReactComponent as MarketingIcon } from './assets/icons/MarketingIcon.sv
 import { ReactComponent as LogisticsIcon } from './assets/icons/LogisticsIcon.svg';
 import { ReactComponent as AutomationIcon } from './assets/icons/AutomationIcon.svg';
 import { ReactComponent as SettingsIcon } from './assets/icons/SettingsIcon.svg';
+import { ReactComponent as TasksIcon } from './assets/icons/TasksIcon.svg';
 import InboxHome from './communication/inbox/Home';
 import ContactsCRM from './communication/contacts/Home';
 import CalendarPage from './communication/schedule/ScheduleHome';
@@ -21,6 +22,7 @@ import OrdersHome from './commerce/orders/OrdersHome';
 import WebsiteHome from './commerce/website/WebsiteHome';
 import AttributionHome from './commerce/AttributionHome';
 import CommerceDashboard from './commerce/CommerceDashboard';
+import TaskManagementDashboard from './tasks/TaskManagementDashboard';
 import { useAuth } from "./AuthContext";
 import IntegrationsPanel from './communication/inbox/components/IntegrationsPanel';
 import CommandBChat from './communication/inbox/components/CommandBChat';

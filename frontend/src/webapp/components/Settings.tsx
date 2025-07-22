@@ -109,7 +109,7 @@ const SettingsPage = () => {
             >
                 ← Back
             </button>
-          <div>
+          <div style={{ textAlign: 'center' }}>
             <h1 style={{
               fontSize: '28px',
               fontWeight: '600',

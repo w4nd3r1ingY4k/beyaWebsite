@@ -6,6 +6,7 @@ import { ReactComponent as LogisticsIcon } from '@/webapp/assets/icons/Logistics
 import { ReactComponent as MarketingIcon } from '@/webapp/assets/icons/MarketingIcon.svg';
 import { ReactComponent as CommerceIcon } from '@/webapp/assets/icons/CommerceIcon.svg';
 import { ReactComponent as SettingsIcon } from '@/webapp/assets/icons/SettingsIcon.svg';
+import { ReactComponent as TasksIcon } from '@/webapp/assets/icons/TasksIcon.svg';
 
 interface IconItem {
   id: string;
@@ -57,6 +58,9 @@ const icons: IconItem[] = [
         { id: 'attribution', label: 'Attribution' }
       ]
     },
+    { id: 'marketing', Component: MarketingIcon, label: 'Marketing' },
+    { id: 'logistics', Component: LogisticsIcon, label: 'Logistics' },
+    { id: 'automation', Component: AutomationIcon, label: 'Automation' },
     { id: 'settings', Component: SettingsIcon, label: 'Settings' },
     // { id: 'marketing', Component: MarketingIcon, label: 'Marketing' },
     // { id: 'logistics', Component: LogisticsIcon, label: 'Logistics' },

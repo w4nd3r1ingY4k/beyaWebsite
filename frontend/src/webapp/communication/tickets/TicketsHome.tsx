@@ -4,6 +4,8 @@ import TicketList from './components/TicketList';
 import TicketDetail from './components/TicketDetail';
 import TicketForm from './components/TicketForm';
 import { useAuth } from '../../AuthContext';
+import SpaceSelector from '@/webapp/tasks/components/SpaceSelector';
+import BoardView from '@/webapp/tasks/components/BoardView';
 
 // Types
 export interface Ticket {
@@ -29,6 +31,25 @@ export interface TicketComment {
   comment: string;
   created_at: string;
   is_internal?: boolean;
+}
+
+// Add a minimal Task type for BoardView compatibility
+interface BoardTask {
+  id: string;
+  boardId: string;
+  spaceId: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  type: string;
+  assignee?: string;
+  reporter: string;
+  createdAt: string;
+  updatedAt: string;
+  tags: string[];
+  labels: string[];
+  attachments: any[];
 }
 
 // Styles - maintaining design consistency
@@ -156,6 +177,12 @@ const styles = {
 
 const TicketsHome: React.FC = () => {
   const { user } = useAuth();
+  // Add state for spaces, boards, and view mode
+  const [spaces, setSpaces] = useState<any[]>([]);
+  const [boards, setBoards] = useState<any[]>([]);
+  const [selectedSpace, setSelectedSpace] = useState<any | null>(null);
+  const [selectedBoard, setSelectedBoard] = useState<any | null>(null);
+  const [viewMode, setViewMode] = useState<'kanban' | 'list' | 'calendar'>('kanban');
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -180,6 +207,33 @@ const TicketsHome: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('beyaTickets', JSON.stringify(tickets));
   }, [tickets]);
+
+  // Load spaces, boards, and set defaults (mock or adapt as needed)
+  useEffect(() => {
+    // TODO: Replace with actual API/data
+    const mockSpaces = [
+      { id: 'support', name: 'Support', color: '#3B82F6', description: 'Support tickets' },
+      { id: 'it', name: 'IT', color: '#10B981', description: 'IT tickets' },
+    ];
+    setSpaces(mockSpaces);
+    setSelectedSpace(mockSpaces[0]);
+  }, []);
+  useEffect(() => {
+    if (selectedSpace) {
+      // TODO: Replace with actual API/data
+      const mockBoards = [
+        { id: 'main', spaceId: selectedSpace.id, name: 'Main Board', description: 'All tickets', columns: [
+          { id: 'open', name: 'Open', status: 'open' },
+          { id: 'in_progress', name: 'In Progress', status: 'in_progress' },
+          { id: 'under_review', name: 'Under Review', status: 'under_review' },
+          { id: 'resolved', name: 'Resolved', status: 'resolved' },
+          { id: 'closed', name: 'Closed', status: 'closed' },
+        ] },
+      ];
+      setBoards(mockBoards);
+      setSelectedBoard(mockBoards[0]);
+    }
+  }, [selectedSpace]);
 
   // Filter tickets based on search and filters
   const filteredTickets = useMemo(() => {
@@ -220,6 +274,60 @@ const TicketsHome: React.FC = () => {
 
     return { open, inProgress, resolved, urgent };
   }, [tickets]);
+
+  // Adapt tickets to BoardTask for BoardView
+  const boardTasks: BoardTask[] = tickets.map(ticket => ({
+    id: ticket.id,
+    boardId: selectedBoard?.id || 'main',
+    spaceId: selectedSpace?.id || 'support',
+    title: ticket.title,
+    description: ticket.description,
+    status: ticket.status,
+    priority: ticket.priority,
+    type: 'task',
+    assignee: ticket.assignee,
+    reporter: ticket.reporter,
+    createdAt: ticket.created_at,
+    updatedAt: ticket.updated_at,
+    tags: ticket.tags || [],
+    labels: [],
+    attachments: [],
+  }));
+
+  // Adapter handlers for BoardView
+  const handleBoardSelectTask = (task: BoardTask) => {
+    const ticket = tickets.find(t => t.id === task.id);
+    if (ticket) setSelectedTicket(ticket);
+  };
+  const handleBoardUpdateTask = (taskId: string, updates: Partial<BoardTask>) => {
+    // Only allow updates to fields that exist on Ticket
+    const ticketUpdates: Partial<Ticket> = {
+      title: updates.title,
+      description: updates.description,
+      status: updates.status as Ticket['status'],
+      priority: updates.priority as Ticket['priority'],
+      assignee: updates.assignee,
+      tags: updates.tags,
+    };
+    handleUpdateTicket(taskId, ticketUpdates);
+  };
+  const handleBoardDeleteTask = (taskId: string) => {
+    handleDeleteTicket(taskId);
+  };
+  const handleBoardCreateTask = (taskData: Partial<BoardTask>) => {
+    // Only allow creation with fields that exist on Ticket
+    const ticketData: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'reporter'> = {
+      title: taskData.title || '',
+      description: taskData.description || '',
+      status: (taskData.status as Ticket['status']) || 'open',
+      priority: (taskData.priority as Ticket['priority']) || 'medium',
+      assignee: taskData.assignee,
+      tags: taskData.tags || [],
+      customerId: undefined,
+      due_date: undefined,
+    };
+    handleCreateTicket(ticketData);
+  };
 
   // Handlers
   const handleCreateTicket = useCallback((ticketData: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'reporter'>) => {
@@ -262,60 +370,62 @@ const TicketsHome: React.FC = () => {
         <div style={styles.headerContent}>
           <div style={styles.headerLeft}>
             <h1 style={styles.headerTitle}>Tickets</h1>
-            
-            {/* Search */}
-            <div style={styles.searchContainer}>
-              <Search size={18} style={styles.searchIcon} />
-              <input
-                type="text"
-                placeholder="Search tickets..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                style={styles.searchInput}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#EC4899';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#D1D5DB';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              />
-            </div>
+            {/* Space Selector */}
+            <SpaceSelector
+              spaces={spaces}
+              selectedSpace={selectedSpace}
+              onSelectSpace={setSelectedSpace}
+            />
           </div>
-
           <div style={styles.headerActions}>
-            {/* Filter Button */}
-            <button
-              style={styles.filterButton}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = '#EC4899';
-                e.currentTarget.style.color = '#EC4899';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = '#D1D5DB';
-                e.currentTarget.style.color = '#374151';
-              }}
-            >
-              <Filter size={16} />
-              Filter
-              <ChevronDown size={16} />
-            </button>
-
-            {/* Create Button */}
-            <button
-              onClick={() => setShowCreateForm(true)}
-              style={styles.createButton}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DB2777'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EC4899'}
-            >
-              <Plus size={16} />
-              New Ticket
-            </button>
+            {/* View Mode Button Group */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setViewMode('kanban')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  border: viewMode === 'kanban' ? 'none' : '1.5px solid #EC4899',
+                  background: viewMode === 'kanban' ? '#EC4899' : '#fff',
+                  color: viewMode === 'kanban' ? '#fff' : '#EC4899',
+                  fontWeight: 500,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >Kanban</button>
+              <button
+                onClick={() => setViewMode('list')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  border: viewMode === 'list' ? 'none' : '1.5px solid #EC4899',
+                  background: viewMode === 'list' ? '#EC4899' : '#fff',
+                  color: viewMode === 'list' ? '#fff' : '#EC4899',
+                  fontWeight: 500,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >List</button>
+              <button
+                onClick={() => setViewMode('calendar')}
+                style={{
+                  padding: '8px 18px',
+                  borderRadius: 8,
+                  border: viewMode === 'calendar' ? 'none' : '1.5px solid #EC4899',
+                  background: viewMode === 'calendar' ? '#EC4899' : '#fff',
+                  color: viewMode === 'calendar' ? '#fff' : '#EC4899',
+                  fontWeight: 500,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >Calendar</button>
+            </div>
           </div>
         </div>
       </div>
-
       {/* Stats Bar */}
       <div style={styles.statsBar}>
         <div style={styles.statItem}>
@@ -339,16 +449,146 @@ const TicketsHome: React.FC = () => {
           <span style={styles.statValue}>{stats.urgent}</span>
         </div>
       </div>
-
-      {/* Main Content */}
+      {/* Main Content: BoardView replaces TicketList */}
       <div style={styles.mainContent}>
-        {/* Ticket List */}
-        <TicketList
-          tickets={filteredTickets}
-          selectedTicket={selectedTicket}
-          onSelectTicket={setSelectedTicket}
-        />
-
+        {selectedBoard && viewMode === 'kanban' && (
+          <BoardView
+            board={selectedBoard}
+            tasks={boardTasks}
+            viewMode={viewMode}
+            onSelectTask={handleBoardSelectTask}
+            onUpdateTask={handleBoardUpdateTask}
+            onDeleteTask={handleBoardDeleteTask}
+            onCreateTask={handleBoardCreateTask}
+          />
+        )}
+        {viewMode === 'list' && (
+          <div style={{ flex: 1, background: '#fff', borderRadius: 12, margin: 24, padding: 24, boxShadow: '0 1px 3px 0 rgba(0,0,0,0.07)' }}>
+            <h2 style={{ color: '#EC4899', fontWeight: 600, fontSize: 20, marginBottom: 16 }}>List View</h2>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15 }}>
+              <thead>
+                <tr style={{ background: '#FDF2F8', color: '#EC4899' }}>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600 }}>ID</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600 }}>Title</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600 }}>Status</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600 }}>Priority</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600 }}>Assignee</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 600 }}>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTickets.length === 0 ? (
+                  <tr><td colSpan={6} style={{ textAlign: 'center', color: '#9CA3AF', padding: 24 }}>No tickets found</td></tr>
+                ) : (
+                  filteredTickets.map(ticket => (
+                    <tr
+                      key={ticket.id}
+                      style={{ cursor: 'pointer', borderBottom: '1px solid #F3F4F6', background: selectedTicket?.id === ticket.id ? '#FDF2F8' : 'transparent' }}
+                      onClick={() => setSelectedTicket(ticket)}
+                    >
+                      <td style={{ padding: '8px 8px', color: '#6B7280', fontWeight: 500 }}>{ticket.id}</td>
+                      <td style={{ padding: '8px 8px', color: '#111827' }}>{ticket.title}</td>
+                      <td style={{ padding: '8px 8px', color: '#6B7280' }}>{ticket.status.replace('_', ' ')}</td>
+                      <td style={{ padding: '8px 8px', color: '#EC4899', fontWeight: 500 }}>{ticket.priority.toUpperCase()}</td>
+                      <td style={{ padding: '8px 8px', color: '#6B7280' }}>{ticket.assignee || 'Unassigned'}</td>
+                      <td style={{ padding: '8px 8px', color: '#6B7280' }}>{new Date(ticket.updated_at).toLocaleString()}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {viewMode === 'calendar' && (
+          <div style={{ flex: 1, background: '#fff', borderRadius: 12, margin: 24, padding: 24, boxShadow: '0 1px 3px 0 rgba(0,0,0,0.07)' }}>
+            <h2 style={{ color: '#EC4899', fontWeight: 600, fontSize: 20, marginBottom: 16 }}>Calendar View</h2>
+            {/* Simple calendar grid for current month */}
+            {(() => {
+              const now = new Date();
+              const year = now.getFullYear();
+              const month = now.getMonth();
+              const firstDay = new Date(year, month, 1);
+              const lastDay = new Date(year, month + 1, 0);
+              const startDayOfWeek = firstDay.getDay();
+              const daysInMonth = lastDay.getDate();
+              const weeks: any[][] = [[]];
+              let week = 0;
+              // Fill initial empty days
+              for (let i = 0; i < startDayOfWeek; i++) {
+                weeks[week].push(null);
+              }
+              // Fill days with tickets
+              for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                const dayTickets = filteredTickets.filter(t => t.due_date && new Date(t.due_date).getFullYear() === year && new Date(t.due_date).getMonth() === month && new Date(t.due_date).getDate() === day);
+                weeks[week].push({ day, tickets: dayTickets });
+                if (weeks[week].length === 7) {
+                  week++;
+                  weeks[week] = [];
+                }
+              }
+              // Fill trailing empty days
+              while (weeks[weeks.length - 1].length < 7) {
+                weeks[weeks.length - 1].push(null);
+              }
+              return (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 15, marginTop: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#FDF2F8', color: '#EC4899' }}>
+                      <th style={{ padding: 6 }}>Sun</th>
+                      <th style={{ padding: 6 }}>Mon</th>
+                      <th style={{ padding: 6 }}>Tue</th>
+                      <th style={{ padding: 6 }}>Wed</th>
+                      <th style={{ padding: 6 }}>Thu</th>
+                      <th style={{ padding: 6 }}>Fri</th>
+                      <th style={{ padding: 6 }}>Sat</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {weeks.map((week, i) => (
+                      <tr key={i}>
+                        {week.map((cell, j) => (
+                          <td key={j} style={{
+                            minWidth: 80,
+                            height: 70,
+                            verticalAlign: 'top',
+                            border: '1px solid #F3F4F6',
+                            background: cell && cell.day === now.getDate() ? '#FDF2F8' : '#fff',
+                            padding: 6,
+                          }}>
+                            {cell && (
+                              <div>
+                                <div style={{ fontWeight: 600, color: '#EC4899', marginBottom: 4 }}>{cell.day}</div>
+                                {cell.tickets.map((ticket: any) => (
+                                  <div
+                                    key={ticket.id}
+                                    style={{
+                                      background: '#EC4899',
+                                      color: '#fff',
+                                      borderRadius: 6,
+                                      padding: '2px 6px',
+                                      marginBottom: 2,
+                                      fontSize: 13,
+                                      cursor: 'pointer',
+                                      fontWeight: 500,
+                                    }}
+                                    onClick={() => setSelectedTicket(ticket)}
+                                  >
+                                    {ticket.title.length > 16 ? ticket.title.slice(0, 16) + '…' : ticket.title}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+        )}
         {/* Ticket Detail */}
         {selectedTicket && (
           <TicketDetail
@@ -359,7 +599,6 @@ const TicketsHome: React.FC = () => {
           />
         )}
       </div>
-
       {/* Create/Edit Form Modal */}
       {showCreateForm && (
         <TicketForm
