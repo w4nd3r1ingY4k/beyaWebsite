@@ -19,6 +19,12 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchAttempted, setSearchAttempted] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: '',
+    email: '',
+    phone: ''
+  });
 
   // Extract email from flow data
   const extractEmailFromFlow = (flowData: any): string | null => {
@@ -44,7 +50,7 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
   // Search for contact when thread changes
   useEffect(() => {
     const searchContact = async () => {
-      if (!selectedThreadId || !flow || !user?.userId) {
+      if (!selectedThreadId || !flow) {
         setContact(null);
         setSearchAttempted(false);
         setError(null);
@@ -64,7 +70,8 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
       setSearchAttempted(false);
 
       try {
-        const result = await contactsService.findContactByEmail(email, user.userId);
+        // Search for contacts by email without userId restriction (global search)
+        const result = await contactsService.findContactByEmail(email);
         
         // Handle different possible response structures
         let foundContact = null;
@@ -104,7 +111,7 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
     };
 
     searchContact();
-  }, [selectedThreadId, flow, user?.userId]);
+  }, [selectedThreadId, flow]);
 
   // Format timestamp for display
   const formatDate = (timestamp: string | number): string => {
@@ -117,14 +124,80 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
   };
 
   // Handle create new contact
-  const handleCreateContact = () => {
+  const handleCreateContact = async () => {
     const email = extractEmailFromFlow(flow);
-    if (!email) return;
+    if (!email || !user?.userId) return;
 
-    // You could open a modal or navigate to create contact page
-    // For now, we'll just log the action
-    console.log('Create new contact for email:', email);
-    // TODO: Implement contact creation modal or navigation
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Extract a name from the email (use the part before @)
+      const defaultName = email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      
+      // Create the contact
+      const newContact = await contactsService.createContact({
+        userId: user.userId,
+        name: defaultName,
+        email: email
+      });
+
+      console.log('✅ Created new contact:', newContact);
+      
+      // Update the local state to show the newly created contact
+      setContact(newContact);
+      setSearchAttempted(true);
+      
+    } catch (err) {
+      console.error('❌ Failed to create contact:', err);
+      setError(`Failed to create contact: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle edit contact
+  const handleEditContact = (contactToEdit: Contact) => {
+    setEditFormData({
+      name: contactToEdit.name || '',
+      email: contactToEdit.email || '',
+      phone: contactToEdit.phone || ''
+    });
+    setIsEditing(true);
+  };
+
+  // Handle cancel edit
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setError(null);
+  };
+
+  // Handle update contact
+  const handleUpdateContact = async () => {
+    if (!contact || !user?.userId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const updatedContact = await contactsService.updateContact(
+        user.userId,
+        contact.contactId,
+        editFormData
+      );
+
+      console.log('✅ Updated contact:', updatedContact);
+      
+      // Update the local state with the updated contact
+      setContact(updatedContact);
+      setIsEditing(false);
+      
+    } catch (err) {
+      console.error('❌ Failed to update contact:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update contact');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!selectedThreadId) {
@@ -240,8 +313,197 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
         )}
 
         {contact ? (
-          // Contact found - display information
-          <div>
+          isEditing ? (
+            // Edit Contact Form
+            <div>
+              <div style={{ 
+                background: '#f9fafb', 
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '16px'
+              }}>
+                <h4 style={{ 
+                  margin: '0 0 16px 0', 
+                  fontSize: '16px', 
+                  fontWeight: '600',
+                  color: '#111827',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <Edit size={16} />
+                  Edit Contact
+                </h4>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '4px', 
+                    fontSize: '12px', 
+                    fontWeight: '500',
+                    color: '#374151'
+                  }}>
+                    Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={editFormData.name}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#DE1785'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '4px', 
+                    fontSize: '12px', 
+                    fontWeight: '500',
+                    color: '#374151'
+                  }}>
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={editFormData.email}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, email: e.target.value }))}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#DE1785'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ 
+                    display: 'block', 
+                    marginBottom: '4px', 
+                    fontSize: '12px', 
+                    fontWeight: '500',
+                    color: '#374151'
+                  }}>
+                    Phone
+                  </label>
+                  <input
+                    type="tel"
+                    value={editFormData.phone}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      transition: 'border-color 0.2s',
+                      boxSizing: 'border-box'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#DE1785'}
+                    onBlur={(e) => e.target.style.borderColor = '#d1d5db'}
+                  />
+                </div>
+
+                {error && (
+                  <div style={{
+                    backgroundColor: '#fee2e2',
+                    color: '#dc2626',
+                    padding: '8px 12px',
+                    borderRadius: '4px',
+                    marginBottom: '12px',
+                    fontSize: '12px'
+                  }}>
+                    {error}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{
+                display: 'flex',
+                gap: '8px'
+              }}>
+                <button
+                  onClick={handleCancelEdit}
+                  disabled={loading}
+                  style={{
+                    flex: 1,
+                    padding: '10px 12px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    backgroundColor: 'white',
+                    color: '#374151',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    opacity: loading ? 0.6 : 1,
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.backgroundColor = '#f9fafb';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading) {
+                      e.currentTarget.style.backgroundColor = 'white';
+                    }
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateContact}
+                  disabled={loading || !editFormData.name.trim()}
+                  style={{
+                    flex: 1,
+                    padding: '10px 12px',
+                    border: 'none',
+                    borderRadius: '6px',
+                    backgroundColor: loading || !editFormData.name.trim() ? '#d1d5db' : '#DE1785',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: '500',
+                    cursor: loading || !editFormData.name.trim() ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!loading && editFormData.name.trim()) {
+                      e.currentTarget.style.backgroundColor = '#c4176c';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loading && editFormData.name.trim()) {
+                      e.currentTarget.style.backgroundColor = '#DE1785';
+                    }
+                  }}
+                >
+                  {loading ? 'Updating...' : 'Update'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Contact found - display information
+            <div>
             <div style={{ 
               background: '#f0fdf4', 
               border: '1px solid #bbf7d0',
@@ -382,10 +644,7 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
 
             {/* Action Button */}
             <button
-              onClick={() => {
-                // TODO: Open contact edit modal or navigate to contact details
-                console.log('Edit contact:', contact.contactId);
-              }}
+              onClick={() => handleEditContact(contact)}
               style={{
                 width: '100%',
                 padding: '10px 16px',
@@ -415,6 +674,7 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
               Edit Contact
             </button>
           </div>
+          )
         ) : searchAttempted && email ? (
           // No contact found - show option to create
           <div>
@@ -500,6 +760,7 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
           </div>
         ) : null}
       </div>
+
     </div>
   );
 };

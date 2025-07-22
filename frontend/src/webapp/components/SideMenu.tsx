@@ -43,7 +43,7 @@ const icons: IconItem[] = [
         { id: 'contacts', label: 'Contacts' },
         { id: 'inbox', label: 'Inbox' },
         { id: 'schedule', label: 'Schedule' },
-        { id: 'tickets', label: 'Tickets' }
+        { id: 'tasks', label: 'Tasks' }
       ]
     },
     { 

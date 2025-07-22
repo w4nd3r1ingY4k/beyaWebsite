@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../AuthContext';
 import contactsService, { Contact, CreateContactPayload, UpdateContactPayload } from '../../../services/contactsService';
 import './ContactsHome.css';
 
@@ -12,6 +13,7 @@ interface ContactsHomeState {
 }
 
 const ContactsHome: React.FC = () => {
+  const { user } = useAuth();
   const [state, setState] = useState<ContactsHomeState>({
     contacts: [],
     loading: true,
@@ -21,14 +23,18 @@ const ContactsHome: React.FC = () => {
     error: null
   });
 
-  // Mock user ID - in real app this would come from auth context
-  const userId = 'current-user-123';
+  // Use real user ID from auth context
+  const userId = user?.userId;
 
   useEffect(() => {
-    loadContacts();
-  }, []);
+    if (userId) {
+      loadContacts();
+    }
+  }, [userId]);
 
   const loadContacts = async () => {
+    if (!userId) return;
+    
     try {
       setState(prev => ({ ...prev, loading: true, error: null }));
       const response = await contactsService.listContacts(userId);
@@ -58,6 +64,8 @@ const ContactsHome: React.FC = () => {
   };
 
   const handleUpdateContact = async (contactId: string, updates: UpdateContactPayload) => {
+    if (!userId) return;
+    
     try {
       setState(prev => ({ ...prev, error: null }));
       await contactsService.updateContact(userId, contactId, updates);
@@ -69,7 +77,7 @@ const ContactsHome: React.FC = () => {
   };
 
   const handleDeleteContact = async (contactId: string) => {
-    if (!window.confirm('Are you sure you want to delete this contact?')) return;
+    if (!window.confirm('Are you sure you want to delete this contact?') || !userId) return;
     
     try {
       setState(prev => ({ ...prev, error: null }));

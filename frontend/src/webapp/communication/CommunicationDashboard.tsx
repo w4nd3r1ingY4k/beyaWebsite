@@ -1,5 +1,5 @@
 import React from 'react';
-import { Inbox, Users, Calendar, Ticket } from 'lucide-react';
+import { Inbox, Users, Calendar, CheckSquare } from 'lucide-react';
 
 interface CommunicationOption {
   id: string;
@@ -39,7 +39,7 @@ const CommunicationOptions: CommunicationOption[] = [
     id: 'tasks',
     title: 'Tasks',
     description: 'Task management and tracking',
-    icon: <Ticket size={32} />,
+    icon: <CheckSquare size={32} />,
     color: '#F59E0B'
   }
 ];
