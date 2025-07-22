@@ -55,6 +55,17 @@ interface BusinessCentralData {
     totalSalesInvoices: number;
     totalSalesOrders: number;
     totalProducts: number;
+    calculationMethod?: string;
+    revenueAccountsFound?: number;
+    revenueEntriesFound?: number;
+    revenueAccountSummary?: Array<{
+      number: string;
+      name: string;
+      category: string;
+      totalRevenue: number;
+      entryCount: number;
+      balance: number;
+    }>;
     recentInvoices: Array<{
       id: string;
       number: string;
@@ -64,7 +75,7 @@ interface BusinessCentralData {
       date: string;
       status: string;
     }>;
-    topProducts: Array<{
+    topProducts?: Array<{
       id: string;
       number: string;
       displayName: string;
@@ -72,6 +83,39 @@ interface BusinessCentralData {
       inventory: number;
     }>;
   };
+  accounts?: {
+    accounts: Array<{
+      number: string;
+      name: string;
+      category: string;
+      subCategory: string;
+      balance: number;
+      numberRange: string;
+      isRevenueAccount: boolean;
+      isExpenseAccount: boolean;
+      isAssetAccount: boolean;
+      isLiabilityAccount: boolean;
+    }>;
+    summary: {
+      totalAccounts: number;
+      accountsByCategory: Array<{
+        category: string;
+        count: number;
+        totalBalance: number;
+      }>;
+      revenueAccounts: number;
+      expenseAccounts: number;
+      assetAccounts: number;
+      liabilityAccounts: number;
+    };
+    explanation: {
+      whatIsThis: string;
+      accountTypes: { [key: string]: string };
+    };
+  };
+  customers?: Array<{ name: string; balance: number; currencyCode: string; }>;
+  vendors?: Array<{ name: string; balance: number; currencyCode: string; }>;
+  ledgerEntries?: Array<{ postingDate: string; documentNumber: string; accountId: string; description: string; amount: number; }>;
 }
 
 const AttributionHome: React.FC = () => {
@@ -79,6 +123,7 @@ const AttributionHome: React.FC = () => {
   const [businessCentralData, setBusinessCentralData] = useState<BusinessCentralData>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [useSandbox, setUseSandbox] = useState(false); // Flag to use local sandbox
 
   // Business Central API integration - now fetches comprehensive revenue data
   const fetchBusinessCentralData = async () => {
@@ -86,41 +131,60 @@ const AttributionHome: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      // Step 1: Get Business Central access token
-      const tokenResponse = await fetch(`${API_ENDPOINTS.BACKEND_URL}/api/business-central/token`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: '67051142-4b70-4ae9-8992-01d17e991da9',
-          clientId: '29cda312-4374-4b29-aefd-406dd53060a3',
-          clientSecret: 'Uur8Q~pHGV6-x2ixqxww45dszxf2gY--5wSl~c.Q'
-        })
-      });
+      // Choose API base URL based on sandbox flag
+      const apiBaseUrl = useSandbox ? API_ENDPOINTS.SANDBOX_URL : API_ENDPOINTS.BACKEND_URL;
 
-      if (!tokenResponse.ok) {
-        throw new Error('Failed to get Business Central access token');
-      }
-
-      const tokenData = await tokenResponse.json();
-      const authHeaders = {
-        'Authorization': `Bearer ${tokenData.access_token}`,
+      let authHeaders: { [key: string]: string } = {
         'Accept': 'application/json'
       };
 
-      // Step 2: Fetch revenue data and companies in parallel
-      const [companiesRes, revenueRes] = await Promise.all([
-        fetch(`${API_ENDPOINTS.BACKEND_URL}/api/business-central/companies`, { headers: authHeaders }),
-        fetch(`${API_ENDPOINTS.BACKEND_URL}/api/business-central/revenue`, { headers: authHeaders })
+      // Only get token if using production API (sandbox handles auth internally)
+      if (!useSandbox) {
+        // Step 1: Get Business Central access token
+        const tokenResponse = await fetch(`${apiBaseUrl}/api/business-central/token`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tenantId: '67051142-4b70-4ae9-8992-01d17e991da9',
+            clientId: '29cda312-4374-4b29-aefd-406dd53060a3',
+            clientSecret: 'Uur8Q~pHGV6-x2ixqxww45dszxf2gY--5wSl~c.Q'
+          })
+        });
+
+        if (!tokenResponse.ok) {
+          throw new Error('Failed to get Business Central access token');
+        }
+
+        const tokenData = await tokenResponse.json();
+        authHeaders['Authorization'] = `Bearer ${tokenData.access_token}`;
+      }
+
+      // Step 2: Fetch comprehensive Business Central data in parallel
+      const [companiesRes, revenueRes, accountsRes, customersRes, vendorsRes, ledgerRes] = await Promise.all([
+        fetch(`${apiBaseUrl}/api/business-central/companies`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/api/business-central/revenue`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/api/business-central/accounts`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/api/business-central/customers`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/api/business-central/vendors`, { headers: authHeaders }),
+        fetch(`${apiBaseUrl}/api/business-central/ledger-entries`, { headers: authHeaders })
       ]);
 
-      const [companiesData, revenueData] = await Promise.all([
-        companiesRes.ok ? companiesRes.json() : { value: [] },
-        revenueRes.ok ? revenueRes.json() : null
+      const [companiesData, revenueData, accountsData, customersData, vendorsData, ledgerData] = await Promise.all([
+        companiesRes.ok ? companiesRes.json() : { companies: [] },
+        revenueRes.ok ? revenueRes.json() : null,
+        accountsRes.ok ? accountsRes.json() : null,
+        customersRes.ok ? customersRes.json() : { customers: [] },
+        vendorsRes.ok ? vendorsRes.json() : { vendors: [] },
+        ledgerRes.ok ? ledgerRes.json() : { entries: [] }
       ]);
 
       setBusinessCentralData({
-        companies: companiesData.value || [],
-        revenue: revenueData || undefined
+        companies: companiesData.companies || companiesData.value || [],
+        revenue: revenueData || undefined,
+        accounts: accountsData || undefined,
+        customers: customersData.customers || [],
+        vendors: vendorsData.vendors || [],
+        ledgerEntries: ledgerData.entries || []
       });
 
     } catch (err) {
@@ -286,7 +350,26 @@ const AttributionHome: React.FC = () => {
           }}
         >
           <Database size={16} />
-          Fetch Business Central Data
+          Fetch Business Central Data {useSandbox ? '(Sandbox)' : '(Production)'}
+        </button>
+
+        <button
+          onClick={() => setUseSandbox(!useSandbox)}
+          style={{
+            backgroundColor: useSandbox ? '#10B981' : '#6B7280',
+            color: 'white',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '12px 24px',
+            fontSize: '14px',
+            fontWeight: '600',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          {useSandbox ? '🧪' : '🏭'} {useSandbox ? 'Using Sandbox' : 'Using Production'}
         </button>
 
         {loading && (
@@ -587,6 +670,18 @@ const AttributionHome: React.FC = () => {
             }}>
               <Database size={20} style={{ color: '#3B82F6' }} />
               Business Central Revenue
+              {businessCentralData.revenue.calculationMethod && (
+                <span style={{
+                  fontSize: '12px',
+                  backgroundColor: '#f0f9ff',
+                  color: '#0369a1',
+                  padding: '4px 8px',
+                  borderRadius: '4px',
+                  fontWeight: '500'
+                }}>
+                  {businessCentralData.revenue.calculationMethod}
+                </span>
+              )}
             </h3>
 
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -688,6 +783,202 @@ const AttributionHome: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Chart of Accounts Section */}
+      {businessCentralData.accounts && (
+        <div style={{
+          backgroundColor: 'white',
+          borderRadius: '16px',
+          padding: '24px',
+          border: '1px solid #f1f5f9',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          marginTop: '32px'
+        }}>
+          <h3 style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            color: '#1e293b',
+            margin: '0 0 20px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <BarChart3 size={20} style={{ color: '#8B5CF6' }} />
+            Chart of Accounts
+            <span style={{
+              fontSize: '12px',
+              backgroundColor: '#faf5ff',
+              color: '#7c3aed',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontWeight: '500'
+            }}>
+              {businessCentralData.accounts.summary.totalAccounts} accounts
+            </span>
+          </h3>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            {/* Account Summary */}
+            <div>
+              <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
+                Account Types Overview
+              </h4>
+              
+              <div style={{ display: 'grid', gap: '8px' }}>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  backgroundColor: '#ecfdf5',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                    💰 Revenue Accounts
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#10b981' }}>
+                    {businessCentralData.accounts.summary.revenueAccounts}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  backgroundColor: '#fef2f2',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                    💸 Expense Accounts
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#ef4444' }}>
+                    {businessCentralData.accounts.summary.expenseAccounts}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  backgroundColor: '#eff6ff',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                    🏦 Asset Accounts
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#3b82f6' }}>
+                    {businessCentralData.accounts.summary.assetAccounts}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  backgroundColor: '#fefce8',
+                  borderRadius: '6px'
+                }}>
+                  <span style={{ fontSize: '14px', fontWeight: '500', color: '#1e293b' }}>
+                    📋 Liability Accounts
+                  </span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: '#f59e0b' }}>
+                    {businessCentralData.accounts.summary.liabilityAccounts}
+                  </span>
+                </div>
+              </div>
+
+              {/* Revenue Account Breakdown */}
+              {businessCentralData.revenue?.revenueAccountSummary && businessCentralData.revenue.revenueAccountSummary.length > 0 && (
+                <div style={{ marginTop: '20px' }}>
+                  <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
+                    Top Revenue Accounts
+                  </h4>
+                  {businessCentralData.revenue.revenueAccountSummary
+                    .filter(acc => acc.totalRevenue > 0)
+                    .slice(0, 3)
+                    .map((account) => (
+                    <div key={account.number} style={{
+                      padding: '8px 12px',
+                      border: '1px solid #f1f5f9',
+                      borderRadius: '6px',
+                      marginBottom: '6px'
+                    }}>
+                      <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                        {account.number} - {account.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#64748b' }}>
+                        Revenue: ${account.totalRevenue.toLocaleString()} • {account.entryCount} entries
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Account Categories */}
+            <div>
+              <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#1e293b', marginBottom: '12px' }}>
+                Accounts by Category
+              </h4>
+              
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                {businessCentralData.accounts.summary.accountsByCategory
+                  .sort((a, b) => b.count - a.count)
+                  .map((category) => (
+                  <div key={category.category} style={{
+                    padding: '8px 12px',
+                    border: '1px solid #f1f5f9',
+                    borderRadius: '6px',
+                    marginBottom: '6px'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b' }}>
+                          {category.category || 'Uncategorized'}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                          {category.count} accounts
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '14px', fontWeight: '600', color: '#10b981' }}>
+                          ${category.totalBalance.toLocaleString()}
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#64748b' }}>
+                          Total Balance
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* What is Chart of Accounts */}
+              <div style={{
+                marginTop: '20px',
+                padding: '12px',
+                backgroundColor: '#f8fafc',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0'
+              }}>
+                <div style={{ fontSize: '14px', fontWeight: '600', color: '#1e293b', marginBottom: '6px' }}>
+                  💡 What is this?
+                </div>
+                <div style={{ fontSize: '12px', color: '#64748b', lineHeight: '1.4' }}>
+                  {businessCentralData.accounts.explanation.whatIsThis}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>
         {`
