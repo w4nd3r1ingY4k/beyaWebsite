@@ -39,7 +39,6 @@ const icons = [
   { id: 'marketing', Component: MarketingIcon,label: 'Marketing' },
   { id: 'logistics', Component: LogisticsIcon,label: 'Logistics' },
   { id: 'commerce',  Component: CommerceIcon, label: 'Commerce' },
-  { id: 'tasks',     Component: TasksIcon,   label: 'Tasks' },
   { id: 'automation', Component: AutomationIcon, label: 'Automation' },
   { id: 'settings',  Component: SettingsIcon, label: 'Settings' },
 ] as const;
@@ -227,10 +226,6 @@ const navigate = useNavigate();
       }
     }
 
-    if (activeIcon === 'tasks') {
-      return <TaskManagementDashboard />;
-    }
-
     // non-CRM, non-home pages
     const { Component, label } = icons.find(i => i.id === activeIcon)!;
     return (
@@ -263,7 +258,7 @@ const navigate = useNavigate();
       />
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', minWidth: 0 }}>
+      <div style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', minWidth: 0, marginTop: 45 }}>
         {/* Page Content */}
         <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
         {/* <AIChatCircle /> */}

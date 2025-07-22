@@ -66,4 +66,77 @@
 .media-content a:hover {
   background-color: #e9ecef;
   text-decoration: underline;
+}
+
+/* Email HTML Content Styling */
+.email-html-content {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  line-height: 1.6;
+}
+
+.email-html-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 13px;
+}
+
+.email-html-content th,
+.email-html-content td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.email-html-content th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #333;
+}
+
+.email-html-content tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+.email-html-content tr:hover {
+  background-color: #f5f5f5;
+}
+
+.email-html-content p {
+  margin: 8px 0;
+}
+
+.email-html-content strong, 
+.email-html-content b {
+  font-weight: 600;
+  color: #333;
+}
+
+.email-html-content em,
+.email-html-content i {
+  font-style: italic;
+}
+
+.email-html-content a {
+  color: #DE1785;
+  text-decoration: underline;
+}
+
+.email-html-content a:hover {
+  color: #C91476;
+}
+
+.email-html-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.email-html-content div {
+  margin: 4px 0;
+}
+
+.email-html-content span {
+  display: inline;
 } 

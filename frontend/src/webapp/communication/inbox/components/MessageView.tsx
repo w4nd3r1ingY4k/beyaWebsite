@@ -171,7 +171,68 @@ interface TeamMessage {
 type Channel = 'whatsapp' | 'email';
 type Status = 'open' | 'waiting' | 'resolved' | 'overdue';
 
-const API_BASE = API_ENDPOINTS.INBOX_API_BASE;
+  const API_BASE = API_ENDPOINTS.INBOX_API_BASE;
+
+  /**
+   * Clean email thread headers and quoted content - keep only the newest message
+   */
+  const cleanEmailThreadHeaders = (htmlContent: string): string => {
+    if (!htmlContent || typeof htmlContent !== 'string') {
+      return htmlContent;
+    }
+
+    // Strategy: Find the first occurrence of a thread header and remove everything after it
+    // This keeps only the newest content (before the first "On ... wrote:" section)
+    
+    const threadHeaderPatterns = [
+      // HTML encoded emails with &lt; and &gt;
+      /On\s+[^,]+,\s+[^,]+\s+at\s+[^&]+&lt;[^&]+&gt;\s+wrote:/gi,
+      
+      // Regular emails with < and >
+      /On\s+[^,]+,\s+[^,]+\s+at\s+[^<]+<[^>]+>\s+wrote:/gi,
+      
+      // More specific pattern for the format we're seeing
+      /On\s+\w+,\s+\w+\s+\d+,\s+\d+\s+at\s+\d+:\d+\s+[AP]M\s+[^&<]*(?:&lt;|<)[^&>]*(?:&gt;|>)\s+wrote:/gi,
+      
+      // General pattern - any "On ... wrote:"
+      /On\s+.+?\s+wrote:/gi,
+    ];
+
+    let cleanedContent = htmlContent;
+    
+    // Find the first thread header and cut everything after it
+    for (let i = 0; i < threadHeaderPatterns.length; i++) {
+      const pattern = threadHeaderPatterns[i];
+      const match = pattern.exec(cleanedContent);
+      
+      if (match) {
+        // Cut everything from the thread header onwards
+        cleanedContent = cleanedContent.substring(0, match.index).trim();
+        break; // Stop after first match
+      }
+    }
+
+    // Additional cleanup for any remaining threading artifacts
+    const cleanupPatterns = [
+      // Remove any remaining "wrote:" fragments
+      /\s+wrote:\s*/gi,
+      
+      // Remove HTML encoded versions of quotes
+      /&gt;\s*/gi,
+      
+      // Remove HTML wrapped versions
+      /<[^>]*>On\s+[^,]+,\s+[^,]+\s+at\s+[^<]+<[^>]+>\s+wrote:\s*<[^>]*>/gi,
+    ];
+
+    cleanupPatterns.forEach(pattern => {
+      cleanedContent = cleanedContent.replace(pattern, '');
+    });
+
+    // Clean up any extra whitespace
+    cleanedContent = cleanedContent.replace(/^\s+/gm, '').replace(/\s+$/gm, '').trim();
+    
+    return cleanedContent;
+  };
 
 const MessageView: React.FC<MessageViewProps> = ({ 
   messages, 
@@ -196,11 +257,13 @@ const MessageView: React.FC<MessageViewProps> = ({
   const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [isReplying, setIsReplying] = useState(false);
+  const [replyingToMessageId, setReplyingToMessageId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [replySubject, setReplySubject] = useState('');
   const [replyTo, setReplyTo] = useState('');
   const [replyCc, setReplyCc] = useState('');
   const [replyBcc, setReplyBcc] = useState('');
+  const [showCcBcc, setShowCcBcc] = useState(false);
   const [teamMessages, setTeamMessages] = useState<TeamMessage[]>([]);
   const [teamChatInput, setTeamChatInput] = useState('');
   const [emailEditorState, setEmailEditorState] = useState<EditorState>(
@@ -209,6 +272,7 @@ const MessageView: React.FC<MessageViewProps> = ({
   
   // Mock tonality analysis feature
   const [showTonalityWarning, setShowTonalityWarning] = useState(false);
+  const [isReplySending, setIsReplySending] = useState(false);
 
   // Header controls state - use external filters if provided
   const statusFilter = externalStatusFilter;
@@ -245,6 +309,17 @@ const MessageView: React.FC<MessageViewProps> = ({
   const [startY, setStartY] = useState(0);
   const [startHeight, setStartHeight] = useState(0);
 
+  // Undo send feature
+  const [pendingSendMessageId, setPendingSendMessageId] = useState<string | null>(null);
+  const [undoCountdown, setUndoCountdown] = useState(0);
+  const [pendingSendTimeout, setPendingSendTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [pendingSendInterval, setPendingSendInterval] = useState<NodeJS.Timeout | null>(null);
+  const [tempMessage, setTempMessage] = useState<any | null>(null);
+
+  // Attachment support
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{[key: string]: number}>({});
+
   useEffect(() => {
     if (selectedThreadId) {
       if (currentView === 'discussions') {
@@ -276,6 +351,26 @@ const MessageView: React.FC<MessageViewProps> = ({
   useEffect(() => {
     setLocalFlow(flow);
   }, [flow]);
+
+  // Effect to automatically expand the last message when thread is opened
+  useEffect(() => {
+    if (selectedThreadId && messages.length > 0) {
+      // Find the last message (most recent by timestamp)
+      const sortedMessages = [...messages].sort((a, b) => {
+        const timestampA = a.Timestamp || 0;
+        const timestampB = b.Timestamp || 0;
+        return timestampB - timestampA; // Most recent first
+      });
+      
+      const lastMessage = sortedMessages[0];
+      if (lastMessage && lastMessage.MessageId) {
+        setActiveMessageId(lastMessage.MessageId);
+      }
+    } else {
+      // Clear active message when no thread selected
+      setActiveMessageId(null);
+    }
+  }, [selectedThreadId, messages]);
 
   // Cleanup message scroll timeout on unmount
   useEffect(() => {
@@ -325,6 +420,18 @@ const MessageView: React.FC<MessageViewProps> = ({
     };
   }, [isResizing, startY, startHeight]);
 
+  // Cleanup pending sends on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (pendingSendTimeout) {
+        clearTimeout(pendingSendTimeout);
+      }
+      if (pendingSendInterval) {
+        clearInterval(pendingSendInterval);
+      }
+    };
+  }, [pendingSendTimeout, pendingSendInterval]);
+
   const loadTeamMessages = async (threadId: string) => {
     try {
       console.log('Loading team messages for thread:', threadId);
@@ -357,9 +464,11 @@ const MessageView: React.FC<MessageViewProps> = ({
   }
 
   function linkifyWithImages(text: string) {
+    // Clean email thread headers from plain text as well
+    const cleanedText = cleanEmailThreadHeaders(text);
     const urlRegex = /(https?:\/\/[^\s]+)/g;
     
-    return text.split(urlRegex).map((part, index) => {
+    return cleanedText.split(urlRegex).map((part, index) => {
       if (urlRegex.test(part)) {
         const isImage = /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(part);
         
@@ -464,17 +573,122 @@ const MessageView: React.FC<MessageViewProps> = ({
     }
   }
 
+  // Attachment functions
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    // Check file size (max 25MB per file)
+    const maxSize = 25 * 1024 * 1024;
+    const validFiles = files.filter(file => {
+      if (file.size > maxSize) {
+        console.warn(`File ${file.name} is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 25MB.`);
+        return false;
+      }
+      return true;
+    });
+
+    // Add to attachments
+    setAttachments(prev => [...prev, ...validFiles]);
+    
+    // Reset input
+    if (e.target) {
+      e.target.value = '';
+    }
+  };
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Undo send functions
+  const handleUndoSend = () => {
+    if (pendingSendMessageId) {
+      // Clear the timeout and interval
+      if (pendingSendTimeout) {
+        clearTimeout(pendingSendTimeout);
+      }
+      if (pendingSendInterval) {
+        clearInterval(pendingSendInterval);
+      }
+      
+      // Reset states
+      setPendingSendMessageId(null);
+      setUndoCountdown(0);
+      setIsReplySending(false);
+      setPendingSendTimeout(null);
+      setPendingSendInterval(null);
+      setTempMessage(null);
+      
+      console.log('📧 Email send cancelled by user');
+    }
+  };
+
+  const executeDelayedSend = async (messageData: any) => {
+    try {
+      console.log('📧 Executing delayed send:', messageData);
+      await onSendMessage?.(messageData);
+      
+      // Clear reply form on successful send (already done in handleReplySend)
+      // Clear temporary message
+      setTempMessage(null);
+      
+    } catch (err) {
+      console.error('Error in delayed send:', err);
+      // On error, allow user to retry - restore the reply interface
+      setIsReplying(true);
+      setIsReplySending(false);
+    } finally {
+      // Clean up pending send state
+      setPendingSendMessageId(null);
+      setUndoCountdown(0);
+      setPendingSendTimeout(null);
+      setPendingSendInterval(null);
+    }
+  };
+
   // COMMENTED OUT - Original send reply functionality
   const handleReplySend = async () => {
     if (!selectedThreadId) return;
 
+    setIsReplySending(true);
+    
     try {
       const channel = getChannel(selectedThreadId);
+      let messageData: any;
       
       if (channel === 'email') {
-        const rawContentState = convertToRaw(emailEditorState.getCurrentContent());
-        const htmlContent = draftToHtml(rawContentState);
-        const plainText = emailEditorState.getCurrentContent().getPlainText();
+        // Validate editor state before conversion
+        if (!emailEditorState || !emailEditorState.getCurrentContent()) {
+          console.error('❌ Invalid editor state');
+          throw new Error('Editor state is invalid');
+        }
+        
+        let htmlContent: string;
+        let plainText: string;
+        
+        try {
+          const currentContent = emailEditorState.getCurrentContent();
+          const rawContentState = convertToRaw(currentContent);
+          htmlContent = draftToHtml(rawContentState);
+          plainText = currentContent.getPlainText();
+        } catch (draftError) {
+          console.error('❌ Draft.js conversion error:', draftError);
+          // Fallback: use plain text from editor if available
+          plainText = emailEditorState.getCurrentContent()?.getPlainText() || '';
+          if (!plainText.trim()) {
+            throw new Error('No content to send');
+          }
+          htmlContent = `<p>${plainText}</p>`;
+        }
         
         // Use the replyTo field that was auto-populated (fallback to flow contact if empty)
         let recipient = replyTo || flow?.contactEmail || flow?.contactIdentifier || flow?.fromEmail || decodeURIComponent(selectedThreadId);
@@ -503,49 +717,128 @@ const MessageView: React.FC<MessageViewProps> = ({
             `Re: ${latestIncoming.Subject}`;
         }
         
-        console.log('📧 Replying with info:', {
+        console.log('📧 Preparing email for delayed send:', {
           recipient,
           subject: finalSubject,
           hasLatestIncoming: !!latestIncoming,
-          note: 'Backend will automatically find correct Message-ID for threading'
+          note: 'Will send after undo countdown'
         });
         
         // Parse CC and BCC fields into arrays
         const ccArray = replyCc.trim() ? replyCc.split(',').map(email => email.trim()).filter(Boolean) : [];
         const bccArray = replyBcc.trim() ? replyBcc.split(',').map(email => email.trim()).filter(Boolean) : [];
         
-        // DON'T pass originalMessageId - let the backend look it up automatically!
-        // The backend has the correct logic to find the Message-ID from Headers
-        await onSendMessage?.({
+        // Find the Gmail Message-ID from the message being replied to for proper threading
+        let originalMessageId: string | undefined = undefined;
+        if (latestIncoming && latestIncoming.GmailMessageId) {
+          originalMessageId = latestIncoming.GmailMessageId;
+          console.log('📧 Found Gmail Message-ID for threading:', originalMessageId);
+        } else if (latestIncoming && latestIncoming.MessageId) {
+          originalMessageId = latestIncoming.MessageId;
+          console.log('📧 Using fallback Message-ID for threading:', originalMessageId);
+        } else {
+          console.log('📧 No Message-ID found for threading - backend will search automatically');
+        }
+        
+        // Generate unique message ID for temporary message
+        const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        messageData = {
           channel: 'email',
           to: recipient,
           cc: ccArray,
           bcc: bccArray,
           subject: finalSubject || 'Re: (no subject)',
           content: plainText,
-          html: htmlContent
-          // No originalMessageId - backend will auto-detect from database!
-        });
-        
-        setEmailEditorState(EditorState.createEmpty());
-        setReplySubject('');
-        setReplyTo('');
-        setReplyCc('');
-        setReplyBcc('');
+          html: htmlContent,
+          originalMessageId: originalMessageId,
+          MessageId: tempMessageId,
+          attachments: attachments
+        };
+
+        // Create temporary message for immediate UI display
+        const tempMsg = {
+          MessageId: tempMessageId,
+          Subject: finalSubject || 'Re: (no subject)',
+          body: plainText,
+          htmlBody: htmlContent,
+          from: user?.subscriber_email || 'me',
+          to: [recipient],
+          cc: ccArray,
+          bcc: bccArray,
+          Direction: 'outgoing',
+          Timestamp: Date.now() / 1000,
+          isPending: true
+        };
+        setTempMessage(tempMsg);
       } else {
-        // For WhatsApp, pass the flowId (selectedThreadId) so routing logic can detect personal vs business
-        await onSendMessage?.({
-          channel: 'whatsapp',
-          to: selectedThreadId, // Use flowId instead of extracted phone number
-          content: replyText
-        });
+        // For WhatsApp
+        const tempMessageId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         
-        setReplyText('');
+        messageData = {
+          channel: 'whatsapp',
+          to: selectedThreadId,
+          content: replyText,
+          MessageId: tempMessageId
+        };
+
+        // Create temporary message for immediate UI display
+        const tempMsg = {
+          MessageId: tempMessageId,
+          body: replyText,
+          from: user?.subscriber_email || 'me',
+          to: [selectedThreadId],
+          Direction: 'outgoing',
+          Timestamp: Date.now() / 1000,
+          isPending: true
+        };
+        setTempMessage(tempMsg);
       }
       
+      // Start undo countdown (15 seconds)
+      const UNDO_DELAY = 15; // seconds
+      setUndoCountdown(UNDO_DELAY);
+      
+      // Create countdown interval
+      const intervalId = setInterval(() => {
+        setUndoCountdown(prev => {
+          if (prev <= 1) {
+            clearInterval(intervalId);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+      
+      // Create timeout for actual send
+      const timeoutId = setTimeout(() => {
+        clearInterval(intervalId);
+        executeDelayedSend(messageData);
+      }, UNDO_DELAY * 1000);
+      
+      // Store pending send data
+      setPendingSendMessageId(messageData.MessageId);
+      setPendingSendTimeout(timeoutId);
+      setPendingSendInterval(intervalId);
+      
+      // Close reply interface immediately
       setIsReplying(false);
+      setEmailEditorState(EditorState.createEmpty());
+      setReplySubject('');
+      setReplyTo('');
+      setReplyCc('');
+      setReplyBcc('');
+      setShowCcBcc(false);
+      setReplyingToMessageId(null);
+      setReplyText('');
+      setAttachments([]);
+      setUploadProgress({});
+      
+      console.log('📧 Email queued for sending - undo available for', UNDO_DELAY, 'seconds');
+      
     } catch (err) {
-      console.error('Error sending reply:', err);
+      console.error('Error preparing reply:', err);
+      setIsReplySending(false);
     }
   };
 
@@ -1053,14 +1346,29 @@ const MessageView: React.FC<MessageViewProps> = ({
   };
 
   const normalizeMessage = (msg: APIMessage) => {
-    // Check if the Body field contains HTML content
+    // Enhanced HTML content detection
     const isHtmlContent = msg.Body && (
       msg.Body.includes('<!DOCTYPE') || 
       msg.Body.includes('<html') || 
       msg.Body.includes('<div') || 
       msg.Body.includes('<p>') ||
       msg.Body.includes('<table') ||
-      msg.Body.includes('<style')
+      msg.Body.includes('<style') ||
+      msg.Body.includes('<br') ||
+      msg.Body.includes('<span') ||
+      msg.Body.includes('<td') ||
+      msg.Body.includes('<tr') ||
+      msg.Body.includes('<th') ||
+      msg.Body.includes('<thead') ||
+      msg.Body.includes('<tbody') ||
+      msg.Body.includes('<strong') ||
+      msg.Body.includes('<em') ||
+      msg.Body.includes('<b>') ||
+      msg.Body.includes('<i>') ||
+      msg.Body.includes('<a ') ||
+      msg.Body.includes('<img') ||
+      // Also check if there's a separate HtmlBody field
+      !!msg.HtmlBody
     );
 
     // Process message body for Base64 detection
@@ -1070,7 +1378,7 @@ const MessageView: React.FC<MessageViewProps> = ({
     return {
       id: msg.MessageId || `${msg.Timestamp || Date.now()}`,
       body: isHtmlContent ? (msg.Snippet || 'HTML Email') : processedMessage.body,
-      htmlBody: isHtmlContent ? msg.Body : (msg.HtmlBody || ''),
+      htmlBody: isHtmlContent ? (msg.HtmlBody || msg.Body) : '',
       direction: msg.Direction || 'incoming',
       timestamp: formatTimestamp(msg.Timestamp),
       channel: msg.Channel || 'email',
@@ -1211,6 +1519,10 @@ const MessageView: React.FC<MessageViewProps> = ({
       // Close template selector and reply interface
       setShowTemplateSelector(false);
       setIsReplying(false);
+      setShowCcBcc(false);
+      setReplyingToMessageId(null);
+      setAttachments([]);
+      setUploadProgress({});
       
     } catch (err) {
       console.error('Error sending template:', err);
@@ -1246,10 +1558,45 @@ const MessageView: React.FC<MessageViewProps> = ({
       clearTimeout(messageScrollTimeoutRef.current);
     }
 
-    // Hide scrollbar after 500ms of no scrolling
+    // Hide scrollbar after 3000ms of no scrolling (increased for more forgiving UX)
     messageScrollTimeoutRef.current = setTimeout(() => {
       container.classList.remove('scrolling');
-    }, 500);
+    }, 3000);
+  };
+
+  // Handle mouse enter on scroll container
+  const handleMessageMouseEnter = () => {
+    const container = messageScrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when hovering
+    if (messageScrollTimeoutRef.current) {
+      clearTimeout(messageScrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse move to keep scrollbar visible during interaction
+  const handleMessageMouseMove = () => {
+    const container = messageScrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when moving mouse
+    if (messageScrollTimeoutRef.current) {
+      clearTimeout(messageScrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse leave on scroll container
+  const handleMessageMouseLeave = () => {
+    const container = messageScrollContainerRef.current;
+    if (!container) return;
+
+    // Only hide if not actively scrolling - longer delay for easier scrollbar interaction
+    messageScrollTimeoutRef.current = setTimeout(() => {
+      container.classList.remove('scrolling');
+    }, 2000);
   };
 
   // Handle resize start
@@ -1580,20 +1927,24 @@ const MessageView: React.FC<MessageViewProps> = ({
       {/* Custom scrollbar styles for messages */}
       <style>{`
         .message-custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+          width: 6px;
         }
         .message-custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .message-custom-scrollbar::-webkit-scrollbar-thumb {
-          background: rgba(222, 23, 133, 0.3);
-          border-radius: 2px;
+          background: rgba(222, 23, 133, 0.4);
+          border-radius: 3px;
           min-height: 40px;
           opacity: 0;
-          transition: opacity 0.2s ease;
+          transition: opacity 0.15s ease, background 0.2s ease;
         }
+        .message-custom-scrollbar:hover::-webkit-scrollbar-thumb,
         .message-custom-scrollbar.scrolling::-webkit-scrollbar-thumb {
           opacity: 1;
+        }
+        .message-custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(222, 23, 133, 0.8);
         }
         .message-custom-scrollbar.scrolling::-webkit-scrollbar-thumb:hover {
           background: #C91476;
@@ -1604,6 +1955,33 @@ const MessageView: React.FC<MessageViewProps> = ({
         .message-custom-scrollbar.scrolling {
           scrollbar-width: thin;
           scrollbar-color: #DE1785 transparent;
+        }
+        
+        @keyframes borderProgress {
+          from {
+            stroke-dashoffset: 0;
+          }
+          to {
+            stroke-dashoffset: 1000;
+          }
+        }
+        
+        @keyframes shrinkHorizontal {
+          from {
+            transform: scaleX(1);
+          }
+          to {
+            transform: scaleX(0);
+          }
+        }
+        
+        @keyframes shrinkVertical {
+          from {
+            transform: scaleY(1);
+          }
+          to {
+            transform: scaleY(0);
+          }
         }
       `}</style>
       
@@ -1616,6 +1994,7 @@ const MessageView: React.FC<MessageViewProps> = ({
       }}>
 
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px' }}>
+        
         {!selectedThreadId ? (
           <p style={{ textAlign: 'center', color: '#666', fontSize: '16px', marginTop: '100px' }}>
             Select a conversation to view messages.
@@ -1641,13 +2020,13 @@ const MessageView: React.FC<MessageViewProps> = ({
               display: 'flex',
               justifyContent: 'flex-end',
               alignItems: 'center',
-              padding: '0 16px',
+              padding: '14px 16px 0 16px', // Add top padding for spacing from status bar
               gap: '8px',
               position: 'sticky',
               top: 0,
               backgroundColor: 'transparent',
               zIndex: 10,
-              marginBottom: '10px'
+              marginBottom: '3px'
             }}>
               {/* Secondary Tags dropdown */}
               <div style={{ position: 'relative' }} ref={secondaryTagDropdownRef}>
@@ -1671,7 +2050,25 @@ const MessageView: React.FC<MessageViewProps> = ({
                   {/* Display secondary tags */}
                   {(() => {
                     const secondaryTags = Array.isArray(localFlow?.secondaryTags) ? localFlow.secondaryTags : [];
-                    return secondaryTags.slice(0, 2).map((tag: string, index: number) => (
+                    
+                    // Color mapping for different secondary tags
+                    const getTagColors = (tagName: string) => {
+                      const tagColors: Record<string, { bg: string; color: string; border: string }> = {
+                        'urgent': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                        'vip': { bg: '#F3E8FF', color: '#7C3AED', border: '#7C3AED' }, // Purple
+                        'complex': { bg: '#FEF3C7', color: '#D97706', border: '#D97706' }, // Amber
+                        'enterprise': { bg: '#ECFDF5', color: '#059669', border: '#059669' }, // Green
+                        'follow-up': { bg: '#EFF6FF', color: '#2563EB', border: '#2563EB' }, // Blue
+                        'escalated': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                        'deleted': { bg: '#F3F4F6', color: '#6B7280', border: '#6B7280' }, // Gray
+                      };
+                      return tagColors[tagName.toLowerCase()] || { bg: '#FDE7F1', color: '#DE1785', border: '#DE1785' }; // Default pink
+                    };
+                    
+                    return secondaryTags.slice(0, 2).map((tag: string, index: number) => {
+                      const colors = getTagColors(tag);
+                      
+                      return (
                       <span
                         key={index}
                         onClick={(e) => {
@@ -1679,8 +2076,9 @@ const MessageView: React.FC<MessageViewProps> = ({
                           handleSecondaryTagSelect(tag);
                         }}
                         style={{
-                          background: '#DE1785',
-                          color: '#fff',
+                            background: colors.bg,
+                            color: colors.color,
+                            border: `1px solid ${colors.border}`,
                           padding: '2px 6px',
                           borderRadius: '3px',
                           fontSize: '12px',
@@ -1701,7 +2099,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                         {tag.charAt(0).toUpperCase() + tag.slice(1)}
                         <span style={{ fontSize: '10px', fontWeight: 'bold' }}>×</span>
                       </span>
-                    ));
+                      );
+                    });
                   })()}
                   {(() => {
                     const secondaryTags = Array.isArray(localFlow?.secondaryTags) ? localFlow.secondaryTags : [];
@@ -1935,6 +2334,9 @@ const MessageView: React.FC<MessageViewProps> = ({
             <div 
               ref={messageScrollContainerRef}
               onScroll={handleMessageScroll}
+              onMouseEnter={handleMessageMouseEnter}
+              onMouseMove={handleMessageMouseMove}
+              onMouseLeave={handleMessageMouseLeave}
               style={{
                 flex: 1,
                 overflowY: 'auto',
@@ -1943,321 +2345,526 @@ const MessageView: React.FC<MessageViewProps> = ({
               }}
               className="message-custom-scrollbar"
             >
-              {normalizedMessages.map(chat => {
-                const isActive = chat.id === activeMessageId;
+              {(() => {
+                // Combine normalized messages with temporary message if it exists
+                const allMessages = [...normalizedMessages];
+                if (tempMessage) {
+                  allMessages.push({
+                    id: tempMessage.MessageId,
+                    subject: tempMessage.Subject || '',
+                    body: tempMessage.body || '',
+                    htmlBody: tempMessage.htmlBody || '',
+                    from: tempMessage.from,
+                    to: tempMessage.to,
+                    cc: tempMessage.cc || [],
+                    bcc: tempMessage.bcc || [],
+                    direction: tempMessage.Direction,
+                    timestamp: tempMessage.Timestamp,
+                    attachments: []
+                  } as any);
+                }
+                
+                return allMessages.map(chat => {
+                  const isActive = chat.id === activeMessageId;
+                  const isPendingMessage = chat.id === pendingSendMessageId;
 
-                return (
-                  <div
-                    key={`${chat.id}-${chat.timestamp}`}
-                    onClick={() => {
-                      setActiveMessageId(chat.id);
-                    }}
-                    style={{
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
-                      width: 'calc(100% - 16px)',
-                      maxWidth: 'calc(100% - 16px)',
-                      margin: '0 auto 16px auto',
-                      padding: 16,
-                      paddingBottom: 20,
-                      borderRadius: 8,
-                      background: '#FFFBFA',
-                      overflow: 'hidden',
-                      cursor: 'pointer',
-                      border: '1px solid #f0f0f0',
-                      wordWrap: 'break-word',
-                      overflowWrap: 'break-word',
-                      position: 'relative',
-                      
-                      maxHeight: isActive ? 'none' : '110px',
-                      transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.08)';
-                      setHoveredMessageId(chat.id);
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
-                      setHoveredMessageId(null);
-                    }}
-                  >
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center',
-                      marginBottom: '0px'
-                    }}>
-                      <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
-                        <strong style={{ color: chat.direction === 'incoming' ? '#DE1785' : '#000000' }}>
-                          {chat.senderName}
-                        </strong> ·{' '}
-                        <span style={{ color: '#888' }}>
-                          {formatDisplayDate(chat.timestamp)}
-                        </span>
-                      </p>
-                      {/* Show direction tag only when not hovering */}
-                      {hoveredMessageId !== chat.id && (
-                        <div style={{
-                          fontSize: '10px',
-                          background: chat.direction === 'incoming' ? '#f3f4f6' : '#FDE7F1',
-                          color: chat.direction === 'incoming' ? '#374151' : '#DE1785',
-                          padding: '2px 6px',
-                          borderRadius: '10px',
-                          textTransform: 'uppercase',
-                          fontWeight: 'bold'
-                        }}>
-                          {chat.direction}
-                        </div>
+                  return (
+                    <div
+                      key={`${chat.id}-${chat.timestamp}`}
+                      onClick={() => {
+                        setActiveMessageId(chat.id);
+                      }}
+                      style={{
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.07)',
+                        width: 'calc(100% - 16px)',
+                        maxWidth: 'calc(100% - 16px)',
+                        margin: '0 auto 16px auto',
+                        padding: 16,
+                        paddingBottom: 20,
+                        borderRadius: 8,
+                        background: '#FFFBFA',
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        border: isPendingMessage ? '3px solid #DE1785' : '1px solid #f0f0f0',
+                        wordWrap: 'break-word',
+                        overflowWrap: 'break-word',
+                        position: 'relative',
+                        
+                        maxHeight: isActive ? 'none' : '110px',
+                        transition: 'max-height 0.3s ease-out, box-shadow 0.2s ease',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 3px 10px rgba(0,0,0,0.08)';
+                        setHoveredMessageId(chat.id);
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.07)';
+                        setHoveredMessageId(null);
+                      }}
+                    >
+                      {/* Animated border overlay for pending messages */}
+                      {isPendingMessage && (
+                        <>
+                          {/* Top border */}
+                          <div style={{
+                            position: 'absolute',
+                            top: -3,
+                            left: -3,
+                            right: -3,
+                            height: 3,
+                            background: '#DE1785',
+                            transformOrigin: 'left',
+                            animation: `shrinkHorizontal 15s linear forwards`
+                          }} />
+                          {/* Right border */}
+                          <div style={{
+                            position: 'absolute',
+                            top: -3,
+                            right: -3,
+                            bottom: -3,
+                            width: 3,
+                            background: '#DE1785',
+                            transformOrigin: 'top',
+                            animation: `shrinkVertical 15s linear forwards`,
+                            animationDelay: `3.75s`
+                          }} />
+                          {/* Bottom border */}
+                          <div style={{
+                            position: 'absolute',
+                            bottom: -3,
+                            left: -3,
+                            right: -3,
+                            height: 3,
+                            background: '#DE1785',
+                            transformOrigin: 'right',
+                            animation: `shrinkHorizontal 15s linear forwards`,
+                            animationDelay: `7.5s`
+                          }} />
+                          {/* Left border */}
+                          <div style={{
+                            position: 'absolute',
+                            top: -3,
+                            left: -3,
+                            bottom: -3,
+                            width: 3,
+                            background: '#DE1785',
+                            transformOrigin: 'bottom',
+                            animation: `shrinkVertical 15s linear forwards`,
+                            animationDelay: `11.25s`
+                          }} />
+                        </>
                       )}
                       
-                    </div>
-                    
-                    {/* Show reply button when hovering and not active - positioned absolutely */}
-                    {hoveredMessageId === chat.id && !isActive && selectedThreadId && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveMessageId(chat.id);
-                          setIsReplying(true);
-                          
-                          console.log('🔍 Debug reply auto-fill:', {
-                            chatDirection: chat.direction,
-                            chatFrom: chat.from,
-                            chatTo: chat.to,
-                            chatCc: chat.cc,
-                            flowParticipants: flow?.participants,
-                            userEmail: user?.subscriber_email
-                          });
-                          
-                          // Auto-populate reply fields based on message participants
-                          let replyToEmail = '';
-                          let replyCcEmails: string[] = [];
-                          
-                          if (chat.direction === 'incoming') {
-                            // Replying to incoming message: Reply to sender, CC others if any
-                            replyToEmail = chat.from || '';
-                            
-                            // For incoming messages, check if there were CC recipients
-                            if (chat.cc && chat.cc.length > 0) {
-                              replyCcEmails = chat.cc.filter((email: string) => email !== user?.subscriber_email);
-                            }
-                          } else {
-                            // Replying to outgoing message: Reply to original recipients
-                            if (chat.to && chat.to.length > 0) {
-                              // Primary recipient is first in To field
-                              replyToEmail = chat.to[0] || '';
-                              
-                              // CC includes remaining To recipients + original CC (excluding self)
-                              const remainingTo = chat.to.slice(1);
-                              const originalCc = chat.cc || [];
-                              replyCcEmails = [...remainingTo, ...originalCc].filter((email: string) => email !== user?.subscriber_email);
-                            }
-                          }
-                          
-                          // Fallback to flow participants if message doesn't have participant info
-                          if (!replyToEmail && flow && flow.participants && Array.isArray(flow.participants)) {
-                            const otherParticipants = flow.participants.filter((p: string) => p !== user?.subscriber_email);
-                            if (otherParticipants.length > 0) {
-                              replyToEmail = otherParticipants[0];
-                              replyCcEmails = otherParticipants.slice(1);
-                            }
-                          }
-                          
-                          // Final fallback to flow contact info
-                          if (!replyToEmail) {
-                            replyToEmail = flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail || '';
-                          }
-                          
-                          setReplyTo(replyToEmail);
-                          setReplyCc(replyCcEmails.join(', '));
-                          
-                          console.log('✅ Reply fields populated:', {
-                            replyTo: replyToEmail,
-                            replyCc: replyCcEmails.join(', ')
-                          });
-                          
-                          // Auto-populate subject
-                          let subjectToUse = chat.subject || flow?.subject || '';
-                          if (subjectToUse) {
-                            const replySubj = subjectToUse.startsWith('Re:') ? subjectToUse : `Re: ${subjectToUse}`;
-                            setReplySubject(replySubj);
-                          } else {
-                            setReplySubject('Re: (no subject)');
-                          }
-                        }}
-                        style={{
-                          background: '#FDE7F1', // Light pink background same as secondary tag
-                          color: '#DE1785', // Beya pink for the icon
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '36px',
-                          height: '36px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                          position: 'absolute',
-                          right: '16px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          zIndex: 10
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#fce7f3';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = '#FDE7F1';
-                        }}
-                        title="Reply to this message"
-                      >
-                        <Reply size={16} />
-                      </button>
-                    )}
-                    
-                    {chat.subject && (
-                      <p style={{ 
-                        fontStyle: 'italic', 
-                        margin: '4px 0', 
-                        fontSize: '0.95em',
-                        color: isActive ? '#666' : '#888',
-                        fontWeight: '500',
-                        opacity: isActive ? 1 : 0.8,
-                        transition: 'opacity 0.3s ease, color 0.3s ease'
-                      }}>
-                        Subject: {chat.subject}
-                      </p>
-                    )}
-
-                    {/* Participant info removed - now shown in thread title */}
-                    
-                    <div style={{
-                      margin: '8px 0 0',
-                      whiteSpace: 'pre-wrap',
-                      lineHeight: '1.5',
-                      fontSize: '14px',
-                      wordWrap: 'break-word',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      maxWidth: '100%',
-                      opacity: isActive ? 1 : 0.7,
-                      transition: 'opacity 0.3s ease',
-                      color: isActive ? '#333' : '#666'
-                    }}>
-                      {chat.htmlBody ? (
-                        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(chat.htmlBody) }} />
-                      ) : (
-                        renderBase64Content(chat)
-                      )}
-                    </div>
-
-                    
-                    {isActive && selectedThreadId && (
                       <div style={{ 
-                        textAlign: 'left', 
-                        marginTop: 20, 
-                        borderTop: '1px solid #e5e7eb',
-                        paddingTop: '12px',
-                        display: 'flex',
-                        gap: '12px'
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center',
+                        marginBottom: '0px'
                       }}>
+                        <p style={{ margin: 0, color: '#555', fontSize: '0.9em' }}>
+                          <strong style={{ color: chat.direction === 'incoming' ? '#DE1785' : '#000000' }}>
+                            {chat.senderName}
+                          </strong> ·{' '}
+                          <span style={{ color: '#888' }}>
+                            {formatDisplayDate(chat.timestamp)}
+                          </span>
+                        </p>
+                        {/* Show direction tag only when not hovering */}
+                        {hoveredMessageId !== chat.id && (
+                          <div style={{
+                            fontSize: '10px',
+                            background: chat.direction === 'incoming' ? '#f3f4f6' : '#FDE7F1',
+                            color: chat.direction === 'incoming' ? '#374151' : '#DE1785',
+                            padding: '2px 6px',
+                            borderRadius: '10px',
+                            textTransform: 'uppercase',
+                            fontWeight: 'bold'
+                          }}>
+                            {isPendingMessage ? `Sending in ${undoCountdown}s` : chat.direction}
+                          </div>
+                        )}
+                        
+                      </div>
+                      
+                      {/* Show reply button when hovering and not active - positioned absolutely */}
+                      {hoveredMessageId === chat.id && !isActive && selectedThreadId && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setIsReplying(!isReplying);
                             
-                            // Add the same autofill logic as the hover reply button
-                            if (!isReplying) {
-                              console.log('🔍 Debug reply auto-fill (bottom button):', {
-                                chatDirection: chat.direction,
-                                chatFrom: chat.from,
-                                chatTo: chat.to,
-                                chatCc: chat.cc,
-                                flowParticipants: flow?.participants,
-                                userEmail: user?.subscriber_email
-                              });
+                            // If this is a pending message, handle undo
+                            if (isPendingMessage) {
+                              handleUndoSend();
+                              return;
+                            }
+                            
+                            // Otherwise, handle normal reply
+                            setActiveMessageId(chat.id);
+                            setIsReplying(true);
+                            setReplyingToMessageId(chat.id);
+                            
+                            console.log('🔍 Debug reply auto-fill:', {
+                              chatDirection: chat.direction,
+                              chatFrom: chat.from,
+                              chatTo: chat.to,
+                              chatCc: chat.cc,
+                              flowParticipants: flow?.participants,
+                              userEmail: user?.subscriber_email
+                            });
+                            
+                            // Auto-populate reply fields based on message participants
+                            let replyToEmail = '';
+                            let replyCcEmails: string[] = [];
+                            
+                            if (chat.direction === 'incoming') {
+                              // Replying to incoming message: Reply to sender, CC others if any
+                              replyToEmail = chat.from || '';
                               
-                              // Auto-populate reply fields based on message participants
-                              let replyToEmail = '';
-                              let replyCcEmails: string[] = [];
-                              
-                              if (chat.direction === 'incoming') {
-                                // Replying to incoming message: Reply to sender, CC others if any
-                                replyToEmail = chat.from || '';
+                              // For incoming messages, check if there were CC recipients
+                              if (chat.cc && chat.cc.length > 0) {
+                                replyCcEmails = chat.cc.filter((email: string) => email !== user?.subscriber_email);
+                              }
+                            } else {
+                              // Replying to outgoing message: Reply to original recipients
+                              if (chat.to && chat.to.length > 0) {
+                                // Primary recipient is first in To field
+                                replyToEmail = chat.to[0] || '';
                                 
-                                // For incoming messages, check if there were CC recipients
-                                if (chat.cc && chat.cc.length > 0) {
-                                  replyCcEmails = chat.cc.filter((email: string) => email !== user?.subscriber_email);
-                                }
-                              } else {
-                                // Replying to outgoing message: Reply to original recipients
-                                if (chat.to && chat.to.length > 0) {
-                                  // Primary recipient is first in To field
-                                  replyToEmail = chat.to[0] || '';
-                                  
-                                  // CC includes remaining To recipients + original CC (excluding self)
-                                  const remainingTo = chat.to.slice(1);
-                                  const originalCc = chat.cc || [];
-                                  replyCcEmails = [...remainingTo, ...originalCc].filter((email: string) => email !== user?.subscriber_email);
-                                }
+                                // CC includes remaining To recipients + original CC (excluding self)
+                                const remainingTo = chat.to.slice(1);
+                                const originalCc = chat.cc || [];
+                                replyCcEmails = [...remainingTo, ...originalCc].filter((email: string) => email !== user?.subscriber_email);
                               }
-                              
-                              // Fallback to flow participants if message doesn't have participant info
-                              if (!replyToEmail && flow && flow.participants && Array.isArray(flow.participants)) {
-                                const otherParticipants = flow.participants.filter((p: string) => p !== user?.subscriber_email);
-                                if (otherParticipants.length > 0) {
-                                  replyToEmail = otherParticipants[0];
-                                  replyCcEmails = otherParticipants.slice(1);
-                                }
+                            }
+                            
+                            // Fallback to flow participants if message doesn't have participant info
+                            if (!replyToEmail && flow && flow.participants && Array.isArray(flow.participants)) {
+                              const otherParticipants = flow.participants.filter((p: string) => p !== user?.subscriber_email);
+                              if (otherParticipants.length > 0) {
+                                replyToEmail = otherParticipants[0];
+                                replyCcEmails = otherParticipants.slice(1);
                               }
-                              
-                              // Final fallback to flow contact info
-                              if (!replyToEmail) {
-                                replyToEmail = flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail || '';
-                              }
-                              
-                              setReplyTo(replyToEmail);
-                              setReplyCc(replyCcEmails.join(', '));
-                              
-                              console.log('✅ Reply fields populated (bottom button):', {
-                                replyTo: replyToEmail,
-                                replyCc: replyCcEmails.join(', ')
-                              });
-                              
-                              // Auto-populate subject
-                              let subjectToUse = chat.subject || flow?.subject || '';
-                              if (subjectToUse) {
-                                const replySubj = subjectToUse.startsWith('Re:') ? subjectToUse : `Re: ${subjectToUse}`;
-                                setReplySubject(replySubj);
-                              } else {
-                                setReplySubject('Re: (no subject)');
-                              }
+                            }
+                            
+                            // Final fallback to flow contact info
+                            if (!replyToEmail) {
+                              replyToEmail = flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail || '';
+                            }
+                            
+                            setReplyTo(replyToEmail);
+                            setReplyCc(replyCcEmails.join(', '));
+                            
+                            console.log('✅ Reply fields populated:', {
+                              replyTo: replyToEmail,
+                              replyCc: replyCcEmails.join(', ')
+                            });
+                            
+                            // Auto-populate subject
+                            let subjectToUse = chat.subject || flow?.subject || '';
+                            if (subjectToUse) {
+                              const replySubj = subjectToUse.startsWith('Re:') ? subjectToUse : `Re: ${subjectToUse}`;
+                              setReplySubject(replySubj);
+                            } else {
+                              setReplySubject('Re: (no subject)');
                             }
                           }}
                           style={{
-                            background: '#DE1785',
-                            color: '#fff',
-                            padding: '8px 16px',
+                            background: '#FDE7F1', // Light pink background same as secondary tag
+                            color: '#DE1785', // Beya pink for the icon
                             border: 'none',
-                            borderRadius: 6,
-                            fontSize: '14px',
+                            borderRadius: '50%',
+                            width: '36px',
+                            height: '36px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                             cursor: 'pointer',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
-                            transition: 'background 0.2s'
+                            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                            position: 'absolute',
+                            right: '16px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            zIndex: 10
                           }}
                           onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#c1166a';
+                            e.currentTarget.style.background = '#fce7f3';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.background = '#DE1785';
+                            e.currentTarget.style.background = '#FDE7F1';
                           }}
+                          title={isPendingMessage ? "Undo send" : "Reply to this message"}
                         >
-                          Reply
+                          {isPendingMessage ? (
+                            <span style={{ fontSize: '12px', fontWeight: '600' }}>↺</span>
+                          ) : (
+                            <Reply size={16} />
+                          )}
                         </button>
+                      )}
+                      
+                      {chat.subject && (
+                        <p style={{ 
+                          fontStyle: 'italic', 
+                          margin: '4px 0', 
+                          fontSize: '0.95em',
+                          color: isActive ? '#666' : '#888',
+                          fontWeight: '500',
+                          opacity: isActive ? 1 : 0.8,
+                          transition: 'opacity 0.3s ease, color 0.3s ease'
+                        }}>
+                          Subject: {chat.subject}
+                        </p>
+                      )}
+
+                      {/* Participant info removed - now shown in thread title */}
+                      
+                      <div style={{
+                        margin: '8px 0 0',
+                        whiteSpace: 'pre-wrap',
+                        lineHeight: '1.5',
+                        fontSize: '14px',
+                        wordWrap: 'break-word',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        maxWidth: '100%',
+                        opacity: isActive ? 1 : 0.7,
+                        transition: 'opacity 0.3s ease',
+                        color: isActive ? '#333' : '#666'
+                      }}>
+                                                {chat.htmlBody ? (
+                            <div 
+                              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(cleanEmailThreadHeaders(chat.htmlBody)) }}
+                              className="email-html-content"
+                            />
+                          ) : (
+                            renderBase64Content(chat)
+                          )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
+
+                      {/* Display attachments if any */}
+                      {chat.attachments && chat.attachments.length > 0 && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '8px',
+                          background: '#f3f4f6',
+                          borderRadius: '6px',
+                          fontSize: '0.9em'
+                        }}>
+                          <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', color: '#555' }}>
+                            📎 Attachments ({chat.attachments.length})
+                          </p>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            {chat.attachments.map((attachment: any, index: number) => {
+                              // Debug logging to see attachment structure
+                              console.log('🔍 Attachment debug:', {
+                                attachment,
+                                hasUrl: !!(attachment.url || attachment.Url),
+                                url: attachment.url || attachment.Url,
+                                urlStartsWithGmail: (attachment.url || attachment.Url)?.startsWith('gmail-attachment://'),
+                                attachmentId: attachment.id || attachment.Id,
+                                attachmentName: attachment.name || attachment.Name
+                              });
+                              
+                              return (
+                              <div
+                                key={attachment.id || index}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  padding: '4px 8px',
+                                  background: '#fff',
+                                  borderRadius: '4px',
+                                  border: '1px solid #e5e7eb'
+                                }}
+                              >
+                                <span style={{ flex: 1, color: '#333' }}>
+                                  {attachment.name || attachment.Name || 'Unnamed file'}
+                                </span>
+                                <span style={{ color: '#888', fontSize: '0.85em' }}>
+                                  {attachment.sizeBytes || attachment.SizeBytes 
+                                    ? `${Math.round((attachment.sizeBytes || attachment.SizeBytes) / 1024)}KB`
+                                    : 'Size unknown'}
+                                </span>
+                                {(attachment.url || attachment.Url) && !(attachment.url || attachment.Url).startsWith('gmail-attachment://') && (
+                                  <a
+                                    href={attachment.url || attachment.Url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                      color: '#DE1785',
+                                      textDecoration: 'none',
+                                      fontSize: '0.85em'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Download
+                                  </a>
+                                )}
+                                {(attachment.url || attachment.Url) && (attachment.url || attachment.Url).startsWith('gmail-attachment://') && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        const userId = user?.userId;
+                                        const messageId = chat.gmailMessageId || chat.messageId;
+                                        const attachmentId = attachment.id || attachment.Id;
+                                        
+                                        if (!userId || !messageId || !attachmentId) {
+                                          throw new Error('Missing required information for download');
+                                        }
+                                        
+                                        // Call attachment download API
+                                        const downloadUrl = `${API_ENDPOINTS.ATTACHMENT_DOWNLOAD}/${userId}/${messageId}/${attachmentId}`;
+                                        const response = await fetch(downloadUrl);
+                                        
+                                        if (!response.ok) {
+                                          throw new Error('Failed to download attachment');
+                                        }
+                                        
+                                        // Create blob and download
+                                        const blob = await response.blob();
+                                        const url = window.URL.createObjectURL(blob);
+                                        const link = document.createElement('a');
+                                        link.href = url;
+                                        link.download = attachment.name || attachment.Name || 'attachment';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                        window.URL.revokeObjectURL(url);
+                                      } catch (error) {
+                                        console.error('Error downloading attachment:', error);
+                                        alert('Failed to download attachment');
+                                      }
+                                    }}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: '#DE1785',
+                                      textDecoration: 'underline',
+                                      fontSize: '0.85em',
+                                      cursor: 'pointer'
+                                    }}
+                                  >
+                                    Download
+                                  </button>
+                                )}
+                              </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {isActive && selectedThreadId && (
+                        <div style={{ 
+                          textAlign: 'left', 
+                          marginTop: 20, 
+                          borderTop: '1px solid #e5e7eb',
+                          paddingTop: '12px',
+                          display: 'flex',
+                          gap: '12px'
+                        }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setIsReplying(!isReplying);
+                              
+                              // Add the same autofill logic as the hover reply button
+                              if (!isReplying) {
+                                setReplyingToMessageId(chat.id);
+                                console.log('🔍 Debug reply auto-fill (bottom button):', {
+                                  chatDirection: chat.direction,
+                                  chatFrom: chat.from,
+                                  chatTo: chat.to,
+                                  chatCc: chat.cc,
+                                  flowParticipants: flow?.participants,
+                                  userEmail: user?.subscriber_email
+                                });
+                                
+                                // Auto-populate reply fields based on message participants
+                                let replyToEmail = '';
+                                let replyCcEmails: string[] = [];
+                                
+                                if (chat.direction === 'incoming') {
+                                  // Replying to incoming message: Reply to sender, CC others if any
+                                  replyToEmail = chat.from || '';
+                                  
+                                  // For incoming messages, check if there were CC recipients
+                                  if (chat.cc && chat.cc.length > 0) {
+                                    replyCcEmails = chat.cc.filter((email: string) => email !== user?.subscriber_email);
+                                  }
+                                } else {
+                                  // Replying to outgoing message: Reply to original recipients
+                                  if (chat.to && chat.to.length > 0) {
+                                    // Primary recipient is first in To field
+                                    replyToEmail = chat.to[0] || '';
+                                    
+                                    // CC includes remaining To recipients + original CC (excluding self)
+                                    const remainingTo = chat.to.slice(1);
+                                    const originalCc = chat.cc || [];
+                                    replyCcEmails = [...remainingTo, ...originalCc].filter((email: string) => email !== user?.subscriber_email);
+                                  }
+                                }
+                                
+                                // Fallback to flow participants if message doesn't have participant info
+                                if (!replyToEmail && flow && flow.participants && Array.isArray(flow.participants)) {
+                                  const otherParticipants = flow.participants.filter((p: string) => p !== user?.subscriber_email);
+                                  if (otherParticipants.length > 0) {
+                                    replyToEmail = otherParticipants[0];
+                                    replyCcEmails = otherParticipants.slice(1);
+                                  }
+                                }
+                                
+                                // Final fallback to flow contact info
+                                if (!replyToEmail) {
+                                  replyToEmail = flow?.contactIdentifier || flow?.contactEmail || flow?.fromEmail || '';
+                                }
+                                
+                                setReplyTo(replyToEmail);
+                                setReplyCc(replyCcEmails.join(', '));
+                                
+                                console.log('✅ Reply fields populated (bottom button):', {
+                                  replyTo: replyToEmail,
+                                  replyCc: replyCcEmails.join(', ')
+                                });
+                                
+                                // Auto-populate subject
+                                let subjectToUse = chat.subject || flow?.subject || '';
+                                if (subjectToUse) {
+                                  const replySubj = subjectToUse.startsWith('Re:') ? subjectToUse : `Re: ${subjectToUse}`;
+                                  setReplySubject(replySubj);
+                                } else {
+                                  setReplySubject('Re: (no subject)');
+                                }
+                              }
+                            }}
+                            style={{
+                              background: '#DE1785',
+                              color: '#fff',
+                              padding: '8px 16px',
+                              border: 'none',
+                              borderRadius: 6,
+                              fontSize: '14px',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = '#c1166a';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = '#DE1785';
+                            }}
+                          >
+                            Reply
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
         )}
@@ -2283,6 +2890,8 @@ const MessageView: React.FC<MessageViewProps> = ({
                 setIsReplying(false);
                 setShowTonalityWarning(false); // Reset warning when closing
                 setReplyBcc(''); // Reset BCC field
+                setShowCcBcc(false); // Reset CC/BCC visibility
+                setReplyingToMessageId(null); // Reset replying to message
               }}
               style={{
                 background: 'none',
@@ -2404,7 +3013,7 @@ const MessageView: React.FC<MessageViewProps> = ({
             </div>
           )}
 
-          {selectedThreadId && getChannel(selectedThreadId) === 'email' && (
+                    {selectedThreadId && getChannel(selectedThreadId) === 'email' && (
             <>
               {/* To Field */}
               <input
@@ -2412,40 +3021,6 @@ const MessageView: React.FC<MessageViewProps> = ({
                 value={replyTo}
                 onChange={e => setReplyTo(e.target.value)}
                 placeholder="To"
-                style={{
-                  width: '100%',
-                  marginBottom: 8,
-                  padding: '12px 16px',
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  boxSizing: 'border-box',
-                  fontSize: '14px'
-                }}
-              />
-              
-              {/* CC Field */}
-              <input
-                type="text"
-                value={replyCc}
-                onChange={e => setReplyCc(e.target.value)}
-                placeholder="CC"
-                style={{
-                  width: '100%',
-                  marginBottom: 8,
-                  padding: '12px 16px',
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  boxSizing: 'border-box',
-                  fontSize: '14px'
-                }}
-              />
-              
-              {/* BCC Field */}
-              <input
-                type="text"
-                value={replyBcc}
-                onChange={e => setReplyBcc(e.target.value)}
-                placeholder="BCC"
                 style={{
                   width: '100%',
                   marginBottom: 8,
@@ -2465,7 +3040,7 @@ const MessageView: React.FC<MessageViewProps> = ({
                 placeholder="Subject"
                 style={{
                   width: '100%',
-                  marginBottom: 16,
+                  marginBottom: 8,
                   padding: '12px 16px',
                   borderRadius: 8,
                   border: '1px solid #d1d5db',
@@ -2473,6 +3048,204 @@ const MessageView: React.FC<MessageViewProps> = ({
                   fontSize: '14px'
                 }}
               />
+
+              {/* CC/BCC Toggle Button */}
+              <button
+                onClick={() => setShowCcBcc(!showCcBcc)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#6b7280',
+                  fontSize: '13px',
+                  cursor: 'pointer',
+                  padding: '4px 0',
+                  marginBottom: showCcBcc ? 8 : 16,
+                  textDecoration: 'underline'
+                }}
+              >
+                {showCcBcc ? 'Hide CC/BCC' : 'Add CC/BCC'}
+              </button>
+
+              {/* CC/BCC Fields (conditional) */}
+              {showCcBcc && (
+                <>
+                  <input
+                    type="text"
+                    value={replyCc}
+                    onChange={e => setReplyCc(e.target.value)}
+                    placeholder="CC"
+                    style={{
+                      width: '100%',
+                      marginBottom: 8,
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      border: '1px solid #d1d5db',
+                      boxSizing: 'border-box',
+                      fontSize: '14px'
+                    }}
+                  />
+                  
+                  <input
+                    type="text"
+                    value={replyBcc}
+                    onChange={e => setReplyBcc(e.target.value)}
+                    placeholder="BCC"
+                    style={{
+                      width: '100%',
+                      marginBottom: 16,
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      border: '1px solid #d1d5db',
+                      boxSizing: 'border-box',
+                      fontSize: '14px'
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Attachment Section */}
+              <div style={{ marginBottom: '16px' }}>
+                {/* Attachment Button */}
+                <div style={{ marginBottom: '8px' }}>
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileSelect}
+                    style={{ display: 'none' }}
+                    id="email-attachment-input"
+                    accept="*/*"
+                  />
+                  <label
+                    htmlFor="email-attachment-input"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: '#f9fafb',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      fontSize: '13px',
+                      color: '#374151',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#f3f4f6';
+                      e.currentTarget.style.borderColor = '#9ca3af';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = '#f9fafb';
+                      e.currentTarget.style.borderColor = '#d1d5db';
+                    }}
+                  >
+                    📎 Add Attachments
+                  </label>
+                </div>
+
+                {/* Attachment List */}
+                {attachments.length > 0 && (
+                  <div style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    padding: '8px',
+                    background: '#fafafa'
+                  }}>
+                    <div style={{
+                      fontSize: '12px',
+                      color: '#6b7280',
+                      marginBottom: '8px',
+                      fontWeight: '500'
+                    }}>
+                      Attachments ({attachments.length})
+                    </div>
+                    {attachments.map((file, index) => (
+                      <div
+                        key={`${file.name}-${index}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 8px',
+                          background: '#fff',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '4px',
+                          marginBottom: index < attachments.length - 1 ? '4px' : '0'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{
+                            fontSize: '13px',
+                            color: '#374151',
+                            fontWeight: '500',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {file.name}
+                          </div>
+                          <div style={{
+                            fontSize: '11px',
+                            color: '#6b7280'
+                          }}>
+                            {formatFileSize(file.size)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => removeAttachment(index)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            borderRadius: '4px',
+                            fontSize: '12px',
+                            marginLeft: '8px'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#fef2f2';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'none';
+                          }}
+                          title="Remove attachment"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Original Message Reference (when replying) */}
+              {isReplying && (() => {
+                const originalMessage = normalizedMessages.find(msg => msg.id === replyingToMessageId);
+                if (!originalMessage) return null;
+                
+                return (
+                  <div style={{
+                    padding: '12px',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    color: '#374151',
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    border: '1px solid #e5e7eb',
+                    marginBottom: '16px'
+                  }}>
+                    {originalMessage.htmlBody ? (
+                      <div dangerouslySetInnerHTML={{ 
+                        __html: DOMPurify.sanitize(cleanEmailThreadHeaders(originalMessage.htmlBody)) 
+                      }} />
+                    ) : (
+                      <div>{cleanEmailThreadHeaders(originalMessage.body || 'No content')}</div>
+                    )}
+                  </div>
+                );
+              })()}
+              
               <EmailReplyEditor
                 ref={emailEditorRef}
                 editorState={emailEditorState}
@@ -2540,6 +3313,10 @@ const MessageView: React.FC<MessageViewProps> = ({
                 setIsReplying(false);
                 setShowTonalityWarning(false); // Reset warning when canceling
                 setReplyBcc(''); // Reset BCC field
+                setShowCcBcc(false); // Reset CC/BCC visibility
+                setReplyingToMessageId(null); // Reset replying to message
+                setAttachments([]);
+                setUploadProgress({});
               }}
               style={{
                 background: '#f3f4f6',
@@ -2556,26 +3333,48 @@ const MessageView: React.FC<MessageViewProps> = ({
             </button>
             <button
               onClick={handleReplySend}
+              disabled={isReplySending}
               style={{
-                background: '#DE1785',
+                background: isReplySending ? '#9ca3af' : '#DE1785',
                 color: '#fff',
                 padding: '12px 24px',
                 border: 'none',
                 borderRadius: 8,
                 fontSize: '14px',
-                cursor: 'pointer',
-                boxShadow: '0 2px 5px rgba(222,23,133,0.3)',
+                cursor: isReplySending ? 'not-allowed' : 'pointer',
+                boxShadow: isReplySending ? 'none' : '0 2px 5px rgba(222,23,133,0.3)',
                 fontWeight: '600',
-                transition: 'background 0.2s'
+                transition: 'background 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = '#c1166a';
+                if (!isReplySending) {
+                  e.currentTarget.style.background = '#c1166a';
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = '#DE1785';
+                if (!isReplySending) {
+                  e.currentTarget.style.background = '#DE1785';
+                }
               }}
             >
-              Send Reply
+              {isReplySending ? (
+                <>
+                  <div style={{
+                    width: '14px',
+                    height: '14px',
+                    border: '2px solid #fff',
+                    borderTop: '2px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite'
+                  }} />
+                  Sending...
+                </>
+              ) : (
+                'Send Reply'
+              )}
             </button>
           </div>
         </div>
@@ -2805,6 +3604,15 @@ const MessageView: React.FC<MessageViewProps> = ({
         )}
       </div>
 
+      {/* CSS for loading spinner */}
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
 
     </div>
     </>

@@ -487,10 +487,45 @@ const ThreadList: React.FC<Props> = ({
       clearTimeout(scrollTimeoutRef.current);
     }
 
-    // Hide scrollbar after 500ms of no scrolling
+    // Hide scrollbar after 3000ms of no scrolling (increased for more forgiving UX)
     scrollTimeoutRef.current = setTimeout(() => {
       container.classList.remove('scrolling');
-    }, 500);
+    }, 3000);
+  };
+
+  // Handle mouse enter on scroll container
+  const handleMouseEnter = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when hovering
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse move to keep scrollbar visible during interaction
+  const handleMouseMove = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    container.classList.add('scrolling');
+    
+    // Clear any existing timeout when moving mouse
+    if (scrollTimeoutRef.current) {
+      clearTimeout(scrollTimeoutRef.current);
+    }
+  };
+
+  // Handle mouse leave on scroll container
+  const handleMouseLeave = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    // Only hide if not actively scrolling - longer delay for easier scrollbar interaction
+    scrollTimeoutRef.current = setTimeout(() => {
+      container.classList.remove('scrolling');
+    }, 2000);
   };
 
   // Effects
@@ -754,18 +789,25 @@ const ThreadList: React.FC<Props> = ({
       {/* Custom scrollbar styles */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
-          width: 4px;
+          width: 6px;
         }
         .custom-scrollbar::-webkit-scrollbar-track {
           background: transparent;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: transparent;
-          border-radius: 2px;
+          background: rgba(222, 23, 133, 0.4);
+          border-radius: 3px;
           min-height: 40px;
+          opacity: 0;
+          transition: opacity 0.15s ease, background 0.2s ease;
         }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb,
         .custom-scrollbar.scrolling::-webkit-scrollbar-thumb {
+          opacity: 1;
           background: #DE1785;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(222, 23, 133, 0.8);
         }
         .custom-scrollbar.scrolling::-webkit-scrollbar-thumb:hover {
           background: #C91476;
@@ -800,7 +842,8 @@ const ThreadList: React.FC<Props> = ({
         display: 'flex',
         flexDirection: 'column',
         background: '#FFFBFA',
-        position: 'relative'
+        position: 'relative',
+        paddingTop: '20px' // Add top padding to push content down
       }}>
 
         {/* Compose Button - Moved to top */}
@@ -1356,6 +1399,7 @@ const ThreadList: React.FC<Props> = ({
         {/* Thread List Header */}
         <div style={{
           padding: '10px',
+          paddingTop: '20px', // Add extra top padding for spacing from status bar
           background: '#FBF7F7' // Match the thread list container background
         }}>
           <div style={{
@@ -1620,6 +1664,9 @@ const ThreadList: React.FC<Props> = ({
         <div 
           ref={scrollContainerRef}
           onScroll={handleScroll}
+          onMouseEnter={handleMouseEnter}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
           style={{
             flex: 1,
             overflowY: 'auto',
@@ -1800,18 +1847,37 @@ const ThreadList: React.FC<Props> = ({
                     )}
                     
                     {/* Secondary tags */}
-                    {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.slice(0, 3).map((tag: string, index: number) => (
+                    {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.slice(0, 3).map((tag: string, index: number) => {
+                      // Color mapping for different secondary tags
+                      const getTagColors = (tagName: string) => {
+                        const tagColors = {
+                          'urgent': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                          'vip': { bg: '#F3E8FF', color: '#7C3AED', border: '#7C3AED' }, // Purple
+                          'complex': { bg: '#FEF3C7', color: '#D97706', border: '#D97706' }, // Amber
+                          'enterprise': { bg: '#ECFDF5', color: '#059669', border: '#059669' }, // Green
+                          'follow-up': { bg: '#EFF6FF', color: '#2563EB', border: '#2563EB' }, // Blue
+                          'escalated': { bg: '#FEF2F2', color: '#DC2626', border: '#DC2626' }, // Red
+                          'deleted': { bg: '#F3F4F6', color: '#6B7280', border: '#6B7280' }, // Gray
+                        };
+                        return tagColors[tagName.toLowerCase()] || { bg: '#FDE7F1', color: '#DE1785', border: '#DE1785' }; // Default pink
+                      };
+                      
+                      const colors = getTagColors(tag);
+                      
+                      return (
                       <div key={index} style={{
                         fontSize: '10px',
-                        color: '#DE1785',
-                        background: '#FDE7F1',
+                          color: colors.color,
+                          background: colors.bg,
+                          border: `1px solid ${colors.border}`,
                         padding: '2px 6px',
                         borderRadius: '10px',
                         display: 'inline-block'
                       }}>
                         {tag}
                       </div>
-                    ))}
+                      );
+                    })}
                     
                     {/* Show +X more if there are more than 3 secondary tags */}
                     {Array.isArray(flow?.secondaryTags) && flow.secondaryTags.length > 3 && (

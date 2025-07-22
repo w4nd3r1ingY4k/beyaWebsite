@@ -1,0 +1,22 @@
+{
+  "name": "beya-attachment-download",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.js",
+  "directories": {
+    "handlers": "handlers"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Lambda function to download Gmail attachments using Pipedream proxy",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.817.0",
+    "@aws-sdk/lib-dynamodb": "^3.817.0",
+    "@pipedream/sdk": "^1.6.9",
+    "node-fetch": "^2.6.7"
+  }
+} 

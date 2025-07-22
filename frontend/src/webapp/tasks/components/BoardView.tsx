@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, Filter, Search } from 'lucide-react';
-import styles from '@/styles/BoardView.module.css';
+import styles from '../../../styles/BoardView.module.css';
 import { Board, Task, TaskStatus } from '@/types/taskManagement';
 import KanbanView from './KanbanView';
 import ListView from './ListView';
@@ -9,12 +9,12 @@ import TaskForm from './TaskForm';
 
 interface BoardViewProps {
   board: Board;
-  tasks: Task[];
+  tasks: any[];
   viewMode: 'kanban' | 'list' | 'calendar';
-  onSelectTask: (task: Task) => void;
-  onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
+  onSelectTask: (task: any) => void;
+  onUpdateTask: (taskId: string, updates: Partial<any>) => void;
   onDeleteTask: (taskId: string) => void;
-  onCreateTask: (taskData: Partial<Task>) => void;
+  onCreateTask: (taskData: Partial<any>) => void;
 }
 
 const BoardView: React.FC<BoardViewProps> = ({

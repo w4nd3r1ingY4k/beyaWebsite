@@ -179,12 +179,16 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       
       // Preload last messages for all flows for better preview
       if (!fromPolling && updatedFlows.length > 0) {
-        console.log('🔄 Preloading last messages for all flows...');
+        console.log('🔄 Smart preloading: loading first 15 visible conversations...');
         
-        // Process flows in batches to avoid overwhelming the API
-        const batchSize = 10;
-        for (let i = 0; i < updatedFlows.length; i += batchSize) {
-          const batch = updatedFlows.slice(i, i + batchSize);
+        // Only preload first 15 conversations (what's visible on screen)
+        const visibleFlows = updatedFlows.slice(0, 15);
+        const remainingFlows = updatedFlows.slice(15);
+        
+        // Process visible flows immediately in smaller batches
+        const batchSize = 5;
+        for (let i = 0; i < visibleFlows.length; i += batchSize) {
+          const batch = visibleFlows.slice(i, i + batchSize);
           
           // Process batch in parallel
           const batchPromises = batch.map(async (flow: any) => {
@@ -253,12 +257,91 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           }
           
           // Small delay between batches to be respectful to the API
-          if (i + batchSize < updatedFlows.length) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+          if (i + batchSize < visibleFlows.length) {
+            await new Promise(resolve => setTimeout(resolve, 50));
           }
         }
         
-        console.log('✅ Finished preloading last messages');
+        console.log('✅ Finished preloading visible conversations');
+        
+        // Progressive loading: Load remaining conversations in background over time
+        if (remainingFlows.length > 0) {
+          console.log(`🔄 Starting background loading of ${remainingFlows.length} remaining conversations...`);
+          
+          setTimeout(async () => {
+            const backgroundBatchSize = 3; // Smaller batches for background loading
+            
+            for (let i = 0; i < remainingFlows.length; i += backgroundBatchSize) {
+              const batch = remainingFlows.slice(i, i + backgroundBatchSize);
+              
+              const batchPromises = batch.map(async (flow: any) => {
+                try {
+                  const response = await fetch(`${apiBase}/webhook/threads/${encodeURIComponent(flow.flowId)}?userId=${encodeURIComponent(user!.userId)}`);
+                  if (response.ok) {
+                    const data = await response.json();
+                    const messagesArray = data.messages || [];
+                    
+                    const filteredMessages = messagesArray.filter((msg: any) => 
+                      msg.MessageId !== 'THREAD_SUMMARY' && 
+                      msg.Timestamp !== 0 && 
+                      msg.Direction
+                    );
+                    
+                    if (filteredMessages.length > 0) {
+                      const sortedMessages = [...filteredMessages].sort((a, b) => {
+                        const timestampA = a.Timestamp || a.timestamp || 0;
+                        const timestampB = b.Timestamp || b.timestamp || 0;
+                        return timestampB - timestampA;
+                      });
+                      
+                      const lastMessage = sortedMessages[0];
+                      let messageContent = lastMessage.Body || lastMessage.Text || lastMessage.body || lastMessage.text || '';
+                      
+                      if (lastMessage.Channel === 'email' || lastMessage.channel === 'email') {
+                        const subject = lastMessage.Subject || lastMessage.subject || '';
+                        if (subject && (!messageContent || messageContent.length > 100)) {
+                          messageContent = subject;
+                        } else if (messageContent.length > 100) {
+                          messageContent = messageContent.substring(0, 100) + '...';
+                        }
+                      }
+                      
+                      if (messageContent.trim()) {
+                        const direction = lastMessage.Direction || lastMessage.direction || 'unknown';
+                        const indicator = direction === 'outgoing' ? '➤ ' : '← ';
+                        const finalContent = `${indicator}${messageContent.trim()}`;
+                        
+                        return { flowId: flow.flowId, lastMessage: finalContent };
+                      }
+                    }
+                  }
+                } catch (err) {
+                  // Silent fail for background loading
+                }
+                return null;
+              });
+              
+              const batchResults = await Promise.all(batchPromises);
+              const validResults = batchResults.filter(result => result !== null);
+              
+              if (validResults.length > 0) {
+                setFlows(prevFlows => 
+                  prevFlows.map(flow => {
+                    const result = validResults.find(r => r.flowId === flow.flowId);
+                    return result ? { ...flow, lastMessage: result.lastMessage } : flow;
+                  })
+                );
+              }
+              
+              // Longer delay for background loading to not impact user experience
+              if (i + backgroundBatchSize < remainingFlows.length) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+            }
+            
+            console.log('✅ Finished background loading of all conversations');
+          }, 1000); // Start background loading 1 second after visible ones are done
+        }
       }
       
       // Load discussions using the existing function
@@ -303,7 +386,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         }
         
         const participantNames = discussion.participants.map(id => 
-          id === user.userId ? (user.displayName || 'You') : `User ${id.slice(-4)}`
+          id === user.userId || id === user.subscriber_email ? (user.displayName || 'You') : id
         );
         
         const finalStatus = discussion.status || 'open'; // Default to 'open' if no status
@@ -589,18 +672,26 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     
     setParticipantsLoading(true);
     try {
-      const namePromises = participantIds.map(async (userId: string) => {
-        if (participantNames[userId]) {
-          return { userId, name: participantNames[userId] };
+      const namePromises = participantIds.map(async (participantId: string) => {
+        if (participantNames[participantId]) {
+          return { userId: participantId, name: participantNames[participantId] };
+        }
+        
+        // Check if participant is already an email address
+        if (participantId.includes('@')) {
+          // It's an email address, display it directly
+          return { userId: participantId, name: participantId };
         }
         
         try {
-          const userInfo = await getUserById(userId);
-          const displayName = userInfo.displayName || userInfo.subscriber_email || `User ${userId.slice(-4)}`;
-          return { userId, name: displayName };
+          // It might be a user ID, try to fetch user info
+          const userInfo = await getUserById(participantId);
+          const displayName = userInfo.displayName || userInfo.subscriber_email || participantId;
+          return { userId: participantId, name: displayName };
         } catch (error) {
-          console.error(`Error fetching user ${userId}:`, error);
-          return { userId, name: `User ${userId.slice(-4)}` };
+          console.error(`Error fetching user ${participantId}:`, error);
+          // If it's not an email and getUserById fails, it might still be some contact identifier
+          return { userId: participantId, name: participantId };
         }
       });
       
@@ -690,7 +781,8 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
     htmlContent: string,
     originalMessageId?: string,
     cc?: string[],
-    bcc?: string[]
+    bcc?: string[],
+    attachments?: File[]
   ) {
     // IMPORTANT: Extract actual email address from flowId if needed (same logic as WhatsApp)
     let actualRecipient = to;
@@ -728,6 +820,45 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       payload.bcc = bcc;
     }
 
+    // Handle attachments if provided
+    if (attachments && attachments.length > 0) {
+      // Use FormData for file uploads
+      const formData = new FormData();
+      
+      // Add text fields
+      formData.append('to', actualRecipient);
+      formData.append('subject', subject);
+      formData.append('text', plainText);
+      formData.append('html', htmlContent);
+      formData.append('userId', user!.userId);
+      
+      if (originalMessageId) {
+        formData.append('originalMessageId', originalMessageId);
+      }
+      if (cc && cc.length > 0) {
+        formData.append('cc', JSON.stringify(cc));
+      }
+      if (bcc && bcc.length > 0) {
+        formData.append('bcc', JSON.stringify(bcc));
+      }
+      
+      // Add attachments
+      attachments.forEach((file, index) => {
+        formData.append(`attachment_${index}`, file);
+      });
+      
+      const res = await fetch(`${apiBase}/send/email`, {
+        method: 'POST',
+        body: formData, // No Content-Type header - browser will set multipart/form-data
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
+      return res.json();
+    }
+
+    // No attachments - use JSON
     const res = await fetch(`${apiBase}/send/email`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -804,7 +935,8 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           messageData.html || messageData.content, // HTML content
           messageData.originalMessageId, // Pass original Message-ID for threading
           messageData.cc, // CC recipients
-          messageData.bcc // BCC recipients
+          messageData.bcc, // BCC recipients
+          messageData.attachments // File attachments
         );
       }
       
@@ -1660,10 +1792,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       return [];
     }
     
-    return currentFlow.participants.map((userId: string) => ({
-      userId,
-      name: participantNames[userId] || `User ${userId.slice(-4)}`,
-      isCurrentUser: userId === user?.userId
+    return currentFlow.participants.map((participantId: string) => ({
+      userId: participantId,
+      name: participantNames[participantId] || participantId, // Show the actual email/identifier instead of "User XXXX"
+      isCurrentUser: participantId === user?.userId || participantId === user?.subscriber_email
     }));
   };
 
@@ -1905,28 +2037,27 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
       <div style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
         background: '#f9fafb',
         width: '100%',
         position: 'relative',
         overflow: 'hidden'
       }}>
         {/* Status Filter Bar positioned absolutely to span ThreadList's right column + MessageView */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: '179px', // Adjusted to overlap by 1px for seamless border connection
-        right: 0, // Extend to the end
-        padding: '0 16px', // Uniform padding for vertical centering
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottom: '1px solid #e5e7eb',
-        borderLeft: '1px solid #e5e7eb', // Add left border to connect with vertical line
-        background: '#FFFBFA',
-        zIndex: 1002,
-        height: '60px', // Fixed height for the status bar
-        boxSizing: 'border-box'
+              <div style={{
+          position: 'absolute',
+          top: '15px', // Small gap from the top edge
+          left: '179px', // Adjusted to overlap by 1px for seamless border connection
+          right: 0, // Extend to the end
+          padding: '0 16px', // Uniform padding for vertical centering
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid #e5e7eb',
+          borderLeft: '1px solid #e5e7eb', // Add left border to connect with vertical line
+          background: '#FFFBFA',
+          zIndex: 1002,
+          height: '60px', // Fixed height for the status bar
+          boxSizing: 'border-box'
       }}>
         {currentView === 'discussions' ? (
           <div style={{

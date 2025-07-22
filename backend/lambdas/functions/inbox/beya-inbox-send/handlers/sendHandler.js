@@ -16,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { createBackendClient } from "@pipedream/sdk/server";
 import fetch from 'node-fetch';
+import Busboy from 'busboy';
 
 // ─── 0) Load & validate env vars ──────────────────────────────────────────────
 const REGION      = process.env.AWS_REGION;
@@ -38,9 +39,73 @@ const docClient = DynamoDBDocumentClient.from(ddbClient, {
 // ─── 1b) EventBridge client ──────────────────────────────────────────────────
 const eventBridgeClient = new EventBridgeClient({ region: REGION });
 
-// ─── 1a) Helper: fetch the first‐incoming MessageId for a given ThreadId ──────
+// ─── 1c) Multipart form parser ──────────────────────────────────────────────
+async function parseMultipartForm(event) {
+  return new Promise((resolve, reject) => {
+    const fields = {};
+    const files = [];
+    
+    // Extract boundary from content-type header
+    const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
+    const boundary = contentType.split('boundary=')[1];
+    
+    if (!boundary) {
+      reject(new Error('No boundary found in multipart content-type'));
+      return;
+    }
+    
+    // Create busboy instance
+    const busboy = Busboy({
+      headers: {
+        'content-type': contentType
+      }
+    });
+    
+    // Handle fields
+    busboy.on('field', (fieldname, value) => {
+      fields[fieldname] = value;
+    });
+    
+    // Handle files
+    busboy.on('file', (fieldname, file, info) => {
+      const { filename, encoding, mimeType } = info;
+      const chunks = [];
+      
+      file.on('data', (chunk) => {
+        chunks.push(chunk);
+      });
+      
+      file.on('end', () => {
+        files.push({
+          fieldname,
+          filename,
+          mimeType,
+          encoding,
+          buffer: Buffer.concat(chunks)
+        });
+      });
+    });
+    
+    // Handle completion
+    busboy.on('finish', () => {
+      resolve({ fields, files });
+    });
+    
+    busboy.on('error', reject);
+    
+    // Process the body
+    const bodyBuffer = event.isBase64Encoded 
+      ? Buffer.from(event.body, 'base64')
+      : Buffer.from(event.body);
+      
+    busboy.end(bodyBuffer);
+  });
+}
+
+// ─── 1a) Helper: fetch any MessageId for a given ThreadId (incoming first, then outgoing) ──────
 async function getFirstIncomingMessageId(threadId) {
-  const params = {
+  // First try incoming messages (preferred for replies)
+  let params = {
     TableName: MSG_TABLE,
     KeyConditionExpression:    "ThreadId = :th",
     FilterExpression:          "Direction = :dir",
@@ -52,25 +117,34 @@ async function getFirstIncomingMessageId(threadId) {
     Limit: 1
   };
 
-  const { Items } = await docClient.send(new QueryCommand(params));
-  if (Items && Items.length > 0) {
-    const message = Items[0];
+  let result = await docClient.send(new QueryCommand(params));
+  
+  // If no incoming messages, try outgoing messages (to continue conversations you started)
+  if (!result.Items || result.Items.length === 0) {
+    console.log('📧 No incoming messages found, checking outgoing messages for threading...');
+    params.ExpressionAttributeValues[":dir"] = "outgoing";
+    result = await docClient.send(new QueryCommand(params));
+  }
+
+  if (result.Items && result.Items.length > 0) {
+    const message = result.Items[0];
     
-    // First, try to get the original email Message-ID from headers
-    if (message.Headers && message.Headers['Message-ID']) {
-      console.log('📧 Found original Message-ID in headers:', message.Headers['Message-ID']);
-      return message.Headers['Message-ID'];
+    // Priority 1: Get the original email Message-ID from headers (best for threading)
+    if (message.Headers && message.Headers['Message-ID'] && message.Headers['Message-ID'].S) {
+      const messageId = message.Headers['Message-ID'].S;
+      console.log('📧 Found Message-ID in headers:', messageId, 'from', message.Direction, 'message');
+      return messageId;
     }
     
-    // Fallback: check if there's a MessageId in the Result object (for SES)
+    // Priority 2: Check Result object for Gmail/SES Message-ID
     if (message.Result && message.Result.MessageId) {
-      console.log('📧 Found Message-ID in Result:', message.Result.MessageId);
+      console.log('📧 Found Message-ID in Result:', message.Result.MessageId, 'from', message.Direction, 'message');
       return message.Result.MessageId;
     }
     
-    // Last resort: use the MessageId field (our UUID)
+    // Priority 3: Use internal MessageId (UUID) - still better than nothing for threading
     if (message.MessageId) {
-      console.log('📧 Using fallback MessageId (UUID):', message.MessageId);
+      console.log('📧 Using internal MessageId for threading:', message.MessageId, 'from', message.Direction, 'message');
       return message.MessageId;
     }
   }
@@ -79,9 +153,10 @@ async function getFirstIncomingMessageId(threadId) {
   return null;
 }
 
-// ─── 1b) Helper: fetch the most recent incoming MessageId for better threading ──────
+// ─── 1b) Helper: fetch the most recent valid MessageId for better threading (incoming first, then outgoing) ──────
 async function getLastIncomingMessageId(threadId) {
-  const params = {
+  // First try incoming messages (preferred for replies)
+  let params = {
     TableName: MSG_TABLE,
     KeyConditionExpression:    "ThreadId = :th",
     FilterExpression:          "Direction = :dir",
@@ -90,28 +165,45 @@ async function getLastIncomingMessageId(threadId) {
       ":dir": "incoming"
     },
     ScanIndexForward: false, // descending by Timestamp (most recent first)
-    Limit: 1
+    Limit: 5 // Get more to find a valid Message-ID
   };
 
-  const { Items } = await docClient.send(new QueryCommand(params));
-  if (Items && Items.length > 0) {
-    const message = Items[0];
-    
-    // Same logic as above but for the most recent message
-    if (message.Headers && message.Headers['Message-ID']) {
-      console.log('📧 Found recent Message-ID in headers:', message.Headers['Message-ID']);
-      return message.Headers['Message-ID'];
+  let result = await docClient.send(new QueryCommand(params));
+  
+  // If no incoming messages, try outgoing messages (to continue conversations you started)
+  if (!result.Items || result.Items.length === 0) {
+    console.log('📧 No recent incoming messages found, checking outgoing messages for threading...');
+    params.ExpressionAttributeValues[":dir"] = "outgoing";
+    result = await docClient.send(new QueryCommand(params));
+  }
+
+  if (result.Items && result.Items.length > 0) {
+    // Try to find a valid Message-ID (should look like an email Message-ID)
+    for (const message of result.Items) {
+      // Priority 1: Get email Message-ID from headers (best for threading)
+      if (message.Headers && message.Headers['Message-ID'] && message.Headers['Message-ID'].S) {
+        const messageId = message.Headers['Message-ID'].S;
+        // Validate that it looks like a real email Message-ID (contains @ or <)
+        if (messageId.includes('@') || messageId.includes('<')) {
+          console.log('📧 ✅ Found valid Message-ID in headers:', messageId, 'from', message.Direction, 'message');
+          return messageId;
+        }
+      }
     }
     
+    // If no valid Message-ID found, fall back to first message
+    const message = result.Items[0];
+    
+    // Priority 2: Check Result object for Gmail/SES Message-ID
     if (message.Result && message.Result.MessageId) {
-      console.log('📧 Found recent Message-ID in Result:', message.Result.MessageId);
-      return message.Result.MessageId;
+      // Validate this too
+      if (message.Result.MessageId.includes('@') || message.Result.MessageId.includes('<')) {
+        console.log('📧 ⚠️ Fallback: Found valid Message-ID in Result:', message.Result.MessageId, 'from', message.Direction, 'message');
+        return message.Result.MessageId;
+      }
     }
     
-    if (message.MessageId) {
-      console.log('📧 Using fallback recent MessageId (UUID):', message.MessageId);
-      return message.MessageId;
-    }
+    // Priority 3: Don't use internal MessageIds for email threading as they're not valid email Message-IDs
   }
   
   console.log('📧 No recent Message-ID found for threadId:', threadId);
@@ -147,17 +239,55 @@ export async function handler(event) {
     };
   }
 
-  // 3c) Extract path‐parameter and JSON payload
+  // 3c) Extract path‐parameter and parse payload (JSON or multipart)
   const channel = event.pathParameters?.channel; // "whatsapp" or "email"
   let payload;
-  try {
-    payload = JSON.parse(event.body || '{}');
-  } catch {
-    return {
-      statusCode: 400,
-      headers:    CORS,
-      body:       'Invalid JSON'
-    };
+  let attachments = [];
+
+  // Check if this is multipart/form-data
+  const contentType = event.headers['content-type'] || event.headers['Content-Type'] || '';
+  
+  if (contentType.includes('multipart/form-data')) {
+    // Parse multipart form data
+    try {
+      const result = await parseMultipartForm(event);
+      payload = result.fields;
+      attachments = result.files;
+      
+      // Parse JSON fields that were stringified
+      if (payload.cc && typeof payload.cc === 'string') {
+        try {
+          payload.cc = JSON.parse(payload.cc);
+        } catch {
+          payload.cc = [];
+        }
+      }
+      if (payload.bcc && typeof payload.bcc === 'string') {
+        try {
+          payload.bcc = JSON.parse(payload.bcc);
+        } catch {
+          payload.bcc = [];
+        }
+      }
+    } catch (err) {
+      console.error('Multipart parsing error:', err);
+      return {
+        statusCode: 400,
+        headers: CORS,
+        body: JSON.stringify({ error: 'Invalid multipart data', details: err.message })
+      };
+    }
+  } else {
+    // Parse as JSON
+    try {
+      payload = JSON.parse(event.body || '{}');
+    } catch {
+      return {
+        statusCode: 400,
+        headers:    CORS,
+        body:       'Invalid JSON'
+      };
+    }
   }
 
   // pull out the usual fields + optional originalMessageId
@@ -175,6 +305,13 @@ export async function handler(event) {
     templateLanguage,
     templateComponents
   } = payload;
+  
+  // Log attachment info
+  if (attachments && attachments.length > 0) {
+    console.log(`📎 Received ${attachments.length} attachments:`, 
+      attachments.map(f => ({ filename: f.filename, size: f.buffer?.length || 0, mimeType: f.mimeType }))
+    );
+  }
 
   // 3d) Validate required fields
   if (!channel || !to || !userId) {
@@ -336,12 +473,76 @@ export async function handler(event) {
 
       // ➋ If no originalMessageId passed, try to find the best message to reply to
       if (!replyId) {
-        // First try the most recent incoming message for better threading
-        replyId = await getLastIncomingMessageId(to);
-        
-        // If no recent message, try the first incoming message
-        if (!replyId) {
-          replyId = await getFirstIncomingMessageId(to);
+        // Search for existing conversations with this recipient
+        try {
+          // Try a broader search first - just find any email messages for this user
+          const conversationSearch = {
+            TableName: MSG_TABLE,
+            FilterExpression: 'userId = :userId AND Channel = :channel',
+            ExpressionAttributeValues: {
+              ':userId': userId,
+              ':channel': 'email'
+            }
+          };
+          
+          console.log(`📧 Searching for any existing email messages for user...`);
+          const existingMessages = await docClient.send(new ScanCommand(conversationSearch));
+          
+          console.log(`📧 Found ${existingMessages.Items?.length || 0} email messages for user`);
+          
+          if (existingMessages.Items && existingMessages.Items.length > 0) {
+            // Filter for messages involving this recipient (handle display name formats)
+            const relevantMessages = existingMessages.Items.filter(msg => {
+              // Extract email from "Display Name <email@domain.com>" format
+              const extractEmail = (emailField) => {
+                if (!emailField) return '';
+                if (typeof emailField === 'string') {
+                  const match = emailField.match(/<(.+)>/);
+                  return match ? match[1] : emailField;
+                }
+                return emailField;
+              };
+              
+              const fromEmail = extractEmail(msg.From);
+              const fromMatch = fromEmail === to;
+              
+              // Handle To field (can be array or string)
+              let toMatch = false;
+              if (Array.isArray(msg.To)) {
+                toMatch = msg.To.some(toAddr => extractEmail(toAddr) === to);
+              } else {
+                toMatch = extractEmail(msg.To) === to;
+              }
+              
+              return fromMatch || toMatch;
+            });
+            
+            console.log(`📧 Found ${relevantMessages.length} messages involving ${to}`);
+            
+            if (relevantMessages.length > 0) {
+              // Sort by timestamp to get most recent first
+              const sortedMessages = relevantMessages.sort((a, b) => b.Timestamp - a.Timestamp);
+              const recentMessage = sortedMessages[0];
+              const threadId = recentMessage.ThreadId;
+              console.log(`📧 Found existing conversation thread: ${threadId}`);
+              
+              // Now look for Message-IDs within this specific thread
+              replyId = await getLastIncomingMessageId(threadId);
+              
+              // If no recent message, try the first incoming message
+              if (!replyId) {
+                replyId = await getFirstIncomingMessageId(threadId);
+              }
+              
+              console.log(`📧 Message-ID lookup result: ${replyId}`);
+            } else {
+              console.log(`📧 No messages found involving ${to}`);
+            }
+          } else {
+            console.log(`📧 No email messages found for user`);
+          }
+        } catch (error) {
+          console.log(`⚠️ Error searching for existing conversation:`, error.message);
         }
       }
 
@@ -365,7 +566,8 @@ export async function handler(event) {
               cc: cc || [],
               bcc: bcc || [],
               subject,
-              body: html || text
+              body: html || text,
+              attachments: attachments
             });
           } else {
             resp = await gmailSender.sendEmail(userId, {
@@ -373,7 +575,8 @@ export async function handler(event) {
               cc: cc || [],
               bcc: bcc || [],
               subject,
-              body: html || text
+              body: html || text,
+              attachments: attachments
             });
           }
           console.log('✅ Email sent via Gmail MCP');
@@ -406,23 +609,100 @@ export async function handler(event) {
         
         // Search for the original message to get its ThreadId
         try {
+          // Clean up the Message-ID (remove < > brackets if present)
+          const cleanReplyId = replyId.replace(/^<|>$/g, '');
+          
+          console.log(`🔍 Searching for original message with Message-ID: ${replyId}`);
+          console.log(`🔍 Clean Message-ID: ${cleanReplyId}`);
+          
+          // Use robust Message-ID search that handles different storage patterns
           const originalMessageQuery = {
             TableName: MSG_TABLE,
-            FilterExpression: 'userId = :userId AND (Headers.#msgId = :replyId OR MessageId = :replyId)',
+            FilterExpression: 'userId = :userId AND (Headers.#msgId = :messageId OR Headers.#msgId = :messageIdWithBrackets OR Headers.#msgId = :cleanMessageId OR MessageId = :messageId OR MessageId = :cleanMessageId)',
             ExpressionAttributeNames: {
               '#msgId': 'Message-ID'
             },
             ExpressionAttributeValues: {
               ':userId': userId,
-              ':replyId': replyId
+              ':messageId': replyId,                    // Original format with brackets
+              ':messageIdWithBrackets': `<${cleanReplyId}>`, // Ensure brackets
+              ':cleanMessageId': cleanReplyId           // Without brackets
             }
           };
           
-          const originalResult = await docClient.send(new ScanCommand(originalMessageQuery));
-          if (originalResult.Items && originalResult.Items.length > 0) {
-            const originalMessage = originalResult.Items[0];
+          console.log(`🔍 Message-ID search query:`, {
+            formats: {
+              original: replyId,
+              withBrackets: `<${cleanReplyId}>`,
+              clean: cleanReplyId,
+              core: cleanReplyId.split('@')[0]
+            }
+          });
+          
+          // Paginate through scan results to handle large tables
+          let originalMessage = null;
+          let lastEvaluatedKey = undefined;
+          let totalScanned = 0;
+          
+          do {
+            const scanParams = {
+              ...originalMessageQuery,
+              ExclusiveStartKey: lastEvaluatedKey
+            };
+            
+            const scanResult = await docClient.send(new ScanCommand(scanParams));
+            totalScanned += scanResult.ScannedCount || 0;
+            
+            if (scanResult.Items && scanResult.Items.length > 0) {
+              originalMessage = scanResult.Items[0];
+              break;
+            }
+            
+            lastEvaluatedKey = scanResult.LastEvaluatedKey;
+          } while (lastEvaluatedKey);
+          
+          console.log(`🔍 Search result: Scanned ${totalScanned} items, found ${originalMessage ? 1 : 0} matching messages`);
+          
+          if (originalMessage) {
             flowId = originalMessage.ThreadId;
-            console.log(`📧 Found original thread for reply: ${flowId}`);
+            console.log(`📧 ✅ Found original thread for reply: ${flowId}`, {
+              originalMessageId: originalMessage.MessageId,
+              originalSubject: originalMessage.Subject,
+              storedMessageId: originalMessage.Headers?.['Message-ID']
+            });
+          } else {
+            console.log(`📧 ❌ No matching messages found for Message-ID search after scanning ${totalScanned} items`);
+            
+            // FALLBACK: Try searching by any Gmail thread information we might have
+            console.log(`🔍 Attempting fallback search by subject and participants...`);
+            
+            const fallbackQuery = {
+              TableName: MSG_TABLE,
+              FilterExpression: 'userId = :userId AND Channel = :channel AND (contains(#to, :targetEmail) OR contains(#from, :targetEmail))',
+              ExpressionAttributeNames: {
+                '#to': 'To',
+                '#from': 'From'
+              },
+              ExpressionAttributeValues: {
+                ':userId': userId,
+                ':channel': 'email',
+                ':targetEmail': to // The email we're replying to
+              }
+            };
+            
+            const fallbackResult = await docClient.send(new ScanCommand(fallbackQuery));
+            
+            if (fallbackResult.Items && fallbackResult.Items.length > 0) {
+              // Sort by timestamp to get the most recent conversation
+              const sortedMessages = fallbackResult.Items.sort((a, b) => b.Timestamp - a.Timestamp);
+              const recentMessage = sortedMessages[0];
+              flowId = recentMessage.ThreadId;
+              console.log(`📧 🔄 Found thread via fallback search: ${flowId}`, {
+                fallbackMessageId: recentMessage.MessageId,
+                fallbackSubject: recentMessage.Subject,
+                messagesFound: fallbackResult.Items.length
+              });
+            }
           }
         } catch (error) {
           console.log(`⚠️ Could not find original thread for reply, creating new thread:`, error.message);
@@ -464,6 +744,16 @@ export async function handler(event) {
         CC:  cc || [],
         BCC: bcc || [],
         Subject: subject
+      }),
+      // ✅ STORE ATTACHMENTS for outgoing emails
+      ...(attachments && attachments.length > 0 && {
+        Attachments: attachments.map((attachment, index) => ({
+          Id: `outgoing-${messageId}-${index}`, // Generate unique ID for outgoing attachments
+          Name: attachment.filename || `attachment_${index}`,
+          MimeType: attachment.mimeType || 'application/octet-stream',
+          SizeBytes: attachment.buffer ? attachment.buffer.length : 0,
+          Url: `data:${attachment.mimeType || 'application/octet-stream'};base64,${attachment.buffer ? attachment.buffer.toString('base64') : ''}` // Store as data URL for outgoing attachments
+        }))
       })
     };
     
@@ -530,7 +820,7 @@ export async function handler(event) {
 
     // ─── 8) Build rawEvent envelope for context engine ────────────────────
     // Determine the sender email based on provider and available user info
-    let senderEmail = userEmailAddress || "gmail-user@connected.com";
+    let senderEmail = userEmailAddress;
     let provider = "gmail"; // Gmail MCP only
     
     if (channel === "whatsapp") {

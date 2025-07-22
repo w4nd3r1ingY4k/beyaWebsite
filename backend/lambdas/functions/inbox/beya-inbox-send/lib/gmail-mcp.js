@@ -1,4 +1,5 @@
 import { createBackendClient } from "@pipedream/sdk";
+import { GmailDirectClient } from "./gmail-direct.js";
 
 /**
  * Direct Gmail MCP Email Sender
@@ -14,6 +15,9 @@ export class GmailMCPSender {
       },
       projectId: process.env.PIPEDREAM_PROJECT_ID,
     });
+    
+    // Initialize direct Gmail client as well
+    this.directClient = new GmailDirectClient();
   }
 
   /**
@@ -69,7 +73,7 @@ export class GmailMCPSender {
    * Send email directly via Gmail MCP tool using Pipedream SDK
    */
   async sendEmail(userId, emailData) {
-    const { to, subject, body, cc = [], bcc = [], replyTo = null, threadId = null } = emailData;
+    const { to, subject, body, cc = [], bcc = [], replyTo = null, threadId = null, attachments = [] } = emailData;
 
     try {
       // Check if Gmail is connected
@@ -82,6 +86,28 @@ export class GmailMCPSender {
       const gmailAccount = await this.getGmailAccount(userId);
       console.log(`📧 Sending email via Gmail account:`, gmailAccount.name || gmailAccount.external_id);
 
+      // Try direct Gmail API first to avoid threadId issues
+      console.log(`🔧 Attempting Gmail send via direct API for user: ${userId}`);
+      
+      try {
+        const directResult = await this.directClient.sendEmail(userId, {
+          to,
+          subject,
+          body,
+          cc,
+          bcc,
+          replyTo,
+          attachments
+        });
+        
+        console.log(`✅ Email sent successfully via direct Gmail API!`);
+        return directResult;
+        
+      } catch (directError) {
+        console.log(`⚠️ Direct Gmail API failed, falling back to Pipedream:`, directError.message);
+        // Continue with Pipedream approach below
+      }
+      
       console.log(`🔧 Attempting Gmail send via Pipedream SDK for user: ${userId}`);
       
       // Use Pipedream SDK to execute the Gmail send action directly
@@ -102,13 +128,13 @@ export class GmailMCPSender {
         console.log(`📧 Adding BCC recipients: ${actionParams.bcc}`);
       }
 
-      // Only add inReplyTo if it's a valid Message-ID (not a UUID fallback)
-      if (replyTo && !replyTo.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)) {
-        // Use references field instead of inReplyTo to avoid Pipedream auto-threading issues
-        actionParams.references = replyTo;
-        console.log(`📧 Adding email references for threading: ${replyTo}`);
-      } else if (replyTo) {
-        console.log(`⚠️ Skipping UUID fallback replyTo: ${replyTo} - sending as new conversation`);
+      // Add proper threading headers for email replies
+      // NOTE: Pipedream Gmail action doesn't support inReplyTo parameter
+      // Threading must be done via direct Gmail API
+      if (replyTo && replyTo.includes('@') && replyTo.includes('<')) {
+        console.log(`📧 Have valid Message-ID for threading: ${replyTo} (but Pipedream doesn't support it)`);
+      } else {
+        console.log(`⚠️ No valid Message-ID for threading: ${replyTo}`);
       }
       
       // Never add threadId - let Gmail handle threading automatically via references
@@ -118,15 +144,25 @@ export class GmailMCPSender {
 
       console.log(`📧 Gmail action params:`, actionParams);
 
+      // Build final configuration - explicitly exclude threadId and threading params
+      const finalConfig = {
+        gmail: {
+          authProvisionId: gmailAccount.id,
+        },
+        ...actionParams
+      };
+      
+      // Remove problematic threading parameters
+      delete finalConfig.threadId;
+      delete finalConfig.references;
+      delete finalConfig.inReplyTo;
+      
+      console.log(`📧 Final Gmail action config (no auto-threading):`, JSON.stringify(finalConfig, null, 2));
+
       // Execute the Gmail send action using Pipedream SDK
       const result = await this.pd.runAction({
         actionId: "gmail-send-email",
-        configuredProps: {
-          gmail: {
-            authProvisionId: gmailAccount.id,
-          },
-          ...actionParams
-        },
+        configuredProps: finalConfig,
         externalUserId: userId,
       });
 
@@ -174,7 +210,8 @@ export class GmailMCPSender {
       subject, 
       body,
       cc = [],
-      bcc = []
+      bcc = [],
+      attachments = []
     } = replyData;
 
     // Ensure subject has "Re:" prefix if it's a reply
@@ -187,7 +224,8 @@ export class GmailMCPSender {
       cc,
       bcc,
       replyTo: originalMessageId,
-      threadId
+      threadId,
+      attachments
     });
   }
 }

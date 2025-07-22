@@ -77,20 +77,8 @@ function normalizeEmailAddress(addr) {
     return email.toLowerCase().trim();
 }
 
-/**
- * Utility: Clean email body (remove quoted replies, signatures, excessive whitespace)
- * (Simple regex-based for now; can be replaced with a library like talon for more accuracy)
- */
-function cleanEmailBody(body) {
-    if (!body) return '';
-    // Remove common reply separators
-    body = body.replace(/(^|\n)(On .+wrote:|From:.+\nSent:.+\nTo:.+\nSubject:.+|> .+\n|-----Original Message-----|--\s*\n).*/is, '');
-    // Remove signatures (simple heuristic: lines starting with -- or __)
-    body = body.replace(/(--|__)[\s\S]*$/, '');
-    // Collapse multiple newlines
-    body = body.replace(/\n{3,}/g, '\n\n');
-    return body.trim();
-}
+// Note: Email cleaning is now handled upstream in receiveEmailHandler
+// This ensures consistent quote removal across all email processing
 
 /**
  * Enhance rawEvent with natural language description and sentiment analysis
@@ -110,9 +98,13 @@ async function enhanceEventWithNL(rawEvent) {
     const inReplyTo = (headers['In-Reply-To'] || '').trim();
     const references = (headers['References'] || '').trim();
 
-    // Clean body text
+    // Body text should already be cleaned by receiveEmailHandler
+    // but we'll apply minimal cleaning as a safety net
     let bodyText = data.bodyText || '';
-    bodyText = cleanEmailBody(bodyText);
+    if (!data.quotesRemoved) {
+        // Only apply cleaning if it wasn't already done upstream
+        bodyText = bodyText.replace(/\n{3,}/g, '\n\n').trim();
+    }
 
     // Sentiment and NL description
     const [naturalLanguageDescription, comprehendSentiment] = await Promise.all([
