@@ -13,16 +13,21 @@ const env = (key: string, fallback: string) =>
 
 // Environment-based configuration using .env variables
 const config: APIConfig = {
-  // Integration service (port 2074)
-  API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'https://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2074'),
+  // API Gateway URL - handles both integrations and AI services
+  API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
   // AI service - use API Gateway by default
   AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
 };
 
 // Export individual endpoints for easy importing
 export const API_ENDPOINTS = {
-  // Main backend API
-  BACKEND_URL: env('REACT_APP_BACKEND_URL', 'http://localhost:2074'),
+  // Main backend API - using API Gateway that proxies to load balancer
+  BACKEND_URL: env('REACT_APP_BACKEND_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
+  
+  // Integrations/Polling endpoints - using API Gateway that proxies to load balancer port 2074
+  INTEGRATIONS_SETUP: env('REACT_APP_INTEGRATIONS_SETUP_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com/api/integrations/setup'),
+  WHATSAPP_CONNECT: env('REACT_APP_WHATSAPP_CONNECT_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com/api/whatsapp/connect'),
+  GMAIL_CONNECT: env('REACT_APP_GMAIL_CONNECT_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com/api/gmail/connect'),
   
   // AI Service with fallback chain
   AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL', '') || env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
@@ -60,6 +65,7 @@ export const API_ENDPOINTS = {
   DISCUSSIONS: env('REACT_APP_DISCUSSIONS_URL', 'https://45lcjloxwa2wt2hfmbltw42dqm0kiaue.lambda-url.us-east-1.on.aws'),
   FLOW_STATUS_UPDATE: env('REACT_APP_FLOW_STATUS_UPDATE_URL', 'https://spizyylamz3oavcuay5a3hrmsi0eairh.lambda-url.us-east-1.on.aws'),
   ATTACHMENT_DOWNLOAD: env('REACT_APP_ATTACHMENT_DOWNLOAD_URL', 'https://mmvron2wc6spg7edstenj7ls2m0iuesz.lambda-url.us-east-1.on.aws'),
+  COMPANIES_CRUD: env('REACT_APP_COMPANIES_CRUD_URL', 'https://23mtv7jewzzlsjwyzde3j6743a0upvho.lambda-url.us-east-1.on.aws'),
 
   // API Gateway endpoints for inbox/messaging services
   INBOX_API_BASE: env('REACT_APP_INBOX_API_BASE', 'https://8zsaycb149.execute-api.us-east-1.amazonaws.com/prod'),

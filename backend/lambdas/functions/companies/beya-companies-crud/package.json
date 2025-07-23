@@ -1,0 +1,17 @@
+{
+  "name": "beya-companies-crud",
+  "version": "1.0.0",
+  "description": "Company management CRUD operations",
+  "main": "handlers/companiesHandler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/lib-dynamodb": "^3.450.0",
+    "uuid": "^9.0.1"
+  },
+  "keywords": ["aws", "lambda", "dynamodb", "companies"],
+  "author": "Beya",
+  "license": "ISC"
+} 

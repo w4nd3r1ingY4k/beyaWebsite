@@ -85,7 +85,7 @@ const Homer: React.FC = () => {
 
     try {
       // Use the same AI endpoint pattern as CommandBChat
-      const response = await fetch('https://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2075/api/v1/query-with-ai', {
+      const response = await fetch('https://t3p58b0b30.execute-api.us-east-1.amazonaws.com/api/v1/query-with-ai', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -109,7 +109,7 @@ const Homer: React.FC = () => {
       
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.response || data.answer || 'I\'m sorry, I couldn\'t find relevant information for your query.',
+        content: data.aiResponse || data.response || data.answer || 'I\'m sorry, I couldn\'t find relevant information for your query.',
         sender: 'assistant',
         timestamp: new Date()
       };

@@ -15,6 +15,7 @@ const USERS_TABLE = process.env.USERS_TABLE; // e.g. "Users"
  *   - connectedAccounts (primary use case)
  *   - displayName
  *   - timezone
+ *   - companyId
  *   - lastLoginAt
  */
 exports.handler = async (event) => {
@@ -25,6 +26,7 @@ exports.handler = async (event) => {
       connectedAccounts = null,
       displayName = null,
       timezone = null,
+      companyId = null,
       updateLastLogin = false
     } = JSON.parse(event.body || "{}");
 
@@ -54,6 +56,11 @@ exports.handler = async (event) => {
     if (timezone) {
       updateExpressions.push('timezone = :tz');
       expressionAttributeValues[':tz'] = timezone;
+    }
+
+    if (companyId) {
+      updateExpressions.push('companyId = :cid');
+      expressionAttributeValues[':cid'] = companyId;
     }
 
     if (updateLastLogin) {

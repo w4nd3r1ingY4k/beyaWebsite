@@ -161,7 +161,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
     const fetchInsights = async () => {
       if (!user?.userId) return;
       try {
-        const res = await fetch(`https://beya-polling-nlb-3031d63a230444c0.elb.us-east-1.amazonaws.com:2075/api/v1/proactive-insights?userId=${user.userId}`);
+        const res = await fetch(`https://t3p58b0b30.execute-api.us-east-1.amazonaws.com/api/v1/proactive-insights?userId=${user.userId}`);
         const data = await res.json();
         if (data.insights) {
           setProactiveInsights(data.insights);
@@ -257,7 +257,7 @@ const CommandBChat: React.FC<CommandBChatProps> = ({ onClose, initialMessage, wi
                             'general-navigation';
 
       // Call enhanced semantic search API with context awareness
-      const response = await fetch(API_ENDPOINTS.QUERY_AI, {
+      const response = await fetch(API_ENDPOINTS.QUERY_WITH_AI, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
