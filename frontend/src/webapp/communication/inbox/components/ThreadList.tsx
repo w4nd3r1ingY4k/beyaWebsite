@@ -803,7 +803,7 @@ const ThreadList: React.FC<Props> = ({
         }
         .custom-scrollbar:hover::-webkit-scrollbar-thumb,
         .custom-scrollbar.scrolling::-webkit-scrollbar-thumb {
-          opacity: 1;
+          opacity: 0.5;
           background: #DE1785;
         }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
@@ -816,7 +816,7 @@ const ThreadList: React.FC<Props> = ({
           scrollbar-width: none;
         }
         .custom-scrollbar.scrolling {
-          scrollbar-width: thin;
+          scrollbar-width: none;
           scrollbar-color: #DE1785 transparent;
         }
       `}</style>
@@ -843,7 +843,7 @@ const ThreadList: React.FC<Props> = ({
         flexDirection: 'column',
         background: '#FFFBFA',
         position: 'relative',
-        paddingTop: '20px' // Add top padding to push content down
+        paddingTop: '20px' // Increased padding to clear the status bar (60px height + 20px buffer)
       }}>
 
         {/* Compose Button - Moved to top */}

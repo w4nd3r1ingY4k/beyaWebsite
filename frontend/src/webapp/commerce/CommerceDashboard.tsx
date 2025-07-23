@@ -19,35 +19,35 @@ const CommerceOptions: CommerceOption[] = [
     title: 'Payments',
     description: 'Manage transactions and payment methods',
     icon: <CreditCard size={32} />,
-    color: '#3B82F6'
+    color: '#DE1785'
   },
   {
     id: 'products',
     title: 'Products',
     description: 'Catalog and inventory management',
     icon: <Package size={32} />,
-    color: '#10B981'
+    color: '#DE1785'
   },
   {
     id: 'orders',
     title: 'Orders',
     description: 'Track and manage customer orders',
     icon: <ShoppingCart size={32} />,
-    color: '#F59E0B'
+    color: '#DE1785'
   },
   {
     id: 'website',
     title: 'Website',
     description: 'Build and customize your online store',
     icon: <Globe size={32} />,
-    color: '#8B5CF6'
+    color: '#DE1785'
   },
   {
     id: 'attribution',
     title: 'Attribution',
     description: 'Customer journeys, revenue attribution & business analytics',
     icon: <BarChart3 size={32} />,
-    color: '#EF4444'
+    color: '#DE1785'
   }
 ];
 
@@ -60,33 +60,16 @@ const CommerceDashboard: React.FC<CommerceDashboardProps> = ({ onOptionSelect })
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Header */}
-      <div style={{ marginBottom: '40px' }}>
-        <h1 style={{
-          fontSize: '32px',
-          fontWeight: '700',
-          color: '#1e293b',
-          margin: '0 0 8px 0',
-          letterSpacing: '-0.025em'
-        }}>
-          Commerce
-        </h1>
-        <p style={{
-          fontSize: '16px',
-          color: '#64748b',
-          margin: 0,
-          lineHeight: '1.5'
-        }}>
-          Manage your e-commerce operations and online presence
-        </p>
-      </div>
 
       {/* Grid of Options */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        marginTop: '60px', // Add top margin
         gap: '24px',
-        maxWidth: '1200px'
+        margin: '60px auto 0 auto', // Center the grid horizontally
+        width: '100%',
+        height: '1%'
       }}>
         {CommerceOptions.map((option) => (
           <div

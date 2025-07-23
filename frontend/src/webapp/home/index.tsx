@@ -149,6 +149,9 @@ const Homer: React.FC = () => {
       background: '#FFFBFA',
       display: 'flex',
       flexDirection: 'column',
+      paddingLeft: '120px', // Account for side menu (80px menu + 40px padding)
+      paddingRight: '40px', // Right padding
+      paddingTop: '60px', // Top padding for status bar
     }}>
       {/* Messages Area */}
       <div style={{
@@ -271,7 +274,6 @@ const Homer: React.FC = () => {
       <div style={{
         padding: '20px 60px 40px',
         background: '#FFFBFA',
-        borderTop: '1px solid #E5E7EB',
       }}>
         <div style={{
           maxWidth: '1200px',
@@ -328,18 +330,6 @@ const Homer: React.FC = () => {
             <Send size={18} />
           </button>
         </div>
-        
-        <p style={{
-          margin: '12px 0 0 0',
-          fontSize: '13px',
-          color: '#9CA3AF',
-          textAlign: 'center',
-          maxWidth: '1200px',
-          marginLeft: 'auto',
-          marginRight: 'auto',
-        }}>
-          Press Enter to send • Powered by Beya AI
-        </p>
       </div>
 
       {/* Animations */}

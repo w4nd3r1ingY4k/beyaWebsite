@@ -1,0 +1,18 @@
+{
+  "name": "beya-contacts-crud",
+  "version": "1.0.0",
+  "description": "Beya Contacts V2 CRUD Lambda Function",
+  "main": "handlers/contactsHandler.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.840.0",
+    "@aws-sdk/lib-dynamodb": "^3.840.0",
+    "uuid": "^11.1.0"
+  },
+  "keywords": ["beya", "contacts", "lambda", "aws"],
+  "author": "Beya Team",
+  "license": "ISC"
+} 

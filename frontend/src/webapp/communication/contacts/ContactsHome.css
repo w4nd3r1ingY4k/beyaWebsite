@@ -1,7 +1,7 @@
 /* Contacts Home Styling */
 .contacts-home {
   max-width: 1200px;
-  margin: 0 auto;
+  margin: 60px auto 0 auto; /* Add 60px top margin */
   padding: 24px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
 }

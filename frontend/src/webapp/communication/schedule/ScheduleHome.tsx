@@ -4,10 +4,8 @@ import { format, parse, startOfWeek, getDay, parseISO, addHours, startOfDay, end
 import { enUS } from 'date-fns/locale/en-US';
 import { X, Clock, CalendarIcon, MapPin, Users, Edit2, Trash2, Plus, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
-import { API_ENDPOINTS } from '../../../config/api';
-
-// ─────────── Constants ───────────
-const API_BASE = API_ENDPOINTS.SCHEDULE_API_BASE;
+import { useAuth } from '../../AuthContext';
+import contactsService, { Contact } from '../../../services/contactsService';
 
 // ─────────── Date-Fns Localizer Setup ───────────
 const locales = {
@@ -28,15 +26,6 @@ function formatDateKey(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-// ─────────── Types ───────────
-interface Contact {
-  contactId: string;
-  firstName: string;
-  lastName: string;
-  company?: string;
-  email?: string;
 }
 
 // ─────────── Enhanced Event Format ───────────
@@ -62,368 +51,6 @@ interface RBCEvent extends EventData {
   allDay: boolean;
 }
 
-// ─────────── Style Constants ───────────
-const styles = {
-  container: {
-    marginTop: '45px',
-    height: '100vh',
-    backgroundColor: '#F9FAFB',
-    display: 'flex',
-    flexDirection: 'column' as const,
-  },
-  header: {
-    backgroundColor: 'white',
-    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-    borderBottom: '1px solid #E5E7EB',
-    padding: '16px 0',
-  },
-  headerContent: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '0 24px',
-  },
-  headerTitle: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: '#111827',
-    margin: 0,
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  customerDropdown: {
-    position: 'relative' as const,
-    minWidth: '250px',
-  },
-  dropdownButton: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    padding: '8px 16px',
-    backgroundColor: 'white',
-    border: '1px solid #D1D5DB',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#374151',
-    transition: 'all 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  dropdownMenu: {
-    position: 'absolute' as const,
-    top: '100%',
-    left: 0,
-    right: 0,
-    marginTop: '4px',
-    backgroundColor: 'white',
-    border: '1px solid #D1D5DB',
-    borderRadius: '8px',
-    boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-    maxHeight: '300px',
-    overflowY: 'auto' as const,
-    zIndex: 20,
-  },
-  dropdownItem: {
-    padding: '8px 16px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    color: '#374151',
-    transition: 'background-color 0.2s',
-    borderBottom: '1px solid #F3F4F6',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  dropdownItemSelected: {
-    backgroundColor: '#FDF2F8',
-    color: '#EC4899',
-    fontWeight: '500',
-  },
-  mainContent: {
-    flex: 1,
-    padding: '24px',
-  },
-  calendarWrapper: {
-    backgroundColor: 'white',
-    borderRadius: '12px',
-    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-    height: '100%',
-    padding: '16px',
-  },
-  toolbar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '16px',
-    padding: '0 16px',
-  },
-  toolbarLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  todayButton: {
-    padding: '8px 16px',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#374151',
-    backgroundColor: 'white',
-    border: '1px solid #D1D5DB',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  navButton: {
-    padding: '8px',
-    color: '#4B5563',
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-  },
-  monthLabel: {
-    fontSize: '20px',
-    fontWeight: '600',
-    color: '#1F2937',
-    marginLeft: '16px',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  viewSwitcher: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    backgroundColor: '#F3F4F6',
-    padding: '4px',
-    borderRadius: '8px',
-  },
-  viewButton: (isActive: boolean) => ({
-    padding: '8px 16px',
-    fontSize: '14px',
-    fontWeight: '500',
-    borderRadius: '6px',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'all 0.2s',
-    backgroundColor: isActive ? 'white' : 'transparent',
-    color: isActive ? '#111827' : '#4B5563',
-    boxShadow: isActive ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  }),
-  modal: {
-    position: 'fixed' as const,
-    inset: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 50,
-    padding: '16px',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: '16px',
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-    maxWidth: '512px',
-    width: '100%',
-    maxHeight: '90vh',
-    overflowY: 'auto' as const,
-  },
-  modalHeader: {
-    padding: '24px',
-    borderBottom: '1px solid #F3F4F6',
-  },
-  modalHeaderRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalTitle: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: '#111827',
-    margin: 0,
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  closeButton: {
-    padding: '8px',
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-  },
-  modalBody: {
-    padding: '24px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '16px',
-  },
-  inputGroup: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '4px',
-  },
-  label: {
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#374151',
-    marginBottom: '4px',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  input: {
-    width: '100%',
-    padding: '8px 16px',
-    border: '1px solid #D1D5DB',
-    borderRadius: '8px',
-    fontSize: '16px',
-    outline: 'none',
-    transition: 'all 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    boxSizing: 'border-box' as const,
-  },
-  textarea: {
-    width: '100%',
-    padding: '8px 16px',
-    border: '1px solid #D1D5DB',
-    borderRadius: '8px',
-    fontSize: '16px',
-    outline: 'none',
-    transition: 'all 0.2s',
-    resize: 'none' as const,
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-    boxSizing: 'border-box' as const,
-  },
-  iconRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  dateDisplay: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    color: '#4B5563',
-  },
-  attendeeInput: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '8px',
-  },
-  addButton: {
-    padding: '8px',
-    backgroundColor: '#FDF2F8',
-    color: '#EC4899',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-  },
-  attendeeList: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '8px',
-  },
-  attendeeItem: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
-    padding: '8px 12px',
-    borderRadius: '8px',
-  },
-  attendeeText: {
-    fontSize: '14px',
-    color: '#374151',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  removeButton: {
-    color: '#9CA3AF',
-    backgroundColor: 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'color 0.2s',
-  },
-  modalFooter: {
-    padding: '24px',
-    borderTop: '1px solid #F3F4F6',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  deleteButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 16px',
-    color: '#DC2626',
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  buttonGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginLeft: 'auto',
-  },
-  cancelButton: {
-    padding: '8px 16px',
-    color: '#4B5563',
-    backgroundColor: 'transparent',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  saveButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 24px',
-    backgroundColor: '#EC4899',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  eventComponent: {
-    height: '100%',
-    padding: '4px',
-  },
-  eventTitle: {
-    fontWeight: '500',
-    fontSize: '14px',
-  },
-  eventTime: {
-    fontSize: '12px',
-    opacity: 0.9,
-  },
-  eventLocation: {
-    fontSize: '12px',
-    opacity: 0.75,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    marginTop: '4px',
-  },
-  loadingContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '200px',
-    color: '#6B7280',
-    fontSize: '14px',
-  },
-};
-
 // ─────────── Custom Toolbar Component ───────────
 const CustomToolbar = ({ date, view, onView, onNavigate }: any) => {
   const goToBack = () => onNavigate('PREV');
@@ -438,70 +65,142 @@ const CustomToolbar = ({ date, view, onView, onNavigate }: any) => {
   };
 
   return (
-    <div style={styles.toolbar}>
-      <div style={styles.toolbarLeft}>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: '24px',
+      padding: '0 16px',
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '16px',
+      }}>
         <button
           onClick={goToToday}
-          style={styles.todayButton}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F9FAFB'}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+          style={{
+            padding: '12px 20px',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#D9D9D9',
+            backgroundColor: 'transparent',
+            border: '1px solid #D9D9D9',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = '#DE1785';
+            e.currentTarget.style.color = '#DE1785';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = '#D9D9D9';
+            e.currentTarget.style.color = '#D9D9D9';
+          }}
         >
           Today
         </button>
-        <div style={{ display: 'flex', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button
             onClick={goToBack}
-            style={styles.navButton}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            style={{
+              padding: '8px',
+              color: '#D9D9D9',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#DE1785'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#D9D9D9'}
           >
             <ChevronLeft size={20} />
           </button>
           <button
             onClick={goToNext}
-            style={styles.navButton}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            style={{
+              padding: '8px',
+              color: '#D9D9D9',
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#DE1785'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#D9D9D9'}
           >
             <ChevronRight size={20} />
           </button>
         </div>
-        <h2 style={styles.monthLabel}>{label()}</h2>
+        <h2 style={{
+          fontSize: '20px',
+          fontWeight: '500',
+          color: '#000505',
+          margin: 0,
+        }}>
+          {label()}
+        </h2>
       </div>
       
-      <div style={styles.viewSwitcher}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '4px',
+        backgroundColor: '#FBF7F7',
+        padding: '4px',
+        borderRadius: '12px',
+        border: '1px solid #D9D9D9',
+      }}>
         <button
           onClick={() => onView(Views.DAY)}
-          style={styles.viewButton(view === Views.DAY)}
-          onMouseEnter={(e) => {
-            if (view !== Views.DAY) e.currentTarget.style.color = '#111827';
-          }}
-          onMouseLeave={(e) => {
-            if (view !== Views.DAY) e.currentTarget.style.color = '#4B5563';
+          style={{
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: '500',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            backgroundColor: view === Views.DAY ? '#FFFBFA' : 'transparent',
+            color: view === Views.DAY ? '#000505' : '#D9D9D9',
+            boxShadow: view === Views.DAY ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none',
           }}
         >
           Day
         </button>
         <button
           onClick={() => onView(Views.WEEK)}
-          style={styles.viewButton(view === Views.WEEK)}
-          onMouseEnter={(e) => {
-            if (view !== Views.WEEK) e.currentTarget.style.color = '#111827';
-          }}
-          onMouseLeave={(e) => {
-            if (view !== Views.WEEK) e.currentTarget.style.color = '#4B5563';
+          style={{
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: '500',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            backgroundColor: view === Views.WEEK ? '#FFFBFA' : 'transparent',
+            color: view === Views.WEEK ? '#000505' : '#D9D9D9',
+            boxShadow: view === Views.WEEK ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none',
           }}
         >
           Week
         </button>
         <button
           onClick={() => onView(Views.MONTH)}
-          style={styles.viewButton(view === Views.MONTH)}
-          onMouseEnter={(e) => {
-            if (view !== Views.MONTH) e.currentTarget.style.color = '#111827';
-          }}
-          onMouseLeave={(e) => {
-            if (view !== Views.MONTH) e.currentTarget.style.color = '#4B5563';
+          style={{
+            padding: '8px 16px',
+            fontSize: '14px',
+            fontWeight: '500',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            backgroundColor: view === Views.MONTH ? '#FFFBFA' : 'transparent',
+            color: view === Views.MONTH ? '#000505' : '#D9D9D9',
+            boxShadow: view === Views.MONTH ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none',
           }}
         >
           Month
@@ -520,159 +219,94 @@ const EventSummaryModal = ({ event, onClose, onEdit, onDelete }: {
 }) => {
   if (!event) return null;
 
-  const summaryStyles = {
-    modal: {
-      position: 'fixed' as const,
-      inset: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 5, 5, 0.4)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 50,
-      padding: '16px',
-    },
-    content: {
-      backgroundColor: 'white',
-      borderRadius: '16px',
-      boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-      maxWidth: '400px',
-      width: '100%',
-    },
-    header: {
-      padding: '20px 24px',
-      borderBottom: '1px solid #F3F4F6',
-      position: 'relative' as const,
-    },
-    closeButton: {
-      position: 'absolute' as const,
-      top: '20px',
-      right: '20px',
-      padding: '8px',
-      backgroundColor: 'transparent',
-      border: 'none',
-      borderRadius: '8px',
-      cursor: 'pointer',
-      transition: 'background-color 0.2s',
-    },
-    title: {
-      fontSize: '20px',
-      fontWeight: '600',
-      color: '#111827',
-      margin: 0,
-      paddingRight: '40px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-    },
-    body: {
+      zIndex: 1000,
       padding: '24px',
-      display: 'flex',
-      flexDirection: 'column' as const,
-      gap: '16px',
-    },
-    infoRow: {
-      display: 'flex',
-      alignItems: 'flex-start',
-      gap: '12px',
-    },
-    icon: {
-      marginTop: '2px',
-      flexShrink: 0,
-    },
-    infoContent: {
-      flex: 1,
-    },
-    infoLabel: {
-      fontSize: '12px',
-      color: '#6B7280',
-      marginBottom: '2px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-    },
-    infoText: {
-      fontSize: '14px',
-      color: '#111827',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-    },
-    attendeeChip: {
-      display: 'inline-block',
-      backgroundColor: '#F3F4F6',
-      padding: '4px 8px',
-      borderRadius: '6px',
-      fontSize: '12px',
-      marginRight: '6px',
-      marginTop: '4px',
-    },
-    footer: {
-      padding: '16px 24px',
-      borderTop: '1px solid #F3F4F6',
-      display: 'flex',
-      gap: '8px',
-      justifyContent: 'flex-end',
-    },
-    actionButton: {
-      padding: '8px 16px',
-      backgroundColor: 'white',
-      color: '#374151',
-      border: '1px solid #D1D5DB',
-      borderRadius: '8px',
-      cursor: 'pointer',
-      transition: 'all 0.2s',
-      fontSize: '14px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px',
-    },
-    primaryButton: {
-      padding: '8px 16px',
-      backgroundColor: '#EC4899',
-      color: 'white',
-      border: 'none',
-      borderRadius: '8px',
-      cursor: 'pointer',
-      transition: 'background-color 0.2s',
-      fontSize: '14px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px',
-    },
-    deleteButton: {
-      padding: '8px 16px',
-      backgroundColor: 'white',
-      color: '#DC2626',
-      border: '1px solid #FCA5A5',
-      borderRadius: '8px',
-      cursor: 'pointer',
-      transition: 'all 0.2s',
-      fontSize: '14px',
-      fontFamily: 'system-ui, -apple-system, sans-serif',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '6px',
-    },
-  };
-
-  return (
-    <div style={summaryStyles.modal} onClick={onClose}>
-      <div style={summaryStyles.content} onClick={(e) => e.stopPropagation()}>
-        <div style={summaryStyles.header}>
-          <h2 style={summaryStyles.title}>{event.title}</h2>
+    }} onClick={onClose}>
+      <div style={{
+        background: '#FFFBFA',
+        borderRadius: '20px',
+        width: '100%',
+        maxWidth: '400px',
+        overflow: 'hidden',
+        boxShadow: '0 20px 40px rgba(0, 5, 5, 0.15)'
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          padding: '32px 32px 24px 32px',
+          borderBottom: '1px solid #D9D9D9',
+          position: 'relative',
+        }}>
+          <h2 style={{
+            fontSize: '24px',
+            fontWeight: '400',
+            color: '#000505',
+            margin: 0,
+            paddingRight: '40px',
+          }}>
+            {event.title}
+          </h2>
           <button
             onClick={onClose}
-            style={summaryStyles.closeButton}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+            style={{
+              position: 'absolute',
+              top: '32px',
+              right: '32px',
+              background: 'transparent',
+              border: 'none',
+              padding: '8px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              color: '#D9D9D9',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#FFB8DF';
+              e.currentTarget.style.color = '#DE1785';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.color = '#D9D9D9';
+            }}
           >
-            <X size={20} color="#6B7280" />
+            <X size={20} />
           </button>
         </div>
 
-        <div style={summaryStyles.body}>
+        <div style={{
+          padding: '24px 32px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px',
+        }}>
           {/* Date and Time */}
-          <div style={summaryStyles.infoRow}>
-            <CalendarIcon size={18} color="#6B7280" style={summaryStyles.icon} />
-            <div style={summaryStyles.infoContent}>
-              <div style={summaryStyles.infoLabel}>Date & Time</div>
-              <div style={summaryStyles.infoText}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '12px',
+          }}>
+            <CalendarIcon size={18} color="#DE1785" style={{ marginTop: '2px', flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <div style={{
+                fontSize: '12px',
+                color: '#D9D9D9',
+                marginBottom: '4px',
+              }}>
+                Date & Time
+              </div>
+              <div style={{
+                fontSize: '14px',
+                color: '#000505',
+              }}>
                 {format(event.start, 'EEEE, MMMM d, yyyy')}
                 {event.time && (
                   <span> at {event.time}</span>
@@ -683,24 +317,58 @@ const EventSummaryModal = ({ event, onClose, onEdit, onDelete }: {
 
           {/* Location */}
           {event.location && (
-            <div style={summaryStyles.infoRow}>
-              <MapPin size={18} color="#6B7280" style={summaryStyles.icon} />
-              <div style={summaryStyles.infoContent}>
-                <div style={summaryStyles.infoLabel}>Location</div>
-                <div style={summaryStyles.infoText}>{event.location}</div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+            }}>
+              <MapPin size={18} color="#DE1785" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: '12px',
+                  color: '#D9D9D9',
+                  marginBottom: '4px',
+                }}>
+                  Location
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#000505',
+                }}>
+                  {event.location}
+                </div>
               </div>
             </div>
           )}
 
           {/* Attendees */}
           {event.attendees && event.attendees.length > 0 && (
-            <div style={summaryStyles.infoRow}>
-              <Users size={18} color="#6B7280" style={summaryStyles.icon} />
-              <div style={summaryStyles.infoContent}>
-                <div style={summaryStyles.infoLabel}>Attendees ({event.attendees.length})</div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+            }}>
+              <Users size={18} color="#DE1785" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: '12px',
+                  color: '#D9D9D9',
+                  marginBottom: '4px',
+                }}>
+                  Attendees ({event.attendees.length})
+                </div>
                 <div>
                   {event.attendees.map((attendee, index) => (
-                    <span key={index} style={summaryStyles.attendeeChip}>
+                    <span key={index} style={{
+                      display: 'inline-block',
+                      backgroundColor: '#FFB8DF',
+                      color: '#DE1785',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      marginRight: '6px',
+                      marginTop: '4px',
+                    }}>
                       {attendee}
                     </span>
                   ))}
@@ -711,30 +379,64 @@ const EventSummaryModal = ({ event, onClose, onEdit, onDelete }: {
 
           {/* Notes */}
           {event.notes && (
-            <div style={summaryStyles.infoRow}>
-              <Edit2 size={18} color="#6B7280" style={summaryStyles.icon} />
-              <div style={summaryStyles.infoContent}>
-                <div style={summaryStyles.infoLabel}>Notes</div>
-                <div style={summaryStyles.infoText}>{event.notes}</div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px',
+            }}>
+              <Edit2 size={18} color="#DE1785" style={{ marginTop: '2px', flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: '12px',
+                  color: '#D9D9D9',
+                  marginBottom: '4px',
+                }}>
+                  Notes
+                </div>
+                <div style={{
+                  fontSize: '14px',
+                  color: '#000505',
+                }}>
+                  {event.notes}
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        <div style={summaryStyles.footer}>
+        <div style={{
+          padding: '16px 32px 32px 32px',
+          borderTop: '1px solid #D9D9D9',
+          display: 'flex',
+          gap: '12px',
+          justifyContent: 'flex-end',
+        }}>
           <button
             onClick={() => {
               onDelete(event.id);
               onClose();
             }}
-            style={summaryStyles.deleteButton}
+            style={{
+              background: 'transparent',
+              color: '#D9D9D9',
+              border: '1px solid #D9D9D9',
+              borderRadius: '12px',
+              padding: '12px 20px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#FEE2E2';
-              e.currentTarget.style.borderColor = '#F87171';
+              e.currentTarget.style.borderColor = '#EF4444';
+              e.currentTarget.style.color = '#EF4444';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'white';
-              e.currentTarget.style.borderColor = '#FCA5A5';
+              e.currentTarget.style.borderColor = '#D9D9D9';
+              e.currentTarget.style.color = '#D9D9D9';
             }}
           >
             <Trash2 size={14} />
@@ -742,9 +444,22 @@ const EventSummaryModal = ({ event, onClose, onEdit, onDelete }: {
           </button>
           <button
             onClick={onEdit}
-            style={summaryStyles.primaryButton}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DB2777'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EC4899'}
+            style={{
+              background: '#DE1785',
+              color: '#FFFBFA',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#c21668'}
+            onMouseLeave={(e) => e.currentTarget.style.background = '#DE1785'}
           >
             <Edit2 size={14} />
             Edit Event
@@ -801,138 +516,284 @@ const EventModal = ({ event, onClose, onSave, onDelete }: {
   };
 
   return (
-    <div style={styles.modal}>
-      <div style={styles.modalContent}>
-        <div style={styles.modalHeader}>
-          <div style={styles.modalHeaderRow}>
-            <h2 style={styles.modalTitle}>
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 5, 5, 0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '24px',
+    }} onClick={onClose}>
+      <div style={{
+        background: '#FFFBFA',
+        borderRadius: '20px',
+        width: '100%',
+        maxWidth: '500px',
+        overflow: 'hidden',
+        boxShadow: '0 20px 40px rgba(0, 5, 5, 0.15)'
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          padding: '32px 32px 24px 32px',
+          borderBottom: '1px solid #D9D9D9',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <h2 style={{
+              fontSize: '24px',
+              fontWeight: '400',
+              color: '#000505',
+              margin: 0,
+            }}>
               {event.id ? 'Edit Event' : 'New Event'}
             </h2>
             <button
               onClick={onClose}
-              style={styles.closeButton}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: '8px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                color: '#D9D9D9',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#FFB8DF';
+                e.currentTarget.style.color = '#DE1785';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#D9D9D9';
+              }}
             >
-              <X size={20} color="#6B7280" />
+              <X size={20} />
             </button>
           </div>
         </div>
 
-        <div style={styles.modalBody}>
+        <div style={{
+          padding: '24px 32px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '20px',
+        }}>
           {/* Title */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Event Title</label>
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px',
+            }}>
+              Event Title *
+            </label>
             <input
               type="text"
               value={editedEvent.title}
               onChange={(e) => setEditedEvent({ ...editedEvent, title: e.target.value })}
-              style={styles.input}
+              style={{
+                width: '100%',
+                padding: '16px',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                fontSize: '16px',
+                backgroundColor: '#FFFBFA',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                boxSizing: 'border-box',
+              }}
               placeholder="Enter event title"
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#EC4899';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#D1D5DB';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+              onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
             />
           </div>
 
           {/* Date */}
-          <div style={styles.dateDisplay}>
-            <CalendarIcon size={20} />
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: '#D9D9D9',
+          }}>
+            <CalendarIcon size={20} color="#DE1785" />
             <span style={{ fontSize: '14px' }}>
               {format(event.start, 'EEEE, MMMM d, yyyy')}
             </span>
           </div>
 
           {/* Time */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Time</label>
-            <div style={styles.iconRow}>
-              <Clock size={20} color="#9CA3AF" />
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px',
+            }}>
+              Time
+            </label>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <Clock size={20} color="#DE1785" />
               <input
                 type="text"
                 value={editedEvent.time || ''}
                 onChange={(e) => setEditedEvent({ ...editedEvent, time: e.target.value })}
-                style={{ ...styles.input, flex: 1 }}
+                style={{
+                  flex: 1,
+                  padding: '16px',
+                  border: '1px solid #D9D9D9',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  backgroundColor: '#FFFBFA',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box',
+                }}
                 placeholder="e.g., 2:00 PM - 3:00 PM"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#EC4899';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#D1D5DB';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
               />
             </div>
           </div>
 
           {/* Location */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Location</label>
-            <div style={styles.iconRow}>
-              <MapPin size={20} color="#9CA3AF" />
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px',
+            }}>
+              Location
+            </label>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+            }}>
+              <MapPin size={20} color="#DE1785" />
               <input
                 type="text"
                 value={editedEvent.location || ''}
                 onChange={(e) => setEditedEvent({ ...editedEvent, location: e.target.value })}
-                style={{ ...styles.input, flex: 1 }}
+                style={{
+                  flex: 1,
+                  padding: '16px',
+                  border: '1px solid #D9D9D9',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  backgroundColor: '#FFFBFA',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box',
+                }}
                 placeholder="Add location"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#EC4899';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#D1D5DB';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
               />
             </div>
           </div>
 
           {/* Attendees */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Attendees</label>
-            <div style={styles.attendeeInput}>
-              <Users size={20} color="#9CA3AF" />
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px',
+            }}>
+              Attendees
+            </label>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '12px',
+            }}>
+              <Users size={20} color="#DE1785" />
               <input
                 type="text"
                 value={attendeeInput}
                 onChange={(e) => setAttendeeInput(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addAttendee()}
-                style={{ ...styles.input, flex: 1 }}
+                style={{
+                  flex: 1,
+                  padding: '16px',
+                  border: '1px solid #D9D9D9',
+                  borderRadius: '12px',
+                  fontSize: '16px',
+                  backgroundColor: '#FFFBFA',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease',
+                  boxSizing: 'border-box',
+                }}
                 placeholder="Add attendee email"
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#EC4899';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = '#D1D5DB';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
+                onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+                onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
               />
               <button
                 onClick={addAttendee}
-                style={styles.addButton}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FCE7F3'}
-                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FDF2F8'}
+                style={{
+                  padding: '16px',
+                  backgroundColor: '#FFB8DF',
+                  color: '#DE1785',
+                  border: 'none',
+                  borderRadius: '12px',
+                  cursor: 'pointer',
+                  transition: 'background-color 0.2s ease',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FF9FD0'}
+                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#FFB8DF'}
               >
                 <Plus size={20} />
               </button>
             </div>
-            <div style={styles.attendeeList}>
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}>
               {editedEvent.attendees?.map((attendee, index) => (
-                <div key={index} style={styles.attendeeItem}>
-                  <span style={styles.attendeeText}>{attendee}</span>
+                <div key={index} style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#FBF7F7',
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                }}>
+                  <span style={{
+                    fontSize: '14px',
+                    color: '#000505',
+                  }}>
+                    {attendee}
+                  </span>
                   <button
                     onClick={() => removeAttendee(index)}
-                    style={styles.removeButton}
+                    style={{
+                      color: '#D9D9D9',
+                      backgroundColor: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'color 0.2s ease',
+                    }}
                     onMouseEnter={(e) => e.currentTarget.style.color = '#EF4444'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#9CA3AF'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#D9D9D9'}
                   >
                     <X size={16} />
                   </button>
@@ -942,56 +803,139 @@ const EventModal = ({ event, onClose, onSave, onDelete }: {
           </div>
 
           {/* Notes */}
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Notes</label>
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px',
+            }}>
+              Notes
+            </label>
             <textarea
               value={editedEvent.notes || ''}
               onChange={(e) => setEditedEvent({ ...editedEvent, notes: e.target.value })}
-              style={styles.textarea}
+              style={{
+                width: '100%',
+                padding: '16px',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                fontSize: '16px',
+                backgroundColor: '#FFFBFA',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                resize: 'none',
+                fontFamily: 'inherit',
+                boxSizing: 'border-box',
+                minHeight: '100px',
+              }}
               rows={3}
               placeholder="Add notes or description"
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#EC4899';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#D1D5DB';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+              onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
             />
           </div>
         </div>
 
         {/* Actions */}
-        <div style={styles.modalFooter}>
+        <div style={{
+          padding: '16px 32px 32px 32px',
+          borderTop: '1px solid #D9D9D9',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}>
           {event.id && (
             <button
               onClick={() => {
                 onDelete(event.id);
                 onClose();
               }}
-              style={styles.deleteButton}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              style={{
+                background: 'transparent',
+                color: '#D9D9D9',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                padding: '12px 20px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#EF4444';
+                e.currentTarget.style.color = '#EF4444';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#D9D9D9';
+                e.currentTarget.style.color = '#D9D9D9';
+              }}
             >
               <Trash2 size={16} />
               Delete
             </button>
           )}
-          <div style={styles.buttonGroup}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginLeft: 'auto',
+          }}>
             <button
               onClick={onClose}
-              style={styles.cancelButton}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              style={{
+                background: 'transparent',
+                color: '#D9D9D9',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#DE1785';
+                e.currentTarget.style.color = '#DE1785';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#D9D9D9';
+                e.currentTarget.style.color = '#D9D9D9';
+              }}
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              style={styles.saveButton}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DB2777'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EC4899'}
+              disabled={!editedEvent.title.trim()}
+              style={{
+                background: editedEvent.title.trim() ? '#DE1785' : '#D9D9D9',
+                color: '#FFFBFA',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: editedEvent.title.trim() ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => {
+                if (editedEvent.title.trim()) {
+                  e.currentTarget.style.background = '#c21668';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (editedEvent.title.trim()) {
+                  e.currentTarget.style.background = '#DE1785';
+                }
+              }}
             >
               <Edit2 size={16} />
               Save
@@ -1004,7 +948,8 @@ const EventModal = ({ event, onClose, onSave, onDelete }: {
 };
 
 // ─────────── Main Calendar Component ───────────
-const CalendarPage: React.FC = () => {
+const ScheduleHome: React.FC = () => {
+  const { user } = useAuth();
   const [eventsByCustomer, setEventsByCustomer] = useState<EventsByCustomer>({});
   const [currentView, setCurrentView] = useState<View>(Views.MONTH);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -1019,13 +964,6 @@ const CalendarPage: React.FC = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
-  // Mock auth context (replace with actual auth)
-  const user = {
-    userId: 'user123',
-    displayName: 'John Doe',
-    email: 'john@example.com',
-  };
-  
   // Handle click outside to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -1038,34 +976,27 @@ const CalendarPage: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch contacts from API
+  // Fetch contacts from v2 API
   useEffect(() => {
-    const fetchContacts = async () => {
-      setLoadingContacts(true);
-      try {
-        const response = await fetch(`${API_BASE}/contacts?limit=100`);
-        if (!response.ok) throw new Error('Failed to fetch contacts');
-        
-        const data = await response.json();
-        const mappedContacts: Contact[] = data.contacts.map((raw: any) => ({
-          contactId: raw.GoldenContactID || `contact_${Date.now()}_${Math.random()}`,
-          firstName: raw.FIRST_NAME || '',
-          lastName: raw.LAST_NAME || '',
-          company: raw.COMPANY || raw['Default.company'] || '',
-          email: raw.PRIMARY_EMAIL || raw.EMAIL_1 || '',
-        }));
-        
-        setContacts(mappedContacts);
-      } catch (error) {
-        console.error('Error fetching contacts:', error);
-        setContacts([]);
-      } finally {
-        setLoadingContacts(false);
-      }
-    };
+    if (user?.userId) {
+      loadContacts();
+    }
+  }, [user?.userId]);
+
+  const loadContacts = async () => {
+    if (!user?.userId) return;
     
-    fetchContacts();
-  }, []);
+    try {
+      setLoadingContacts(true);
+      const response = await contactsService.listContacts(user.userId);
+      setContacts(response.contacts);
+    } catch (error) {
+      console.error('Error fetching contacts:', error);
+      setContacts([]);
+    } finally {
+      setLoadingContacts(false);
+    }
+  };
 
   // Load events from localStorage
   useEffect(() => {
@@ -1234,14 +1165,14 @@ const CalendarPage: React.FC = () => {
   // Event styling
   const eventStyleGetter = useCallback((event: RBCEvent) => {
     const style: React.CSSProperties = {
-      backgroundColor: '#EC4899',
+      backgroundColor: '#DE1785',
       borderRadius: '6px',
       opacity: 0.9,
       color: 'white',
       border: 'none',
       display: 'block',
       fontSize: currentView === Views.MONTH ? '0.75em' : '0.85em',
-      padding: currentView === Views.MONTH ? '2px 4px' : '4px 8px',
+      padding: currentView === Views.MONTH ? '2px 6px' : '4px 8px',
       cursor: 'pointer',
     };
     return { style };
@@ -1250,13 +1181,20 @@ const CalendarPage: React.FC = () => {
   // Custom event component for day/week views
   const EventComponent = ({ event }: { event: RBCEvent }) => {
     return (
-      <div style={styles.eventComponent}>
-        <div style={styles.eventTitle}>{event.title}</div>
+      <div style={{ height: '100%', padding: '4px' }}>
+        <div style={{ fontWeight: '500', fontSize: '14px' }}>{event.title}</div>
         {event.time && currentView !== Views.MONTH && (
-          <div style={styles.eventTime}>{event.time}</div>
+          <div style={{ fontSize: '12px', opacity: 0.9 }}>{event.time}</div>
         )}
         {event.location && (
-          <div style={styles.eventLocation}>
+          <div style={{
+            fontSize: '12px',
+            opacity: 0.75,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            marginTop: '4px',
+          }}>
             <MapPin size={12} />
             {event.location}
           </div>
@@ -1270,125 +1208,212 @@ const CalendarPage: React.FC = () => {
     if (selectedCustomerId === 'all') return 'All Customers';
     const customer = contacts.find(c => c.contactId === selectedCustomerId);
     if (!customer) return 'Select Customer';
-    const name = `${customer.firstName} ${customer.lastName}`.trim();
-    return name || customer.company || 'Unnamed Customer';
+    return customer.name || 'Unnamed Customer';
   };
 
+  if (loadingContacts) {
+    return (
+      <div style={{
+        height: '100vh',
+        width: '100%',
+        backgroundColor: '#FFFBFA',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingLeft: '120px',
+        paddingTop: '60px'
+      }}>
+        <div style={{
+          width: '40px',
+          height: '40px',
+          border: '3px solid #D9D9D9',
+          borderTop: '3px solid #DE1785',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    );
+  }
+
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <div style={styles.headerContent}>
-          <h1 style={styles.headerTitle}>Schedule</h1>
+    <div style={{
+      minHeight: '100vh',
+      width: '100%',
+      backgroundColor: '#FFFBFA',
+      paddingLeft: '120px',
+      paddingRight: '40px',
+      paddingTop: '100px',
+      paddingBottom: '40px',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Header with Customer Dropdown */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        marginBottom: '24px'
+      }}>
+        {/* Customer Dropdown */}
+        <div style={{
+          position: 'relative',
+          minWidth: '250px'
+        }} ref={dropdownRef}>
+          <button
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              padding: '12px 16px',
+              backgroundColor: '#FFFBFA',
+              border: '1px solid #D9D9D9',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              transition: 'all 0.2s ease',
+            }}
+            onClick={() => setShowDropdown(!showDropdown)}
+            onMouseEnter={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+            onMouseLeave={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
+          >
+            <span>{getCustomerDisplayName()}</span>
+            <ChevronDown size={20} style={{ 
+              transform: showDropdown ? 'rotate(180deg)' : 'rotate(0deg)', 
+              transition: 'transform 0.2s',
+              color: '#DE1785'
+            }} />
+          </button>
           
-          {/* Customer Dropdown */}
-          <div style={styles.customerDropdown} ref={dropdownRef}>
-            <button
-              style={styles.dropdownButton}
-              onClick={() => setShowDropdown(!showDropdown)}
-              onMouseEnter={(e) => e.currentTarget.style.borderColor = '#EC4899'}
-              onMouseLeave={(e) => e.currentTarget.style.borderColor = '#D1D5DB'}
-            >
-              <span>{getCustomerDisplayName()}</span>
-              <ChevronDown size={20} style={{ transform: showDropdown ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-            </button>
-            
-            {showDropdown && (
-              <div style={styles.dropdownMenu}>
+          {showDropdown && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              marginTop: '4px',
+              backgroundColor: '#FFFBFA',
+              border: '1px solid #D9D9D9',
+              borderRadius: '12px',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              maxHeight: '300px',
+              overflowY: 'auto',
+              zIndex: 20,
+            }}>
+              <div
+                style={{
+                  padding: '12px 16px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  color: selectedCustomerId === 'all' ? '#DE1785' : '#000505',
+                  backgroundColor: selectedCustomerId === 'all' ? '#FFF7FB' : 'transparent',
+                  fontWeight: selectedCustomerId === 'all' ? '500' : '400',
+                  transition: 'background-color 0.2s',
+                  borderBottom: '1px solid #FBF7F7',
+                }}
+                onClick={() => {
+                  setSelectedCustomerId('all');
+                  setShowDropdown(false);
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedCustomerId !== 'all') {
+                    e.currentTarget.style.backgroundColor = '#FBF7F7';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedCustomerId !== 'all') {
+                    e.currentTarget.style.backgroundColor = 'transparent';
+                  }
+                }}
+              >
+                All Customers
+              </div>
+              
+              {contacts.map(contact => (
                 <div
+                  key={contact.contactId}
                   style={{
-                    ...styles.dropdownItem,
-                    ...(selectedCustomerId === 'all' ? styles.dropdownItemSelected : {})
+                    padding: '12px 16px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: selectedCustomerId === contact.contactId ? '#DE1785' : '#000505',
+                    backgroundColor: selectedCustomerId === contact.contactId ? '#FFF7FB' : 'transparent',
+                    fontWeight: selectedCustomerId === contact.contactId ? '500' : '400',
+                    transition: 'background-color 0.2s',
+                    borderBottom: '1px solid #FBF7F7',
                   }}
                   onClick={() => {
-                    setSelectedCustomerId('all');
+                    setSelectedCustomerId(contact.contactId);
                     setShowDropdown(false);
                   }}
                   onMouseEnter={(e) => {
-                    if (selectedCustomerId !== 'all') {
-                      e.currentTarget.style.backgroundColor = '#F9FAFB';
+                    if (selectedCustomerId !== contact.contactId) {
+                      e.currentTarget.style.backgroundColor = '#FBF7F7';
                     }
                   }}
                   onMouseLeave={(e) => {
-                    if (selectedCustomerId !== 'all') {
+                    if (selectedCustomerId !== contact.contactId) {
                       e.currentTarget.style.backgroundColor = 'transparent';
                     }
                   }}
                 >
-                  All Customers
+                  <div>
+                    <div style={{ fontWeight: '500' }}>{contact.name}</div>
+                    {contact.email && (
+                      <div style={{ fontSize: '12px', color: '#D9D9D9' }}>{contact.email}</div>
+                    )}
+                  </div>
                 </div>
-                
-                {loadingContacts ? (
-                  <div style={styles.loadingContainer}>Loading contacts...</div>
-                ) : (
-                  contacts.map(contact => {
-                    const displayName = `${contact.firstName} ${contact.lastName}`.trim() || contact.company || 'Unnamed';
-                    return (
-                      <div
-                        key={contact.contactId}
-                        style={{
-                          ...styles.dropdownItem,
-                          ...(selectedCustomerId === contact.contactId ? styles.dropdownItemSelected : {})
-                        }}
-                        onClick={() => {
-                          setSelectedCustomerId(contact.contactId);
-                          setShowDropdown(false);
-                        }}
-                        onMouseEnter={(e) => {
-                          if (selectedCustomerId !== contact.contactId) {
-                            e.currentTarget.style.backgroundColor = '#F9FAFB';
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (selectedCustomerId !== contact.contactId) {
-                            e.currentTarget.style.backgroundColor = 'transparent';
-                          }
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: '500' }}>{displayName}</div>
-                          {contact.company && (
-                            <div style={{ fontSize: '12px', color: '#6B7280' }}>{contact.company}</div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
       
-      <div style={styles.mainContent}>
-        <div style={styles.calendarWrapper}>
-          <Calendar
-            localizer={localizer}
-            events={rbEvents}
-            startAccessor="start"
-            endAccessor="end"
-            selectable
-            onSelectSlot={handleSelectSlot}
-            onSelectEvent={handleSelectEvent}
-            view={currentView}
-            onView={setCurrentView}
-            date={currentDate}
-            onNavigate={setCurrentDate}
-            views={[Views.DAY, Views.WEEK, Views.MONTH]}
-            defaultView={Views.MONTH}
-            eventPropGetter={eventStyleGetter}
-            components={{
-              toolbar: CustomToolbar,
-              event: EventComponent,
-            }}
-            popup
-            step={60}
-            timeslots={1}
-            min={new Date(0, 0, 0, 6, 0, 0)}
-            max={new Date(0, 0, 0, 22, 0, 0)}
-            dayLayoutAlgorithm="no-overlap"
-          />
-        </div>
+      {/* Calendar - Direct in base container */}
+      <div style={{ flex: 1 }}>
+        <Calendar
+          localizer={localizer}
+          events={rbEvents}
+          startAccessor="start"
+          endAccessor="end"
+          selectable
+          onSelectSlot={handleSelectSlot}
+          onSelectEvent={handleSelectEvent}
+          view={currentView}
+          onView={setCurrentView}
+          date={currentDate}
+          onNavigate={setCurrentDate}
+          views={[Views.DAY, Views.WEEK, Views.MONTH]}
+          defaultView={Views.MONTH}
+          eventPropGetter={eventStyleGetter}
+          components={{
+            toolbar: CustomToolbar,
+            event: EventComponent,
+          }}
+          popup
+          step={60}
+          timeslots={1}
+          min={new Date(0, 0, 0, 6, 0, 0)}
+          max={new Date(0, 0, 0, 22, 0, 0)}
+          dayLayoutAlgorithm="no-overlap"
+          style={{
+            height: 'calc(100vh - 220px)',
+            backgroundColor: '#FFFBFA',
+            borderRadius: '16px',
+            border: '1px solid #D9D9D9',
+            padding: '24px',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+          }}
+        />
       </div>
 
       {showSummaryModal && (
@@ -1417,8 +1442,129 @@ const CalendarPage: React.FC = () => {
           onDelete={handleDeleteEvent}
         />
       )}
+
+      {/* Custom CSS for Calendar Month View Fix */}
+      <style>{`
+        /* Fix month view styling */
+        .rbc-calendar {
+          font-family: inherit !important;
+        }
+        
+        .rbc-month-view {
+          border: none !important;
+          background: transparent !important;
+        }
+        
+        .rbc-month-header {
+          border-bottom: 1px solid #D9D9D9 !important;
+          background: #FBF7F7 !important;
+        }
+        
+        .rbc-header {
+          padding: 12px 8px !important;
+          font-weight: 500 !important;
+          color: #000505 !important;
+          font-size: 14px !important;
+          border-right: 1px solid #D9D9D9 !important;
+          background: #FBF7F7 !important;
+        }
+        
+        .rbc-header:last-child {
+          border-right: none !important;
+        }
+        
+        .rbc-month-row {
+          border-bottom: 1px solid #D9D9D9 !important;
+        }
+        
+        .rbc-month-row:last-child {
+          border-bottom: none !important;
+        }
+        
+        .rbc-date-cell {
+          padding: 8px !important;
+          border-right: 1px solid #D9D9D9 !important;
+          background: #FFFBFA !important;
+          min-height: 100px !important;
+        }
+        
+        .rbc-date-cell:last-child {
+          border-right: none !important;
+        }
+        
+        .rbc-date-cell.rbc-off-range-bg {
+          background: #FBF7F7 !important;
+        }
+        
+        .rbc-date-cell > a {
+          color: #000505 !important;
+          font-weight: 500 !important;
+          text-decoration: none !important;
+        }
+        
+        .rbc-date-cell.rbc-off-range > a {
+          color: #D9D9D9 !important;
+        }
+        
+        .rbc-today {
+          background: #FFF7FB !important;
+        }
+        
+        .rbc-today > a {
+          color: #DE1785 !important;
+          font-weight: 600 !important;
+        }
+        
+        .rbc-event {
+          background: #DE1785 !important;
+          border: none !important;
+          border-radius: 6px !important;
+          padding: 4px 6px !important;
+          font-size: 12px !important;
+          margin: 1px 0 !important;
+        }
+        
+        .rbc-event:hover {
+          background: #c21668 !important;
+        }
+        
+        .rbc-slot-selection {
+          background: rgba(222, 23, 133, 0.1) !important;
+          border: 1px solid #DE1785 !important;
+        }
+        
+        /* Fix toolbar styling that might be inherited */
+        .rbc-toolbar {
+          display: none !important; /* We use custom toolbar */
+        }
+        
+        /* Fix week and day view styling */
+        .rbc-time-view .rbc-time-header {
+          border-bottom: 1px solid #D9D9D9 !important;
+        }
+        
+        .rbc-time-view .rbc-time-content {
+          border-top: 1px solid #D9D9D9 !important;
+        }
+        
+        .rbc-timeslot-group {
+          border-bottom: 1px solid #F5F5F5 !important;
+        }
+        
+        .rbc-time-slot {
+          border-top: 1px solid #F5F5F5 !important;
+        }
+        
+        .rbc-day-slot .rbc-time-slot {
+          border-right: 1px solid #D9D9D9 !important;
+        }
+        
+        .rbc-current-time-indicator {
+          background-color: #DE1785 !important;
+        }
+      `}</style>
     </div>
   );
 };
 
-export default CalendarPage;
+export default ScheduleHome;

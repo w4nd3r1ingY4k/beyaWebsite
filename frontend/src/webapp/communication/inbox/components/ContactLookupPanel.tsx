@@ -208,7 +208,8 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
         display: 'flex', 
         flexDirection: 'column', 
         background: '#FFFBFA', 
-        borderLeft: '1px solid #e5e7eb' 
+        borderLeft: '1px solid #e5e7eb',
+        marginTop: '60px' // Add top margin to clear the status bar
       }}>
         <div style={{ 
           padding: '20px', 
@@ -238,27 +239,10 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
       display: 'flex', 
       flexDirection: 'column', 
       background: '#FFFBFA', 
-      borderLeft: '1px solid #e5e7eb' 
+      borderLeft: '1px solid #e5e7eb',
+      marginTop: '70px' // Add top margin to clear the status bar
     }}>
-      {/* Header */}
-      <div style={{ 
-        padding: '16px', 
-        borderBottom: '1px solid #e5e7eb',
-        background: '#fff'
-      }}>
-        <h3 style={{ 
-          margin: 0, 
-          fontSize: '16px', 
-          fontWeight: '600', 
-          color: '#111827',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <User size={18} />
-          Contact Information
-        </h3>
-      </div>
+     
 
       {/* Content */}
       <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
@@ -551,7 +535,8 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
                   display: 'flex', 
                   alignItems: 'center', 
                   gap: '8px',
-                  marginBottom: '8px'
+                  marginBottom: '8px',
+                  
                 }}>
                   <Mail size={14} style={{ color: '#6b7280' }} />
                   <span style={{ fontSize: '14px', color: '#374151' }}>

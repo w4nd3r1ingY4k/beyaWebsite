@@ -65,83 +65,56 @@ const SettingsPage = () => {
   return (
     <div style={{
       minHeight: '100vh',
-      backgroundColor: '#FFFFFF',
+      width: '100%',
+      backgroundColor: '#FFFBFA',
+      paddingLeft: '120px', // Account for side menu (80px menu + 40px padding)
+      paddingRight: '40px', // Right padding
+      paddingTop: '100px', // Top padding (60px for status bar + 40px extra)
+      paddingBottom: '40px', // Bottom padding
+      display: 'flex',
+      flexDirection: 'column',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
-      <div style={{
-        width: '100%',
-        minHeight: '100vh',
-        backgroundColor: '#FFFFFF',
-        overflow: 'hidden'
-      }}>
         {/* Header */}
         <div style={{
-          padding: '32px 40px',
-          borderBottom: '1px solid #F0F0F0',
+          marginBottom: '32px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-            <button
-                onClick={() => window.location.href = '/webapp'}
-                style={{
-                    padding: '10px 20px',
-                    backgroundColor: '#F3F4F6',
-                    border: '1px solid #E0E0E0',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    fontWeight: '500',
-                    color: '#374151',
-                    cursor: 'pointer',
-                    marginRight: '24px',
-                    transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => {
-                    e.currentTarget.style.backgroundColor = '#E5E7EB';
-                    e.currentTarget.style.borderColor = '#DF1785';
-                    e.currentTarget.style.color = '#DF1785';
-                }}
-                onMouseLeave={e => {
-                    e.currentTarget.style.backgroundColor = '#F3F4F6';
-                    e.currentTarget.style.borderColor = '#E0E0E0';
-                    e.currentTarget.style.color = '#374151';
-                }}
-            >
-                ← Back
-            </button>
-          <div style={{ textAlign: 'center' }}>
+          <div>
             <h1 style={{
               fontSize: '28px',
               fontWeight: '600',
-              color: '#1A1A1A',
+              color: '#000505',
               margin: 0
             }}>Settings</h1>
             <p style={{
-              fontSize: '14px',
-              color: '#666',
+              fontSize: '16px',
+              color: '#D9D9D9',
               margin: '8px 0 0 0'
             }}>Manage your account and integrations</p>
           </div>
           <button
             onClick={handleSignOut}
             style={{
-              padding: '10px 20px',
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #E0E0E0',
-              borderRadius: '8px',
+              padding: '12px 24px',
+              backgroundColor: '#FFFBFA',
+              border: '1px solid #DE1785',
+              borderRadius: '12px',
               fontSize: '14px',
               fontWeight: '500',
-              color: '#DC2626',
+              color: '#DE1785',
               cursor: 'pointer',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s ease'
             }}
             onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#FEF2F2';
-                e.currentTarget.style.backgroundColor = '#DC2626';
+                e.currentTarget.style.backgroundColor = '#DE1785';
+                e.currentTarget.style.color = '#FFFBFA';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#FFFFFF';
-              e.currentTarget.style.borderColor = '#E0E0E0';
+              e.currentTarget.style.backgroundColor = '#FFFBFA';
+              e.currentTarget.style.color = '#DE1785';
             }}
           >
             Sign Out
@@ -151,8 +124,8 @@ const SettingsPage = () => {
         {/* Tabs */}
         <div style={{
           display: 'flex',
-          borderBottom: '1px solid #F0F0F0',
-          padding: '0 40px'
+          borderBottom: '1px solid #D9D9D9',
+          marginBottom: '32px'
         }}>
           <button
             onClick={() => setActiveTab('contact')}
@@ -160,12 +133,12 @@ const SettingsPage = () => {
               padding: '16px 24px',
               backgroundColor: 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'contact' ? '2px solid #DF1785' : '2px solid transparent',
-              fontSize: '15px',
-              fontWeight: '500',
-              color: activeTab === 'contact' ? '#DF1785' : '#666',
+              borderBottom: activeTab === 'contact' ? '2px solid #DE1785' : '2px solid transparent',
+              fontSize: '16px',
+              fontWeight: activeTab === 'contact' ? '600' : '500',
+              color: activeTab === 'contact' ? '#DE1785' : '#D9D9D9',
               cursor: 'pointer',
-              transition: 'all 0.2s',
+              transition: 'all 0.2s ease',
               marginBottom: '-1px'
             }}
           >
@@ -177,12 +150,12 @@ const SettingsPage = () => {
               padding: '16px 24px',
               backgroundColor: 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'integrations' ? '2px solid #DF1785' : '2px solid transparent',
-              fontSize: '15px',
-              fontWeight: '500',
-              color: activeTab === 'integrations' ? '#DF1785' : '#666',
+              borderBottom: activeTab === 'integrations' ? '2px solid #DE1785' : '2px solid transparent',
+              fontSize: '16px',
+              fontWeight: activeTab === 'integrations' ? '600' : '500',
+              color: activeTab === 'integrations' ? '#DE1785' : '#D9D9D9',
               cursor: 'pointer',
-              transition: 'all 0.2s',
+              transition: 'all 0.2s ease',
               marginBottom: '-1px'
             }}
           >
@@ -194,12 +167,12 @@ const SettingsPage = () => {
               padding: '16px 24px',
               backgroundColor: 'transparent',
               border: 'none',
-              borderBottom: activeTab === 'account' ? '2px solid #DF1785' : '2px solid transparent',
-              fontSize: '15px',
-              fontWeight: '500',
-              color: activeTab === 'account' ? '#DF1785' : '#666',
+              borderBottom: activeTab === 'account' ? '2px solid #DE1785' : '2px solid transparent',
+              fontSize: '16px',
+              fontWeight: activeTab === 'account' ? '600' : '500',
+              color: activeTab === 'account' ? '#DE1785' : '#D9D9D9',
               cursor: 'pointer',
-              transition: 'all 0.2s',
+              transition: 'all 0.2s ease',
               marginBottom: '-1px'
             }}
           >
@@ -208,14 +181,14 @@ const SettingsPage = () => {
         </div>
 
         {/* Content */}
-        <div style={{ padding: '32px 40px' }}>
+        <div style={{ flex: 1 }}>
           {/* Contact Tab */}
           {activeTab === 'contact' && (
             <div>
               <h2 style={{
-                fontSize: '20px',
-                fontWeight: '600',
-                color: '#1A1A1A',
+                fontSize: '24px',
+                fontWeight: '400',
+                color: '#000505',
                 marginBottom: '24px'
               }}>Get in Touch</h2>
               
@@ -225,7 +198,7 @@ const SettingsPage = () => {
                     display: 'block',
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: '#374151',
+                    color: '#000505',
                     marginBottom: '8px'
                   }}>
                     Subject
@@ -237,16 +210,17 @@ const SettingsPage = () => {
                     placeholder="What's this about?"
                     style={{
                       width: '100%',
-                      padding: '12px 16px',
-                      fontSize: '15px',
-                      border: '1px solid #E0E0E0',
-                      borderRadius: '8px',
+                      padding: '16px',
+                      fontSize: '16px',
+                      border: '1px solid #D9D9D9',
+                      borderRadius: '12px',
+                      backgroundColor: '#FFFBFA',
                       outline: 'none',
-                      transition: 'border-color 0.2s',
+                      transition: 'border-color 0.2s ease',
                       boxSizing: 'border-box'
                     }}
-                    onFocus={(e) => e.target.style.borderColor = '#DF1785'}
-                    onBlur={(e) => e.target.style.borderColor = '#E0E0E0'}
+                    onFocus={(e) => e.target.style.borderColor = '#DE1785'}
+                    onBlur={(e) => e.target.style.borderColor = '#D9D9D9'}
                   />
                 </div>
 
@@ -255,7 +229,7 @@ const SettingsPage = () => {
                     display: 'block',
                     fontSize: '14px',
                     fontWeight: '500',
-                    color: '#374151',
+                    color: '#000505',
                     marginBottom: '8px'
                   }}>
                     Message
@@ -267,18 +241,19 @@ const SettingsPage = () => {
                     rows={6}
                     style={{
                       width: '100%',
-                      padding: '12px 16px',
-                      fontSize: '15px',
-                      border: '1px solid #E0E0E0',
-                      borderRadius: '8px',
+                      padding: '16px',
+                      fontSize: '16px',
+                      border: '1px solid #D9D9D9',
+                      borderRadius: '12px',
+                      backgroundColor: '#FFFBFA',
                       outline: 'none',
                       resize: 'vertical',
-                      transition: 'border-color 0.2s',
+                      transition: 'border-color 0.2s ease',
                       boxSizing: 'border-box',
                       fontFamily: 'inherit'
                     }}
-                    onFocus={(e) => e.target.style.borderColor = '#DF1785'}
-                    onBlur={(e) => e.target.style.borderColor = '#E0E0E0'}
+                    onFocus={(e) => e.target.style.borderColor = '#DE1785'}
+                    onBlur={(e) => e.target.style.borderColor = '#D9D9D9'}
                   />
                 </div>
 
@@ -287,24 +262,27 @@ const SettingsPage = () => {
                   disabled={!message.trim() || !subject.trim() || sendStatus === 'sending'}
                   style={{
                     padding: '12px 24px',
-                    backgroundColor: message.trim() && subject.trim() ? '#DF1785' : '#F0F0F0',
-                    color: message.trim() && subject.trim() ? '#FFFFFF' : '#999',
+                    backgroundColor: message.trim() && subject.trim() ? '#DE1785' : '#D9D9D9',
+                    color: '#FFFBFA',
                     border: 'none',
-                    borderRadius: '8px',
-                    fontSize: '15px',
+                    borderRadius: '12px',
+                    fontSize: '14px',
                     fontWeight: '500',
                     cursor: message.trim() && subject.trim() ? 'pointer' : 'not-allowed',
-                    transition: 'all 0.2s',
-                    minWidth: '120px'
+                    transition: 'all 0.2s ease',
+                    minWidth: '120px',
+                    boxShadow: message.trim() && subject.trim() ? '0 2px 8px rgba(222, 23, 133, 0.2)' : 'none'
                   }}
                   onMouseEnter={(e) => {
                     if (message.trim() && subject.trim()) {
-                      e.currentTarget.style.backgroundColor = '#C01570';
+                      e.currentTarget.style.backgroundColor = '#c21668';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (message.trim() && subject.trim()) {
-                      e.currentTarget.style.backgroundColor = '#DF1785';
+                      e.currentTarget.style.backgroundColor = '#DE1785';
+                      e.currentTarget.style.transform = 'translateY(0)';
                     }
                   }}
                 >
@@ -315,7 +293,7 @@ const SettingsPage = () => {
                   <p style={{
                     marginTop: '16px',
                     fontSize: '14px',
-                    color: '#059669'
+                    color: '#DE1785'
                   }}>
                     Your message has been sent successfully!
                   </p>
@@ -347,84 +325,84 @@ const SettingsPage = () => {
           {activeTab === 'account' && (
             <div>
               <h2 style={{
-                fontSize: '20px',
-                fontWeight: '600',
-                color: '#1A1A1A',
+                fontSize: '24px',
+                fontWeight: '400',
+                color: '#000505',
                 marginBottom: '24px'
               }}>Account Information</h2>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 <div>
                   <label style={{
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: '500',
-                    color: '#666',
+                    color: '#D9D9D9',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>Display Name</label>
                   <p style={{
-                    fontSize: '15px',
-                    color: '#1A1A1A',
+                    fontSize: '16px',
+                    color: '#000505',
                     margin: '6px 0 0 0'
                   }}>{mockUserData.displayName}</p>
                 </div>
 
                 <div>
                   <label style={{
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: '500',
-                    color: '#666',
+                    color: '#D9D9D9',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>Email</label>
                   <p style={{
-                    fontSize: '15px',
-                    color: '#1A1A1A',
+                    fontSize: '16px',
+                    color: '#000505',
                     margin: '6px 0 0 0'
                   }}>{user?.email || 'Not available'}</p>
                 </div>
                 
                 <div>
                   <label style={{
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: '500',
-                    color: '#666',
+                    color: '#D9D9D9',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>Timezone</label>
                   <p style={{
-                    fontSize: '15px',
-                    color: '#1A1A1A',
+                    fontSize: '16px',
+                    color: '#000505',
                     margin: '6px 0 0 0'
                   }}>{mockUserData.timezone}</p>
                 </div>
 
                 <div>
                   <label style={{
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: '500',
-                    color: '#666',
+                    color: '#D9D9D9',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>Member Since</label>
                   <p style={{
-                    fontSize: '15px',
-                    color: '#1A1A1A',
+                    fontSize: '16px',
+                    color: '#000505',
                     margin: '6px 0 0 0'
                   }}>{formatDate(mockUserData.createdAt)}</p>
                 </div>
 
                 <div>
                   <label style={{
-                    fontSize: '13px',
+                    fontSize: '14px',
                     fontWeight: '500',
-                    color: '#666',
+                    color: '#D9D9D9',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>Last Login</label>
                   <p style={{
-                    fontSize: '15px',
-                    color: '#1A1A1A',
+                    fontSize: '16px',
+                    color: '#000505',
                     margin: '6px 0 0 0'
                   }}>{formatDate(mockUserData.lastLoginAt)}</p>
                 </div>
@@ -432,7 +410,6 @@ const SettingsPage = () => {
             </div>
           )}
         </div>
-      </div>
     </div>
   );
 };

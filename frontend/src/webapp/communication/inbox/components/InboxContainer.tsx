@@ -2046,7 +2046,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
         {/* Status Filter Bar positioned absolutely to span ThreadList's right column + MessageView */}
               <div style={{
           position: 'absolute',
-          top: '15px', // Small gap from the top edge
+          top: '4vh', // Move to very top
           left: '179px', // Adjusted to overlap by 1px for seamless border connection
           right: 0, // Extend to the end
           padding: '0 16px', // Uniform padding for vertical centering
@@ -2056,7 +2056,7 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
           borderBottom: '1px solid #e5e7eb',
           borderLeft: '1px solid #e5e7eb', // Add left border to connect with vertical line
           background: '#FFFBFA',
-          zIndex: 1002,
+          zIndex: 1010, // Increased z-index to ensure it's on top
           height: '60px', // Fixed height for the status bar
           boxSizing: 'border-box'
       }}>
@@ -2621,10 +2621,10 @@ const InboxContainer: React.FC<Props> = ({ onOpenAIChat }) => {
 
       {/* Main content area - offset by status bar height */}
       <div style={{
+        marginTop: '3vh',
         display: 'flex',
         flex: 1,
         overflow: 'hidden',
-        height: '100%'
       }}>
         {/* Debug logging */}
         {currentView === 'discussions' && (() => {

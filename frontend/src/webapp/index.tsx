@@ -23,6 +23,7 @@ import WebsiteHome from './commerce/website/WebsiteHome';
 import AttributionHome from './commerce/AttributionHome';
 import CommerceDashboard from './commerce/CommerceDashboard';
 import TaskManagementDashboard from './tasks/TaskManagementDashboard';
+import SettingsPage from './components/Settings';
 import { useAuth } from "./AuthContext";
 import IntegrationsPanel from './communication/inbox/components/IntegrationsPanel';
 import CommandBChat from './communication/inbox/components/CommandBChat';
@@ -226,6 +227,10 @@ const navigate = useNavigate();
       }
     }
 
+    if (activeIcon === 'settings') {
+      return <SettingsPage />;
+    }
+
     // non-CRM, non-home pages
     const { Component, label } = icons.find(i => i.id === activeIcon)!;
     return (
@@ -258,7 +263,7 @@ const navigate = useNavigate();
       />
 
       {/* Main Content Area */}
-      <div style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex', minWidth: 0, marginTop: 45 }}>
+      <div style={{ flex: 1, padding: 0, overflow: 'hidden', display: 'flex'}}>
         {/* Page Content */}
         <div style={{ flex: 1, overflow: 'auto', minWidth: 0 }}>
         {/* <AIChatCircle /> */}

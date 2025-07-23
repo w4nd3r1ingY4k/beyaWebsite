@@ -4,6 +4,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  margin-top: 60px; /* Add top margin to match other pages */
 }
 
 .header {

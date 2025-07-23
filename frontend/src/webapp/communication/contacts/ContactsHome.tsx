@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../AuthContext';
 import contactsService, { Contact, CreateContactPayload, UpdateContactPayload } from '../../../services/contactsService';
-import './ContactsHome.css';
+import { Search, Plus, Mail, Phone, Edit2, Trash2, X, Check } from 'lucide-react';
 
 interface ContactsHomeState {
   contacts: Contact[];
@@ -23,7 +23,6 @@ const ContactsHome: React.FC = () => {
     error: null
   });
 
-  // Use real user ID from auth context
   const userId = user?.userId;
 
   useEffect(() => {
@@ -56,7 +55,7 @@ const ContactsHome: React.FC = () => {
     try {
       setState(prev => ({ ...prev, error: null }));
       await contactsService.createContact(contactData);
-      await loadContacts(); // Refresh list
+      await loadContacts();
       setState(prev => ({ ...prev, showCreateModal: false }));
     } catch (error) {
       setState(prev => ({ ...prev, error: 'Failed to create contact' }));
@@ -69,7 +68,7 @@ const ContactsHome: React.FC = () => {
     try {
       setState(prev => ({ ...prev, error: null }));
       await contactsService.updateContact(userId, contactId, updates);
-      await loadContacts(); // Refresh list
+      await loadContacts();
       setState(prev => ({ ...prev, editingContact: null }));
     } catch (error) {
       setState(prev => ({ ...prev, error: 'Failed to update contact' }));
@@ -77,12 +76,12 @@ const ContactsHome: React.FC = () => {
   };
 
   const handleDeleteContact = async (contactId: string) => {
-    if (!window.confirm('Are you sure you want to delete this contact?') || !userId) return;
+    if (!window.confirm('Delete this contact?') || !userId) return;
     
     try {
       setState(prev => ({ ...prev, error: null }));
       await contactsService.deleteContact(userId, contactId);
-      await loadContacts(); // Refresh list
+      await loadContacts();
     } catch (error) {
       setState(prev => ({ ...prev, error: 'Failed to delete contact' }));
     }
@@ -96,89 +95,425 @@ const ContactsHome: React.FC = () => {
 
   if (state.loading) {
     return (
-      <div className="contacts-home">
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Loading contacts...</p>
-        </div>
+      <div style={{
+        height: '100vh',
+        width: '100%',
+        backgroundColor: '#FFFBFA',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingLeft: '120px', // Account for side menu
+        paddingTop: '60px' // Account for top spacing
+      }}>
+        <div style={{
+          width: '40px',
+          height: '40px',
+          border: '3px solid #D9D9D9',
+          borderTop: '3px solid #DE1785',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <style>{`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div className="contacts-home">
-      <div className="contacts-header">
-        <h1>Contacts</h1>
-        <button 
-          className="btn-primary"
-          onClick={() => setState(prev => ({ ...prev, showCreateModal: true }))}
-        >
-          <span>+</span>
-          Add Contact
-        </button>
+    <div style={{
+      minHeight: '100vh',
+      width: '100%',
+      backgroundColor: '#FFFBFA',
+      paddingLeft: '120px', // Account for side menu (80px menu + 40px padding)
+      paddingRight: '40px', // Right padding
+      paddingTop: '100px', // Top padding (60px for status bar + 40px extra)
+      paddingBottom: '40px', // Bottom padding
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {/* Header */}
+      <div style={{
+        marginBottom: '32px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '24px'
+        }}>
+          {/* Search */}
+          <div style={{
+            position: 'relative',
+            maxWidth: '400px',
+            flex: '1'
+          }}>
+            <Search 
+              size={20} 
+              style={{
+                position: 'absolute',
+                left: '16px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#D9D9D9'
+              }}
+            />
+            <input
+              type="text"
+              placeholder="Search contacts..."
+              value={state.searchTerm}
+              onChange={(e) => setState(prev => ({ ...prev, searchTerm: e.target.value }))}
+              style={{
+                width: '100%',
+                padding: '16px 16px 16px 48px',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                fontSize: '16px',
+                backgroundColor: '#FFFBFA',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+              onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
+            />
+          </div>
+
+          <button
+            onClick={() => setState(prev => ({ ...prev, showCreateModal: true }))}
+            style={{
+              background: '#DE1785',
+              color: '#FFFBFA',
+              border: 'none',
+              borderRadius: '12px',
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease',
+              boxShadow: '0 2px 8px rgba(222, 23, 133, 0.2)',
+              whiteSpace: 'nowrap'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#c21668';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = '#DE1785';
+              e.currentTarget.style.transform = 'translateY(0)';
+            }}
+          >
+            <Plus size={16} />
+            Add Contact
+          </button>
+        </div>
       </div>
 
-      {state.error && (
-        <div className="error-banner">
-          {state.error}
-        </div>
-      )}
-
-      <div className="contacts-controls">
-        <div className="search-box">
-          <input
-            type="text"
-            placeholder="Search contacts..."
-            value={state.searchTerm}
-            onChange={(e) => setState(prev => ({ ...prev, searchTerm: e.target.value }))}
-            className="search-input"
-          />
-        </div>
-      </div>
-
-      <div className="contacts-list">
+      {/* Content */}
+      <div style={{ flex: 1 }}>
         {filteredContacts.length === 0 ? (
-          <div className="empty-state">
-            {state.searchTerm ? (
-              <>
-                <p>🔍 No contacts match your search</p>
-                <p>Try adjusting your search terms or check the spelling</p>
-              </>
-            ) : (
-              <>
-                <p>👥 No contacts yet</p>
-                <p>Add your first contact to get started!</p>
-                <button 
-                  className="btn-primary"
-                  onClick={() => setState(prev => ({ ...prev, showCreateModal: true }))}
-                  style={{ marginTop: '16px' }}
-                >
-                  <span>+</span>
-                  Add Your First Contact
-                </button>
-              </>
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '400px',
+            textAlign: 'center'
+          }}>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              borderRadius: '50%',
+              backgroundColor: '#FFB8DF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '24px'
+            }}>
+              <Mail size={32} color="#DE1785" />
+            </div>
+            <h3 style={{
+              fontSize: '20px',
+              fontWeight: '400',
+              color: '#000505',
+              margin: '0 0 8px 0'
+            }}>
+              {state.searchTerm ? 'No contacts found' : 'No contacts yet'}
+            </h3>
+            <p style={{
+              fontSize: '16px',
+              color: '#D9D9D9',
+              margin: '0 0 24px 0'
+            }}>
+              {state.searchTerm ? 'Try adjusting your search' : 'Add your first contact to get started'}
+            </p>
+            {!state.searchTerm && (
+              <button
+                onClick={() => setState(prev => ({ ...prev, showCreateModal: true }))}
+                style={{
+                  background: 'transparent',
+                  color: '#DE1785',
+                  border: '1px solid #DE1785',
+                  borderRadius: '12px',
+                  padding: '12px 24px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#DE1785';
+                  e.currentTarget.style.color = '#FFFBFA';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.color = '#DE1785';
+                }}
+              >
+                Create Your First Contact
+              </button>
             )}
           </div>
         ) : (
-          <div className="contacts-table-container">
-            <table className="contacts-table">
+          // Table View
+          <div style={{
+            backgroundColor: '#FFFBFA',
+            border: '1px solid #D9D9D9',
+            borderRadius: '16px',
+            overflow: 'hidden',
+            boxShadow: '0 1px 3px rgba(222, 23, 133, 0.1)'
+          }}>
+            <table style={{
+              width: '100%',
+              borderCollapse: 'collapse'
+            }}>
               <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Notes</th>
-                  <th>Actions</th>
+                <tr style={{
+                  backgroundColor: '#FBF7F7',
+                  borderBottom: '1px solid #D9D9D9'
+                }}>
+                  <th style={{
+                    padding: '20px 24px',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#000505',
+                    borderRight: '1px solid #D9D9D9'
+                  }}>
+                    Name
+                  </th>
+                  <th style={{
+                    padding: '20px 24px',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#000505',
+                    borderRight: '1px solid #D9D9D9'
+                  }}>
+                    Email
+                  </th>
+                  <th style={{
+                    padding: '20px 24px',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#000505',
+                    borderRight: '1px solid #D9D9D9'
+                  }}>
+                    Phone
+                  </th>
+                  <th style={{
+                    padding: '20px 24px',
+                    textAlign: 'left',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#000505',
+                    borderRight: '1px solid #D9D9D9'
+                  }}>
+                    Created
+                  </th>
+                  <th style={{
+                    padding: '20px 24px',
+                    textAlign: 'center',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    color: '#000505',
+                    width: '120px'
+                  }}>
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {filteredContacts.map(contact => (
-                  <ContactRow
+                {filteredContacts.map((contact, index) => (
+                  <tr 
                     key={contact.contactId}
-                    contact={contact}
-                    onEdit={(contact) => setState(prev => ({ ...prev, editingContact: contact }))}
-                    onDelete={handleDeleteContact}
-                  />
+                                         style={{
+                       borderBottom: index < filteredContacts.length - 1 ? '1px solid #D9D9D9' : 'none',
+                       transition: 'background-color 0.2s ease'
+                     }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#FFF7FB';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                                         <td style={{
+                       padding: '20px 24px',
+                       borderRight: '1px solid #D9D9D9'
+                     }}>
+                       <div style={{
+                         display: 'flex',
+                         alignItems: 'center',
+                         gap: '12px'
+                       }}>
+                         <div style={{
+                           width: '36px',
+                           height: '36px',
+                           borderRadius: '50%',
+                           backgroundColor: '#FFB8DF',
+                           display: 'flex',
+                           alignItems: 'center',
+                           justifyContent: 'center',
+                           fontSize: '14px',
+                           fontWeight: '600',
+                           color: '#DE1785'
+                         }}>
+                           {contact.name.charAt(0).toUpperCase()}
+                         </div>
+                         <span style={{
+                           fontSize: '16px',
+                           fontWeight: '500',
+                           color: '#000505'
+                         }}>
+                           {contact.name}
+                         </span>
+                       </div>
+                     </td>
+                     <td style={{
+                       padding: '20px 24px',
+                       borderRight: '1px solid #D9D9D9'
+                     }}>
+                       {contact.email ? (
+                         <a
+                           href={`mailto:${contact.email}`}
+                           style={{
+                             fontSize: '14px',
+                             color: '#DE1785',
+                             textDecoration: 'none',
+                             display: 'flex',
+                             alignItems: 'center',
+                             gap: '8px'
+                           }}
+                           onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                           onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                         >
+                           <Mail size={14} />
+                           {contact.email}
+                         </a>
+                       ) : (
+                         <span style={{ fontSize: '14px', color: '#D9D9D9' }}>—</span>
+                       )}
+                     </td>
+                     <td style={{
+                       padding: '20px 24px',
+                       borderRight: '1px solid #D9D9D9'
+                     }}>
+                       {contact.phone ? (
+                         <a
+                           href={`tel:${contact.phone}`}
+                           style={{
+                             fontSize: '14px',
+                             color: '#DE1785',
+                             textDecoration: 'none',
+                             display: 'flex',
+                             alignItems: 'center',
+                             gap: '8px'
+                           }}
+                           onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                           onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                         >
+                           <Phone size={14} />
+                           {contact.phone}
+                         </a>
+                       ) : (
+                         <span style={{ fontSize: '14px', color: '#D9D9D9' }}>—</span>
+                       )}
+                     </td>
+                     <td style={{
+                       padding: '20px 24px',
+                       borderRight: '1px solid #D9D9D9'
+                     }}>
+                      <span style={{
+                        fontSize: '14px',
+                        color: '#000505'
+                      }}>
+                        {new Date(contact.createdAt).toLocaleDateString()}
+                      </span>
+                    </td>
+                    <td style={{
+                      padding: '20px 24px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        gap: '8px',
+                        justifyContent: 'center'
+                      }}>
+                        <button
+                          onClick={() => setState(prev => ({ ...prev, editingContact: contact }))}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '8px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            color: '#D9D9D9',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#FFB8DF';
+                            e.currentTarget.style.color = '#DE1785';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = '#D9D9D9';
+                          }}
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteContact(contact.contactId)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '8px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            color: '#D9D9D9',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#FFB8DF';
+                            e.currentTarget.style.color = '#DE1785';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                            e.currentTarget.style.color = '#D9D9D9';
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -186,6 +521,7 @@ const ContactsHome: React.FC = () => {
         )}
       </div>
 
+      {/* Modals */}
       {state.showCreateModal && (
         <ContactModal
           mode="create"
@@ -204,76 +540,33 @@ const ContactsHome: React.FC = () => {
           onCancel={() => setState(prev => ({ ...prev, editingContact: null }))}
         />
       )}
+
+      {/* Error Toast */}
+      {state.error && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '24px',
+          background: '#DE1785',
+          color: '#FFFBFA',
+          padding: '16px 24px',
+          borderRadius: '12px',
+          fontSize: '14px',
+          fontWeight: '500',
+          boxShadow: '0 4px 12px rgba(222, 23, 133, 0.3)',
+          zIndex: 1001
+        }}>
+          {state.error}
+        </div>
+      )}
     </div>
   );
 };
 
-// Contact Row Component for Table
-interface ContactRowProps {
-  contact: Contact;
-  onEdit: (contact: Contact) => void;
-  onDelete: (contactId: string) => void;
-}
-
-const ContactRow: React.FC<ContactRowProps> = ({ contact, onEdit, onDelete }) => {
-  return (
-    <tr className="contact-row">
-      <td className="contact-name">
-        <div className="name-cell">
-          <span className="name-text">{contact.name}</span>
-        </div>
-      </td>
-      <td className="contact-email">
-        {contact.email ? (
-          <a href={`mailto:${contact.email}`} className="email-link">
-            {contact.email}
-          </a>
-        ) : (
-          <span className="no-data">—</span>
-        )}
-      </td>
-      <td className="contact-phone">
-        {contact.phone ? (
-          <a href={`tel:${contact.phone}`} className="phone-link">
-            {contact.phone}
-          </a>
-        ) : (
-          <span className="no-data">—</span>
-        )}
-      </td>
-      <td className="contact-notes">
-        {contact.notes && contact.notes.length > 0 ? (
-          <span className="notes-count">{contact.notes.length} notes</span>
-        ) : (
-          <span className="no-data">—</span>
-        )}
-      </td>
-      <td className="contact-actions">
-        <div className="action-buttons">
-          <button 
-            className="btn-secondary btn-small"
-            onClick={() => onEdit(contact)}
-            title="Edit contact"
-          >
-            ✏️
-          </button>
-          <button 
-            className="btn-danger btn-small"
-            onClick={() => onDelete(contact.contactId)}
-            title="Delete contact"
-          >
-            🗑️
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
-};
-
-// Contact Modal Component
+// Modal Component
 interface ContactModalProps {
   mode: 'create' | 'edit';
-  userId: string;
+  userId?: string;
   contact?: Contact;
   onSave: (data: any) => void;
   onCancel: () => void;
@@ -289,10 +582,7 @@ const ContactModal: React.FC<ContactModalProps> = ({ mode, userId, contact, onSa
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.name.trim()) {
-      alert('Name is required');
-      return;
-    }
+    if (!formData.name.trim()) return;
 
     if (mode === 'create') {
       onSave({
@@ -311,50 +601,220 @@ const ContactModal: React.FC<ContactModalProps> = ({ mode, userId, contact, onSa
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content">
-        <div className="modal-header">
-          <h2>{mode === 'create' ? 'Add Contact' : 'Edit Contact'}</h2>
-          <button className="modal-close" onClick={onCancel}>×</button>
+    <div style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 5, 5, 0.4)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+      padding: '24px'
+    }} onClick={onCancel}>
+      <div style={{
+        background: '#FFFBFA',
+        borderRadius: '20px',
+        width: '100%',
+        maxWidth: '400px',
+        overflow: 'hidden',
+        boxShadow: '0 20px 40px rgba(0, 5, 5, 0.15)'
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{
+          padding: '32px 32px 24px 32px',
+          borderBottom: '1px solid #D9D9D9'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <h2 style={{
+              fontSize: '24px',
+              fontWeight: '400',
+              color: '#000505',
+              margin: 0
+            }}>
+              {mode === 'create' ? 'Add Contact' : 'Edit Contact'}
+            </h2>
+            <button
+              onClick={onCancel}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: '8px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                color: '#D9D9D9',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#FFB8DF';
+                e.currentTarget.style.color = '#DE1785';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = '#D9D9D9';
+              }}
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
         
-        <form onSubmit={handleSubmit} className="contact-form">
-          <div className="form-group">
-            <label htmlFor="name">Name *</label>
+        <form onSubmit={handleSubmit} style={{ padding: '24px 32px 32px 32px' }}>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px'
+            }}>
+              Name *
+            </label>
             <input
-              id="name"
               type="text"
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              style={{
+                width: '100%',
+                padding: '16px',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                fontSize: '16px',
+                backgroundColor: '#FFFBFA',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+              onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
               required
             />
           </div>
           
-          <div className="form-group">
-            <label htmlFor="email">Email</label>
+          <div style={{ marginBottom: '20px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px'
+            }}>
+              Email
+            </label>
             <input
-              id="email"
               type="email"
               value={formData.email}
               onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              style={{
+                width: '100%',
+                padding: '16px',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                fontSize: '16px',
+                backgroundColor: '#FFFBFA',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+              onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
             />
           </div>
           
-          <div className="form-group">
-            <label htmlFor="phone">Phone</label>
+          <div style={{ marginBottom: '32px' }}>
+            <label style={{
+              display: 'block',
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#000505',
+              marginBottom: '8px'
+            }}>
+              Phone
+            </label>
             <input
-              id="phone"
               type="tel"
               value={formData.phone}
               onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+              style={{
+                width: '100%',
+                padding: '16px',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                fontSize: '16px',
+                backgroundColor: '#FFFBFA',
+                outline: 'none',
+                transition: 'border-color 0.2s ease',
+                boxSizing: 'border-box'
+              }}
+              onFocus={(e) => e.currentTarget.style.borderColor = '#DE1785'}
+              onBlur={(e) => e.currentTarget.style.borderColor = '#D9D9D9'}
             />
           </div>
           
-          <div className="modal-actions">
-            <button type="button" className="btn-secondary" onClick={onCancel}>
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            justifyContent: 'flex-end'
+          }}>
+            <button
+              type="button"
+              onClick={onCancel}
+              style={{
+                background: 'transparent',
+                color: '#D9D9D9',
+                border: '1px solid #D9D9D9',
+                borderRadius: '12px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#DE1785';
+                e.currentTarget.style.color = '#DE1785';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = '#D9D9D9';
+                e.currentTarget.style.color = '#D9D9D9';
+              }}
+            >
               Cancel
             </button>
-            <button type="submit" className="btn-primary">
+            <button
+              type="submit"
+              disabled={!formData.name.trim()}
+              style={{
+                background: formData.name.trim() ? '#DE1785' : '#D9D9D9',
+                color: '#FFFBFA',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '12px 24px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: formData.name.trim() ? 'pointer' : 'not-allowed',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+              onMouseEnter={(e) => {
+                if (formData.name.trim()) {
+                  e.currentTarget.style.background = '#c21668';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (formData.name.trim()) {
+                  e.currentTarget.style.background = '#DE1785';
+                }
+              }}
+            >
+              <Check size={16} />
               {mode === 'create' ? 'Create' : 'Update'}
             </button>
           </div>

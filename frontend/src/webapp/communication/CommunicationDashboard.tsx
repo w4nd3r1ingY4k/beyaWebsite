@@ -26,21 +26,21 @@ const CommunicationOptions: CommunicationOption[] = [
     title: 'Contacts',
     description: 'Manage your customer relationships',
     icon: <Users size={32} />,
-    color: '#3B82F6'
+    color: '#DE1785'
   },
   {
     id: 'schedule',
     title: 'Schedule',
     description: 'Calendar and appointment management',
     icon: <Calendar size={32} />,
-    color: '#10B981'
+    color: '#DE1785'
   },
   {
     id: 'tasks',
     title: 'Tasks',
     description: 'Task management and tracking',
     icon: <CheckSquare size={32} />,
-    color: '#F59E0B'
+    color: '#DE1785'
   }
 ];
 
@@ -53,33 +53,17 @@ const CommunicationDashboard: React.FC<CommunicationDashboardProps> = ({ onOptio
       display: 'flex',
       flexDirection: 'column'
     }}>
-      {/* Header */}
-      <div style={{ marginBottom: '40px' }}>
-        <h1 style={{
-          fontSize: '32px',
-          fontWeight: '700',
-          color: '#1e293b',
-          margin: '0 0 8px 0',
-          letterSpacing: '-0.025em'
-        }}>
-          Communication
-        </h1>
-        <p style={{
-          fontSize: '16px',
-          color: '#64748b',
-          margin: 0,
-          lineHeight: '1.5'
-        }}>
-          Connect with your customers and manage communications
-        </p>
-      </div>
+
 
       {/* Grid of Options */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        marginTop: '60px', // Add top margin
         gap: '24px',
-        maxWidth: '1200px'
+        margin: '60px auto 0 auto', // Center the grid horizontally
+        width: '100%',
+        height: '1%'
       }}>
         {CommunicationOptions.map((option) => (
           <div
