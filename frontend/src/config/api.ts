@@ -25,7 +25,7 @@ export const API_ENDPOINTS = {
   BACKEND_URL: env('REACT_APP_BACKEND_URL', 'http://localhost:2074'),
   
   // AI Service with fallback chain
-  AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL') || env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
+  AI_SERVICE_URL: env('REACT_APP_AI_SERVICE_URL', '') || env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
   
   // API Gateway endpoints
   API_GATEWAY_URL: env('REACT_APP_API_GATEWAY_URL', 'https://t3p58b0b30.execute-api.us-east-1.amazonaws.com'),
@@ -35,6 +35,9 @@ export const API_ENDPOINTS = {
   
   // New Contacts V2 API
   CONTACTS_API_BASE: env('REACT_APP_CONTACTS_API_BASE', 'https://bij7as05n4.execute-api.us-east-1.amazonaws.com/prod'),
+
+  // Calendar V1 API
+  CALENDAR_API_BASE: env('REACT_APP_CALENDAR_API_BASE', 'https://0zuyl9hjz6.execute-api.us-east-1.amazonaws.com/prod'),
 
   // Sandbox server for local testing
   SANDBOX_URL: 'http://localhost:3001',

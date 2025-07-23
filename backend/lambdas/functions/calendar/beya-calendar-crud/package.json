@@ -1,0 +1,20 @@
+{
+  "name": "beya-calendar-crud",
+  "version": "1.0.0",
+  "description": "Beya Calendar CRUD Lambda Function",
+  "main": "handlers/calendarHandler.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "zip -r beya-calendar-crud.zip . -x node_modules/\\* .git/\\* *.zip",
+    "install-prod": "npm install --production"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.840.0",
+    "@aws-sdk/lib-dynamodb": "^3.840.0",
+    "uuid": "^11.1.0"
+  },
+  "keywords": ["beya", "calendar", "schedule", "lambda", "aws"],
+  "author": "Beya Team",
+  "license": "ISC"
+} 

@@ -58,10 +58,10 @@ export const NavigationBar: React.FC = () => {
   };
 
   const navItems = [
-    { id: "mission", label: "Mission" },
+    /* { id: "mission", label: "Mission" },
     { id: "features", label: "Features" },
     { id: "blog", label: "Blog" },
-    { id: "our-team", label: "Team" },
+    { id: "our-team", label: "Team" }, */
   ];
 
   // Styles

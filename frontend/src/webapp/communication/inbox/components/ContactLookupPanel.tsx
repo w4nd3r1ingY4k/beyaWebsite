@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from "../../../AuthContext";
 import contactsService, { Contact } from '../../../../services/contactsService';
-import { User, Mail, Phone, FileText, Plus, Edit, Clock } from 'lucide-react';
+import calendarService, { CalendarEvent } from '../../../../services/calendarService';
+import { User, Mail, Phone, FileText, Plus, Edit, Clock, Calendar } from 'lucide-react';
 
 interface ContactLookupPanelProps {
   selectedThreadId: string | null;
@@ -25,6 +26,10 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
     email: '',
     phone: ''
   });
+  
+  // Calendar state
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState<boolean>(false);
 
   // Extract email from flow data
   const extractEmailFromFlow = (flowData: any): string | null => {
@@ -112,6 +117,45 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
 
     searchContact();
   }, [selectedThreadId, flow]);
+
+  // Fetch upcoming calendar events for the contact
+  useEffect(() => {
+    const fetchUpcomingEvents = async () => {
+      if (!contact?.contactId || !user?.userId) {
+        setUpcomingEvents([]);
+        return;
+      }
+
+      setCalendarLoading(true);
+      try {
+        // Get events for the next 30 days
+        const endDate = new Date();
+        endDate.setDate(endDate.getDate() + 30);
+        
+        const events = await calendarService.getEventsForRange(
+          contact.contactId,
+          new Date(),
+          endDate
+        );
+
+        // Filter to only upcoming events (not past events)
+        const now = new Date();
+        const upcoming = events
+          .filter(event => new Date(event.startTime) > now)
+          .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+          .slice(0, 5); // Show max 5 upcoming events
+
+        setUpcomingEvents(upcoming);
+      } catch (error) {
+        console.error('Failed to fetch calendar events:', error);
+        setUpcomingEvents([]);
+      } finally {
+        setCalendarLoading(false);
+      }
+    };
+
+    fetchUpcomingEvents();
+  }, [contact?.contactId, user?.userId]);
 
   // Format timestamp for display
   const formatDate = (timestamp: string | number): string => {
@@ -570,6 +614,86 @@ const ContactLookupPanel: React.FC<ContactLookupPanelProps> = ({
                   Created {formatDate(contact.createdAt)}
                 </span>
               </div>
+            </div>
+
+            {/* Upcoming Calendar Events Section */}
+            <div style={{ 
+              background: '#fff', 
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              padding: '16px',
+              marginBottom: '16px'
+            }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                marginBottom: '12px'
+              }}>
+                <Calendar size={16} style={{ color: '#6b7280' }} />
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                  Upcoming Events
+                </span>
+                {calendarLoading && (
+                  <span style={{ fontSize: '12px', color: '#6b7280', fontStyle: 'italic' }}>
+                    Loading...
+                  </span>
+                )}
+              </div>
+              
+              {upcomingEvents.length > 0 ? (
+                <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {upcomingEvents.map((event, index) => (
+                    <div key={event.eventId} style={{ 
+                      padding: '8px 0',
+                      borderBottom: index < upcomingEvents.length - 1 ? '1px solid #f3f4f6' : 'none'
+                    }}>
+                      <p style={{ 
+                        margin: '0 0 4px 0', 
+                        fontSize: '13px', 
+                        color: '#374151',
+                        fontWeight: '500'
+                      }}>
+                        {event.title}
+                      </p>
+                      <div style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '8px',
+                        fontSize: '11px', 
+                        color: '#9ca3af'
+                      }}>
+                        <Clock size={10} />
+                        <span>
+                          {new Date(event.startTime).toLocaleDateString()} at{' '}
+                          {new Date(event.startTime).toLocaleTimeString([], { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                          })}
+                        </span>
+                      </div>
+                      {event.location && (
+                        <p style={{ 
+                          margin: '2px 0 0 0', 
+                          fontSize: '11px', 
+                          color: '#9ca3af'
+                        }}>
+                          📍 {event.location}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : !calendarLoading ? (
+                <p style={{ 
+                  fontSize: '12px', 
+                  color: '#6b7280', 
+                  fontStyle: 'italic',
+                  margin: '0'
+                }}>
+                  No upcoming events
+                </p>
+              ) : null}
             </div>
 
             {/* Notes Section */}

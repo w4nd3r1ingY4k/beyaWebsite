@@ -175,7 +175,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
             </p>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: "0.85rem", marginTop: "1rem" }}>
-              {["AI-Powered Commerce", "Unified Dashboard", "Natural Language Control"].map((text, index) => (
+              {["Communication", "Commerce", "Intelligence"].map((text, index) => (
                 <div
                   key={index}
                   style={{
@@ -197,6 +197,7 @@ export const HeroSection: React.FC<HeroSectionProps> = () => {
 
             <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem", marginTop: "1.5rem" }}>
               <button
+                onClick={() => window.open('https://cal.com/akbar-shamji', '_blank')}
                 style={{
                   padding: "1.2rem 2.6rem",
                   color: "#fff",

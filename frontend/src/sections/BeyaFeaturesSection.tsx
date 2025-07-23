@@ -7,7 +7,7 @@ export const BeyaFeaturesSection = () => {
   const features = [
     {
       id: 'ai-commerce',
-      title: 'CRM and Commerce',
+      title: 'Communication',
       subtitle: 'Connect with your customers and collect payments',
       description: "Beya's AI understands your customers, predicts trends, and automates your entire sales funnel. From product recommendations to inventory management, let artificial intelligence handle the complexity while you focus on strategy.",
       image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=600&h=400&fit=crop&crop=entropy&auto=format&q=80',
@@ -20,7 +20,7 @@ export const BeyaFeaturesSection = () => {
     },
     {
       id: 'unified-dashboard',
-      title: 'Unified Dashboard',
+      title: 'Commerce',
       subtitle: 'Everything in its right place',
       description: 'Stop juggling multiple tools and platforms. Beya brings together sales, marketing, customer service, and analytics into one intuitive dashboard that gives you complete visibility and control over your business.',
       image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=600&h=400&fit=crop&crop=entropy&auto=format&q=80',
@@ -33,7 +33,7 @@ export const BeyaFeaturesSection = () => {
     },
     {
       id: 'natural-language',
-      title: 'Natural Language Control',
+      title: 'Intelligence',
       subtitle: 'Control your business with one conversation',
       description: 'Skip complex interfaces and technical barriers. Simply tell Beya what you want to accomplish in plain English, and watch it execute your commands. From generating reports to launching campaigns, business management has never been this intuitive.',
       image: 'https://images.unsplash.com/photo-1589254065878-42c9da997008?w=600&h=400&fit=crop&crop=entropy&auto=format&q=80',

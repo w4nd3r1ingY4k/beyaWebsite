@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import { Footer } from "@/components/Footer";
 import { HeroSection } from "@/sections/HeroSection";
 import { BeyaFeaturesSection } from "@/sections/BeyaFeaturesSection";
+import { OnlyOnBeyaSection } from "@/sections/OnlyOnBeyaSection";
 import { TeamSection } from "@/sections/TeamSection";
 import { BlogSection } from "@/sections/BlogSection";
 import { NavigationBar } from "@/components/navigation/NavigationBar";
@@ -37,9 +38,10 @@ const HomePage = () => {
       <ScrollDown />
       <HeroSection {...heroData} />
       <BeyaFeaturesSection />
-      <BlogSection blogPosts={blogPosts} />
-      <TeamSection teamMembers={teamMembers} />
-      <Footer {...footerData} />
+      <OnlyOnBeyaSection />
+      {/* <BlogSection blogPosts={blogPosts} /> */}
+      {/* <TeamSection teamMembers={teamMembers} /> */}
+      {/* <Footer {...footerData} /> */}
     </div>
   );
 };
