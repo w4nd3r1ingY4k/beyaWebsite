@@ -6,6 +6,8 @@ import TicketForm from './components/TicketForm';
 import { useAuth } from '../../AuthContext';
 import SpaceSelector from '@/webapp/tasks/components/SpaceSelector';
 import BoardView from '@/webapp/tasks/components/BoardView';
+import tasksService from '@/services/tasksService';
+import type { Task as BackendTask } from '@/services/tasksService';
 
 // Types
 export interface Ticket {
@@ -175,6 +177,29 @@ const styles = {
   },
 };
 
+// Helper to map Task status to Ticket status
+const mapTaskStatusToTicketStatus = (status: string): Ticket['status'] => {
+  switch (status) {
+    case 'pending': return 'open';
+    case 'in_progress': return 'in_progress';
+    case 'review': return 'under_review';
+    case 'done': return 'resolved';
+    case 'cancelled': return 'closed';
+    default: return 'open';
+  }
+};
+// Helper to map Ticket status to Task status (returns TaskStatus union)
+const mapTicketStatusToTaskStatus = (status: Ticket['status']): BackendTask['status'] => {
+  switch (status) {
+    case 'open': return 'pending';
+    case 'in_progress': return 'in_progress';
+    case 'under_review': return 'review';
+    case 'resolved': return 'done';
+    case 'closed': return 'cancelled';
+    default: return 'pending';
+  }
+};
+
 const TicketsHome: React.FC = () => {
   const { user } = useAuth();
   // Add state for spaces, boards, and view mode
@@ -187,25 +212,59 @@ const TicketsHome: React.FC = () => {
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterPriority, setFilterPriority] = useState<string>('all');
+  // Add filter options
+  const statusOptions: { value: Ticket['status'], label: string }[] = [
+    { value: 'open', label: 'Open' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'under_review', label: 'Under Review' },
+    { value: 'resolved', label: 'Resolved' },
+    { value: 'closed', label: 'Closed' },
+  ];
+  const priorityOptions: { value: Ticket['priority'], label: string }[] = [
+    { value: 'urgent', label: 'Urgent' },
+    { value: 'high', label: 'High' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'low', label: 'Low' },
+  ];
+  const [filterStatuses, setFilterStatuses] = useState<Ticket['status'][]>([]);
+  const [filterPriorities, setFilterPriorities] = useState<Ticket['priority'][]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Load tickets from localStorage on mount
   useEffect(() => {
-    const storedTickets = localStorage.getItem('beyaTickets');
-    if (storedTickets) {
+    const fetchTickets = async () => {
+      if (!selectedBoard || !user) return;
+      setLoading(true);
+      setError(null);
       try {
-        setTickets(JSON.parse(storedTickets));
-      } catch (error) {
-        console.error('Error loading tickets:', error);
-        setTickets([]);
+        const tasks: BackendTask[] = await tasksService.getTasksByBoard(selectedBoard.id || selectedBoard.boardId, user.email);
+        setTickets(tasks.map((task) => ({
+          id: task.taskId,
+          title: task.title,
+          description: task.description || '',
+          status: mapTaskStatusToTicketStatus(task.status),
+          priority: task.priority as Ticket['priority'],
+          assignee: task.assigneeId || '',
+          reporter: task.reporterId || '',
+          created_at: task.createdAt,
+          updated_at: task.updatedAt,
+          due_date: task.dueDate,
+          customerId: (task as any).customerId,
+          tags: task.tags || [],
+        })));
+      } catch (err: any) {
+        setError(err.message || 'Failed to load tickets');
+      } finally {
+        setLoading(false);
       }
-    }
-  }, []);
+    };
+    fetchTickets();
+  }, [selectedBoard, user]);
 
   // Save tickets to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('beyaTickets', JSON.stringify(tickets));
+    // No longer needed as tickets are fetched from backend
   }, [tickets]);
 
   // Load spaces, boards, and set defaults (mock or adapt as needed)
@@ -235,35 +294,30 @@ const TicketsHome: React.FC = () => {
     }
   }, [selectedSpace]);
 
-  // Filter tickets based on search and filters
+  // Update filteredTickets to use advanced filters
   const filteredTickets = useMemo(() => {
     let filtered = [...tickets];
-
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(ticket => 
+      filtered = filtered.filter(ticket =>
         ticket.title.toLowerCase().includes(query) ||
         ticket.description.toLowerCase().includes(query) ||
         ticket.id.toLowerCase().includes(query)
       );
     }
-
-    // Status filter
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter(ticket => ticket.status === filterStatus);
+    // Status filter (multi-select)
+    if (filterStatuses.length > 0) {
+      filtered = filtered.filter(ticket => filterStatuses.includes(ticket.status));
     }
-
-    // Priority filter
-    if (filterPriority !== 'all') {
-      filtered = filtered.filter(ticket => ticket.priority === filterPriority);
+    // Priority filter (multi-select)
+    if (filterPriorities.length > 0) {
+      filtered = filtered.filter(ticket => filterPriorities.includes(ticket.priority));
     }
-
     // Sort by updated_at (newest first)
     filtered.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-
     return filtered;
-  }, [tickets, searchQuery, filterStatus, filterPriority]);
+  }, [tickets, searchQuery, filterStatuses, filterPriorities]);
 
   // Statistics
   const stats = useMemo(() => {
@@ -330,38 +384,103 @@ const TicketsHome: React.FC = () => {
   };
 
   // Handlers
-  const handleCreateTicket = useCallback((ticketData: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'reporter'>) => {
-    const newTicket: Ticket = {
-      ...ticketData,
-      id: `TICKET-${Date.now()}`,
-      reporter: user?.email || 'Unknown User',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-
-    setTickets(prev => [newTicket, ...prev]);
-    setSelectedTicket(newTicket);
-    setShowCreateForm(false);
-  }, [user]);
-
-  const handleUpdateTicket = useCallback((ticketId: string, updates: Partial<Ticket>) => {
-    setTickets(prev => prev.map(ticket => 
-      ticket.id === ticketId 
-        ? { ...ticket, ...updates, updated_at: new Date().toISOString() }
-        : ticket
-    ));
-
-    if (selectedTicket?.id === ticketId) {
-      setSelectedTicket(prev => prev ? { ...prev, ...updates, updated_at: new Date().toISOString() } : null);
+  const handleCreateTicket = useCallback(async (ticketData: Omit<Ticket, 'id' | 'created_at' | 'updated_at' | 'reporter'>) => {
+    if (!selectedBoard || !selectedSpace || !user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const newTask = await tasksService.createTask({
+        boardId: selectedBoard.id || selectedBoard.boardId,
+        spaceId: selectedSpace.id || selectedSpace.spaceId,
+        title: ticketData.title,
+        description: ticketData.description,
+        status: mapTicketStatusToTaskStatus(ticketData.status),
+        priority: ticketData.priority as BackendTask['priority'],
+        assigneeId: ticketData.assignee,
+        reporterId: user.email,
+        tags: ticketData.tags || [],
+        dueDate: ticketData.due_date,
+      });
+      const newTicket: Ticket = {
+        id: newTask.taskId,
+        title: newTask.title,
+        description: newTask.description || '',
+        status: mapTaskStatusToTicketStatus(newTask.status),
+        priority: newTask.priority as Ticket['priority'],
+        assignee: newTask.assigneeId || '',
+        reporter: newTask.reporterId || '',
+        created_at: newTask.createdAt,
+        updated_at: newTask.updatedAt,
+        due_date: newTask.dueDate,
+        customerId: (newTask as any).customerId,
+        tags: newTask.tags || [],
+      };
+      setTickets(prev => [newTicket, ...prev]);
+      setSelectedTicket(newTicket);
+      setShowCreateForm(false);
+    } catch (err: any) {
+      setError(err.message || 'Failed to create ticket');
+    } finally {
+      setLoading(false);
     }
-  }, [selectedTicket]);
+  }, [selectedBoard, selectedSpace, user]);
 
-  const handleDeleteTicket = useCallback((ticketId: string) => {
-    setTickets(prev => prev.filter(ticket => ticket.id !== ticketId));
-    if (selectedTicket?.id === ticketId) {
-      setSelectedTicket(null);
+  const handleUpdateTicket = useCallback(async (ticketId: string, updates: Partial<Ticket>) => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const updatedTask = await tasksService.updateTask(ticketId, user.email, {
+        title: updates.title,
+        description: updates.description,
+        status: updates.status ? mapTicketStatusToTaskStatus(updates.status) : undefined,
+        priority: updates.priority as BackendTask['priority'],
+        assigneeId: updates.assignee,
+        tags: updates.tags,
+        dueDate: updates.due_date,
+      });
+      setTickets(prev => prev.map(ticket =>
+        ticket.id === ticketId
+          ? {
+              ...ticket,
+              ...updates,
+              status: updates.status ? updates.status : ticket.status,
+              updated_at: updatedTask.updatedAt,
+            }
+          : ticket
+      ));
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket(prev => prev ? { ...prev, ...updates, status: updates.status ? updates.status : prev.status, updated_at: updatedTask.updatedAt } : null);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to update ticket');
+    } finally {
+      setLoading(false);
     }
-  }, [selectedTicket]);
+  }, [user, selectedTicket]);
+
+  const handleDeleteTicket = useCallback(async (ticketId: string) => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Implement deleteTask in tasksService if not present
+      if (typeof tasksService.deleteTask === 'function') {
+        await tasksService.deleteTask(ticketId, user.email);
+      } else {
+        // fallback: just remove from UI
+        setTickets(prev => prev.filter(ticket => ticket.id !== ticketId));
+      }
+      setTickets(prev => prev.filter(ticket => ticket.id !== ticketId));
+      if (selectedTicket?.id === ticketId) {
+        setSelectedTicket(null);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete ticket');
+    } finally {
+      setLoading(false);
+    }
+  }, [user, selectedTicket]);
 
   return (
     <div style={styles.container}>
@@ -426,6 +545,54 @@ const TicketsHome: React.FC = () => {
           </div>
         </div>
       </div>
+      {/* Advanced Filters */}
+      <div style={{ display: 'flex', gap: 24, alignItems: 'center', padding: '16px 24px', background: '#fff', borderBottom: '1px solid #E5E7EB' }}>
+        <div>
+          <span style={{ fontWeight: 500, color: '#EC4899', marginRight: 8 }}>Status:</span>
+          {statusOptions.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setFilterStatuses(s => s.includes(opt.value) ? s.filter(v => v !== opt.value) : [...s, opt.value])}
+              style={{
+                marginRight: 6,
+                padding: '4px 12px',
+                borderRadius: 16,
+                border: filterStatuses.includes(opt.value) ? 'none' : '1.5px solid #EC4899',
+                background: filterStatuses.includes(opt.value) ? '#EC4899' : '#fff',
+                color: filterStatuses.includes(opt.value) ? '#fff' : '#EC4899',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >{opt.label}</button>
+          ))}
+        </div>
+        <div>
+          <span style={{ fontWeight: 500, color: '#EC4899', marginRight: 8 }}>Priority:</span>
+          {priorityOptions.map(opt => (
+            <button
+              key={opt.value}
+              onClick={() => setFilterPriorities(s => s.includes(opt.value) ? s.filter(v => v !== opt.value) : [...s, opt.value])}
+              style={{
+                marginRight: 6,
+                padding: '4px 12px',
+                borderRadius: 16,
+                border: filterPriorities.includes(opt.value) ? 'none' : '1.5px solid #EC4899',
+                background: filterPriorities.includes(opt.value) ? '#EC4899' : '#fff',
+                color: filterPriorities.includes(opt.value) ? '#fff' : '#EC4899',
+                fontWeight: 500,
+                fontSize: 13,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >{opt.label}</button>
+          ))}
+        </div>
+      </div>
+      {/* Loading/Error States */}
+      {loading && <div style={{ padding: 16, color: '#EC4899', fontWeight: 500 }}>Loading...</div>}
+      {error && <div style={{ padding: 16, color: '#EF4444', fontWeight: 500 }}>{error}</div>}
       {/* Stats Bar */}
       <div style={styles.statsBar}>
         <div style={styles.statItem}>

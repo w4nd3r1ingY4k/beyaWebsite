@@ -395,6 +395,19 @@ class TasksService {
     const result = await response.json();
     return result.result;
   }
+
+  // Delete Task
+  async deleteTask(taskId: string, userId: string): Promise<void> {
+    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}?userId=${userId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete task');
+    }
+  }
 }
 
 export const tasksService = new TasksService();
