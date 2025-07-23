@@ -13,6 +13,7 @@ import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnec
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
 import { MultiServicePollingManager } from './services/multi-user-polling.js';
 import { normalizeNumber } from './services/normalizePhone.js';
+import { handler as tasksHandler } from './lambdas/functions/tasks/beya-tasks-crud/handlers/tasksHandler.js';
 
 // Initialize SDKs
 const pd = createBackendClient({
@@ -2613,5 +2614,31 @@ app.get("/api/v1/proactive-insights", async (req, res) => {
   } catch (err) {
     console.error('Failed to generate proactive insights:', err);
     res.status(500).json({ error: 'Failed to generate insights', details: err.message });
+  }
+});
+
+// Add this before the server is started
+app.post('/api/v1/tasks', async (req, res) => {
+  try {
+    // The handler expects an event with { operation, payload }
+    const { operation, payload } = req.body;
+    if (!operation) {
+      return res.status(400).json({ error: 'operation is required' });
+    }
+    const event = { operation, payload };
+    const result = await tasksHandler(event);
+    // If the handler returns a statusCode, use it; otherwise, assume 200
+    if (result && typeof result.statusCode === 'number') {
+      // If body is a string, try to parse as JSON
+      let body = result.body;
+      try {
+        body = typeof body === 'string' ? JSON.parse(body) : body;
+      } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in /api/v1/tasks:', error);
+    return res.status(500).json({ error: error.message });
   }
 });
