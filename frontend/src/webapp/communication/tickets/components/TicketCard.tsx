@@ -3,13 +3,13 @@ import { User, Tag, Clock, Trash2 } from 'lucide-react';
 import styles from '@/styles/TaskCard.module.css';
 import { Task, TaskPriority, TaskType } from '@/types/taskManagement';
 
-interface TaskCardProps {
+interface TicketCardProps {
   task: Task;
   onClick: () => void;
   onDelete?: () => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, onDelete }) => {
+const TicketCard: React.FC<TicketCardProps> = ({ task, onClick, onDelete }) => {
   const getPriorityColor = (priority: TaskPriority) => {
     switch (priority) {
       case 'urgent': return '#ef4444';
@@ -126,4 +126,4 @@ const TaskCard: React.FC<TaskCardProps> = ({ task, onClick, onDelete }) => {
   );
 };
 
-export default TaskCard; 
+export default TicketCard; 

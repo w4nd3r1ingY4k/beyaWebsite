@@ -1,8 +1,8 @@
 import React from 'react';
 import styles from '@/styles/KanbanView.module.css';
 import { Board, Task } from '@/types/taskManagement';
-import TaskCard from './TaskCard';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
+import TicketCard from './TicketCard';
 
 interface KanbanViewProps {
   board: Board;
@@ -79,7 +79,7 @@ const KanbanView: React.FC<KanbanViewProps> = ({
                                 background: '#fff',
                               }}
                             >
-                              <TaskCard
+                              <TicketCard
                                 task={task}
                                 onClick={() => onSelectTask(task)}
                                 onDelete={() => onDeleteTask(task.id)}

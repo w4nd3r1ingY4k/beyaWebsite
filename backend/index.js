@@ -4,68 +4,14 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 import express from "express";
-import { createBackendClient } from "@pipedream/sdk/server";
-import OpenAI from "openai";
 import cors from "cors";
 import { handleShopifyConnect, handleBusinessCentralConnect, handleKlaviyoConnect, handleSquareConnect, handleGmailConnect, handleWhatsAppConnect } from './connect/connect.js';
 import { semanticSearch, queryWithAI, getCustomerContext, searchByThreadId, searchWithinThread } from './services/semantic-search.js';
 import { MultiServicePollingManager } from './services/multi-user-polling.js';
 import { normalizeNumber } from './services/normalizePhone.js';
-import { handler as tasksHandler } from './lambdas/functions/tasks/beya-tasks-crud/handlers/tasksHandler.js';
-
-// Initialize SDKs
-const pd = createBackendClient({
-  environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
-  credentials: {
-    clientId: process.env.PIPEDREAM_CLIENT_ID,
-    clientSecret: process.env.PIPEDREAM_CLIENT_SECRET,
-  },
-  projectId: process.env.PIPEDREAM_PROJECT_ID,
-});
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-import square from 'square';
-
-/**
- * Get connected account credentials from Pipedream
- */
-async function getConnectedAccountCredentials(appSlug, externalUserId) {
-  try {
-    // Get the connected account for this user
-    const accounts = await pd.getAccounts({
-      app: appSlug,
-      external_user_id: externalUserId,
-      include_credentials: 1, // Required to get OAuth credentials
-    });
-    
-    if (accounts && accounts.data && accounts.data.length > 0) {
-      // Return the first connected account's credentials
-      return accounts.data[0].credentials;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error(`Error fetching connected account for ${appSlug}:`, error);
-    return null;
-  }
-}
-
-/**
- * Initialize Square client with Pipedream credentials
- */
-async function getSquareClient(externalUserId) {
-  const credentials = await getConnectedAccountCredentials('square', externalUserId);
-  
-  if (!credentials || !credentials.access_token) {
-    throw new Error('Square account not connected or credentials not available');
-  }
-  
-  return new Client({
-    accessToken: credentials.access_token,
-    environment: credentials.sandbox ? 'sandbox' : 'production'
-  });
-}
+import tasksRouter from './routes/tasks.js';
+import { multiServicePollingManager } from './app-setup.js';
+import pipedreamRouter from './routes/pipedream.js';
 
 // Tool manifest with proper MCP tool names (UPPERCASE with hyphens)
 const toolManifest = {
@@ -798,86 +744,15 @@ Important:
 
 // Express server setup
 const app = express();
-app.use(cors({ origin: "*" })); // Configure appropriately for production
-app.use(express.json());
+const allowedOrigins = [
+  "https://usebeya.com/",
+  "http://localhost:3000"
+];
 
-// Initialize Multi-Service Polling Manager
-const multiServicePollingManager = new MultiServicePollingManager();
-console.log("🔄 Multi-Service Polling Manager initialized - auto-polling will begin shortly...");
-
-// Main workflow endpoint
-app.post("/workflow", async (req, res) => {
-  const { userRequest, externalUserId } = req.body;
-  if (!userRequest) {
-    return res.status(400).json({ error: "userRequest is required" });
-  }
-
-  try {
-    const result = await runWorkflow(userRequest, externalUserId || 'test-user-123');
-    return res.status(200).json({ response: result });
-  } catch (error) {
-    console.error("🔥 Workflow error:", error);
-    return res.status(500).json({ 
-      error: error.message || "Internal Server Error",
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-});
-
-// Debug endpoint to test tool listing
-app.post("/debug/list-tools", async (req, res) => {
-  const { appSlug, externalUserId } = req.body;
-  if (!appSlug) {
-    return res.status(400).json({ error: "appSlug is required" });
-  }
-
-  try {
-    const accessToken = await pd.rawAccessToken();
-    const tools = await debugListTools(appSlug, accessToken, externalUserId || 'test-user-123');
-    return res.status(200).json({ tools });
-  } catch (error) {
-    console.error("🔥 Debug error:", error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// Debug endpoint to check connected accounts
-app.post("/debug/check-connection", async (req, res) => {
-  const { appSlug, externalUserId } = req.body;
-  if (!appSlug) {
-    return res.status(400).json({ error: "appSlug is required" });
-  }
-
-  try {
-    const credentials = await getConnectedAccountCredentials(appSlug, externalUserId || 'test-user-123');
-    
-    if (credentials) {
-      // Don't expose sensitive data, just confirm connection
-      return res.status(200).json({ 
-        connected: true,
-        hasAccessToken: !!credentials.access_token,
-        appSlug: appSlug
-      });
-    } else {
-      return res.status(200).json({ 
-        connected: false,
-        appSlug: appSlug
-      });
-    }
-  } catch (error) {
-    console.error("🔥 Connection check error:", error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// Health check endpoint
-app.get("/health", (req, res) => {
-  res.json({ 
-    status: "ok", 
-    environment: process.env.PIPEDREAM_PROJECT_ENVIRONMENT,
-    timestamp: new Date().toISOString()
-  });
-});
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));app.use(express.json());
 
 // Debug endpoint to check Pinecone index stats
 app.get("/debug/pinecone-stats", async (req, res) => {
@@ -2561,164 +2436,6 @@ app.get("/api/v1/proactive-insights", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 2074;
-
-const server = app.listen(PORT, () => {
-  console.log("\n" + "=".repeat(60));
-  console.log("🚀 MCP WORKFLOW SERVER STARTED");
-  console.log("=".repeat(60));
-  console.log(`📍 URL: http://localhost:${PORT}`);
-  console.log(`📋 Environment: ${process.env.PIPEDREAM_PROJECT_ENVIRONMENT}`);
-  console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? '✓ Loaded' : '✗ Missing'}`);
-  console.log(`🔑 Pipedream Client ID: ${process.env.PIPEDREAM_CLIENT_ID ? '✓ Loaded' : '✗ Missing'}`);
-  console.log(`🔑 Pipedream Project ID: ${process.env.PIPEDREAM_PROJECT_ID ? '✓ Loaded' : '✗ Missing'}`);
-  console.log("=".repeat(60) + "\n");
-  console.log("✨ Server is running and waiting for requests...");
-});
-
-server.on('error', (error) => {
-  console.error('🔥 Server error:', error);
-});
-
-server.on('close', () => {
-  console.log('🔴 Server closed');
-});
-
-// ===== TASKS API ROUTES =====
-
-// POST /api/v1/tasks
-app.post('/api/v1/tasks', async (req, res) => {
-  try {
-    const { operation, payload } = req.body;
-    if (!operation) {
-      return res.status(400).json({ error: 'operation is required' });
-    }
-    const event = { operation, payload };
-    const result = await tasksHandler(event);
-    if (result && typeof result.statusCode === 'number') {
-      let body = result.body;
-      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
-      return res.status(result.statusCode).json(body);
-    }
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('🔥 Tasks error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// GET /api/v1/tasks/board/:boardId
-app.get('/api/v1/tasks/board/:boardId', async (req, res) => {
-  try {
-    const { boardId } = req.params;
-    const { userId } = req.query;
-    const event = { operation: 'getTasksByBoard', payload: { boardId, userId } };
-    const result = await tasksHandler(event);
-    if (result && typeof result.statusCode === 'number') {
-      let body = result.body;
-      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
-      return res.status(result.statusCode).json(body);
-    }
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('🔥 Tasks board error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// POST /api/v1/tasks/spaces
-app.post('/api/v1/tasks/spaces', async (req, res) => {
-  try {
-    const event = { operation: 'createSpace', payload: req.body };
-    const result = await tasksHandler(event);
-    if (result && typeof result.statusCode === 'number') {
-      let body = result.body;
-      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
-      return res.status(result.statusCode).json(body);
-    }
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('🔥 Create space error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// GET /api/v1/tasks/:taskId
-app.get('/api/v1/tasks/:taskId', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { userId } = req.query;
-    const event = { operation: 'getTask', payload: { taskId, userId } };
-    const result = await tasksHandler(event);
-    if (result && typeof result.statusCode === 'number') {
-      let body = result.body;
-      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
-      return res.status(result.statusCode).json(body);
-    }
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('🔥 Get task error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// PUT /api/v1/tasks/:taskId
-app.put('/api/v1/tasks/:taskId', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { userId, ...updates } = req.body;
-    const event = { operation: 'updateTask', payload: { taskId, userId, ...updates } };
-    const result = await tasksHandler(event);
-    if (result && typeof result.statusCode === 'number') {
-      let body = result.body;
-      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
-      return res.status(result.statusCode).json(body);
-    }
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('🔥 Update task error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// DELETE /api/v1/tasks/:taskId
-app.delete('/api/v1/tasks/:taskId', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { userId } = req.query;
-    const event = { operation: 'deleteTask', payload: { taskId, userId } };
-    const result = await tasksHandler(event);
-    if (result && typeof result.statusCode === 'number') {
-      let body = result.body;
-      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
-      return res.status(result.statusCode).json(body);
-    }
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('🔥 Delete task error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// GET /api/v1/tasks/:taskId/subtasks
-app.get('/api/v1/tasks/:taskId/subtasks', async (req, res) => {
-  try {
-    const { taskId } = req.params;
-    const { userId } = req.query;
-    const event = { operation: 'getSubTasksByTask', payload: { taskId, userId } };
-    const result = await tasksHandler(event);
-    if (result && typeof result.statusCode === 'number') {
-      let body = result.body;
-      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
-      return res.status(result.statusCode).json(body);
-    }
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('🔥 Get subtasks error:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
 // POST /api/v1/sla/timers/check
 app.post('/api/v1/sla/timers/check', async (req, res) => {
   try {
@@ -2739,4 +2456,22 @@ app.post('/api/v1/sla/timers/check', async (req, res) => {
     console.error('🔥 SLA check error:', error);
     return res.status(500).json({ error: error.message });
   }
+});
+
+const PORT = process.env.PORT || 2074;
+
+// Mount routers
+app.use(pipedreamRouter);
+app.use(tasksRouter);
+
+const server = app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+server.on('error', (error) => {
+  console.error('🔥 Server error:', error);
+});
+
+server.on('close', () => {
+  console.log('🔴 Server closed');
 });

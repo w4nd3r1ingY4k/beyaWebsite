@@ -167,3 +167,70 @@
     justify-content: center;
   }
 } 
+
+/* Filter Modal Styles */
+.filterModalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.filterModal {
+  background: #fff;
+  border-radius: 12px;
+  padding: 32px;
+  min-width: 320px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.filterModalTitle {
+  margin-top: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.filterSection {
+  margin-bottom: 8px;
+}
+
+.filterOptionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.filterOptionLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #374151;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filterOptionLabel input[type="checkbox"] {
+  accent-color: #3b82f6;
+}
+
+.filterModalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+} 

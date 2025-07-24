@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Plus, Search, Filter, ChevronDown, Clock, AlertCircle, CheckCircle, User } from 'lucide-react';
-import TicketList from './components/TicketList';
 import TicketDetail from './components/TicketDetail';
 import TicketForm from './components/TicketForm';
 import { useAuth } from '../../AuthContext';
-import SpaceSelector from '@/webapp/tasks/components/SpaceSelector';
-import BoardView from '@/webapp/tasks/components/BoardView';
+import SpaceSelector from '@/webapp/communication/tickets/components/SpaceSelector';
+import BoardView from '@/webapp/communication/tickets/components/BoardView';
 import tasksService from '@/services/tasksService';
 import type { Task as BackendTask } from '@/services/tasksService';
+import styles from '@/styles/TicketsHome.module.css';
 
 // Types
 export interface Ticket {
@@ -53,129 +53,6 @@ interface BoardTask {
   labels: string[];
   attachments: any[];
 }
-
-// Styles - maintaining design consistency
-const styles = {
-  container: {
-    height: '100vh',
-    backgroundColor: '#F9FAFB',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    marginTop: '45px',
-  },
-  header: {
-    backgroundColor: 'white',
-    boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
-    borderBottom: '1px solid #E5E7EB',
-    padding: '16px 24px',
-  },
-  headerContent: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-  },
-  headerTitle: {
-    fontSize: '24px',
-    fontWeight: '600',
-    color: '#111827',
-    margin: 0,
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  searchContainer: {
-    position: 'relative' as const,
-    width: '320px',
-  },
-  searchInput: {
-    width: '100%',
-    padding: '8px 12px 8px 36px',
-    border: '1px solid #D1D5DB',
-    borderRadius: '8px',
-    fontSize: '14px',
-    outline: 'none',
-    transition: 'all 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  searchIcon: {
-    position: 'absolute' as const,
-    left: '12px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    color: '#6B7280',
-  },
-  headerActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  filterButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '8px 16px',
-    backgroundColor: 'white',
-    border: '1px solid #D1D5DB',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    color: '#374151',
-    transition: 'all 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  createButton: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '8px 16px',
-    backgroundColor: '#EC4899',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    transition: 'background-color 0.2s',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  mainContent: {
-    flex: 1,
-    display: 'flex',
-    overflow: 'hidden',
-  },
-  statsBar: {
-    backgroundColor: 'white',
-    padding: '16px 24px',
-    borderBottom: '1px solid #E5E7EB',
-    display: 'flex',
-    gap: '32px',
-  },
-  statItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  statIcon: {
-    width: '20px',
-    height: '20px',
-  },
-  statLabel: {
-    fontSize: '12px',
-    color: '#6B7280',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-  statValue: {
-    fontSize: '20px',
-    fontWeight: '600',
-    color: '#111827',
-    marginLeft: '4px',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
-  },
-};
 
 // Helper to map Task status to Ticket status
 const mapTaskStatusToTicketStatus = (status: string): Ticket['status'] => {
@@ -230,6 +107,9 @@ const TicketsHome: React.FC = () => {
   const [filterPriorities, setFilterPriorities] = useState<Ticket['priority'][]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [tempStatuses, setTempStatuses] = useState<Ticket['status'][]>([]);
+  const [tempPriorities, setTempPriorities] = useState<Ticket['priority'][]>([]);
 
   // Load tickets from localStorage on mount
   useEffect(() => {
@@ -439,18 +319,26 @@ const TicketsHome: React.FC = () => {
         tags: updates.tags,
         dueDate: updates.due_date,
       });
+      // Map backend task to Ticket
+      const newTicket: Ticket = {
+        id: updatedTask.taskId,
+        title: updatedTask.title,
+        description: updatedTask.description || '',
+        status: mapTaskStatusToTicketStatus(updatedTask.status),
+        priority: updatedTask.priority as Ticket['priority'],
+        assignee: updatedTask.assigneeId || '',
+        reporter: updatedTask.reporterId || '',
+        created_at: updatedTask.createdAt,
+        updated_at: updatedTask.updatedAt,
+        due_date: updatedTask.dueDate,
+        customerId: (updatedTask as any).customerId,
+        tags: updatedTask.tags || [],
+      };
       setTickets(prev => prev.map(ticket =>
-        ticket.id === ticketId
-          ? {
-              ...ticket,
-              ...updates,
-              status: updates.status ? updates.status : ticket.status,
-              updated_at: updatedTask.updatedAt,
-            }
-          : ticket
+        ticket.id === ticketId ? newTicket : ticket
       ));
       if (selectedTicket?.id === ticketId) {
-        setSelectedTicket(prev => prev ? { ...prev, ...updates, status: updates.status ? updates.status : prev.status, updated_at: updatedTask.updatedAt } : null);
+        setSelectedTicket(newTicket);
       }
     } catch (err: any) {
       setError(err.message || 'Failed to update ticket');
@@ -483,12 +371,12 @@ const TicketsHome: React.FC = () => {
   }, [user, selectedTicket]);
 
   return (
-    <div style={styles.container}>
+    <div className={styles.container}>
       {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.headerLeft}>
-            <h1 style={styles.headerTitle}>Tickets</h1>
+      <div className={styles.header}>
+        <div className={styles.headerContent}>
+          <div className={styles.headerLeft}>
+            <h1 className={styles.headerTitle}>Tickets</h1>
             {/* Space Selector */}
             <SpaceSelector
               spaces={spaces}
@@ -496,7 +384,7 @@ const TicketsHome: React.FC = () => {
               onSelectSpace={setSelectedSpace}
             />
           </div>
-          <div style={styles.headerActions}>
+          <div className={styles.headerActions}>
             {/* View Mode Button Group */}
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -542,82 +430,118 @@ const TicketsHome: React.FC = () => {
                 }}
               >Calendar</button>
             </div>
+            {/* Filters Button */}
+            <button
+              className={styles.filterButton}
+              onClick={() => {
+                setTempStatuses(filterStatuses);
+                setTempPriorities(filterPriorities);
+                setShowFilterPanel((prev) => !prev);
+              }}
+            >
+              <Filter size={16} /> Filters
+              {(filterStatuses.length + filterPriorities.length) > 0 && (
+                <span className={styles.filterCount}>{filterStatuses.length + filterPriorities.length}</span>
+              )}
+            </button>
           </div>
         </div>
       </div>
-      {/* Advanced Filters */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'center', padding: '16px 24px', background: '#fff', borderBottom: '1px solid #E5E7EB' }}>
-        <div>
-          <span style={{ fontWeight: 500, color: '#EC4899', marginRight: 8 }}>Status:</span>
-          {statusOptions.map(opt => (
+      {/* Filter Panel (not modal) */}
+      <div
+        className={styles.filterPanel}
+        style={{
+          maxHeight: showFilterPanel ? 300 : 0,
+          opacity: showFilterPanel ? 1 : 0,
+          pointerEvents: showFilterPanel ? 'auto' : 'none',
+          transition: 'max-height 0.3s cubic-bezier(0.4,0,0.2,1), opacity 0.2s',
+          overflow: 'hidden',
+          marginBottom: showFilterPanel ? 16 : 0,
+        }}
+      >
+        <div className={styles.filterPanelContent}>
+          <div className={styles.filterSection}>
+            <strong>Status</strong>
+            <div className={styles.filterOptionsRow}>
+              {statusOptions.map((opt) => (
+                <label key={opt.value} className={styles.filterOptionLabel}>
+                  <input
+                    type="checkbox"
+                    checked={tempStatuses.includes(opt.value)}
+                    onChange={() => setTempStatuses((prev) => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value])}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className={styles.filterSection}>
+            <strong>Priority</strong>
+            <div className={styles.filterOptionsRow}>
+              {priorityOptions.map((opt) => (
+                <label key={opt.value} className={styles.filterOptionLabel}>
+                  <input
+                    type="checkbox"
+                    checked={tempPriorities.includes(opt.value)}
+                    onChange={() => setTempPriorities((prev) => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value])}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className={styles.filterPanelActions}>
             <button
-              key={opt.value}
-              onClick={() => setFilterStatuses(s => s.includes(opt.value) ? s.filter(v => v !== opt.value) : [...s, opt.value])}
-              style={{
-                marginRight: 6,
-                padding: '4px 12px',
-                borderRadius: 16,
-                border: filterStatuses.includes(opt.value) ? 'none' : '1.5px solid #EC4899',
-                background: filterStatuses.includes(opt.value) ? '#EC4899' : '#fff',
-                color: filterStatuses.includes(opt.value) ? '#fff' : '#EC4899',
-                fontWeight: 500,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
+              onClick={() => {
+                setTempStatuses([]);
+                setTempPriorities([]);
               }}
-            >{opt.label}</button>
-          ))}
-        </div>
-        <div>
-          <span style={{ fontWeight: 500, color: '#EC4899', marginRight: 8 }}>Priority:</span>
-          {priorityOptions.map(opt => (
+              className={styles.filterButton}
+              style={{ background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' }}
+            >
+              Reset
+            </button>
             <button
-              key={opt.value}
-              onClick={() => setFilterPriorities(s => s.includes(opt.value) ? s.filter(v => v !== opt.value) : [...s, opt.value])}
-              style={{
-                marginRight: 6,
-                padding: '4px 12px',
-                borderRadius: 16,
-                border: filterPriorities.includes(opt.value) ? 'none' : '1.5px solid #EC4899',
-                background: filterPriorities.includes(opt.value) ? '#EC4899' : '#fff',
-                color: filterPriorities.includes(opt.value) ? '#fff' : '#EC4899',
-                fontWeight: 500,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.2s',
+              onClick={() => {
+                setFilterStatuses(tempStatuses);
+                setFilterPriorities(tempPriorities);
+                setShowFilterPanel(false);
               }}
-            >{opt.label}</button>
-          ))}
+              className={styles.createButton}
+            >
+              Apply
+            </button>
+          </div>
         </div>
       </div>
       {/* Loading/Error States */}
       {loading && <div style={{ padding: 16, color: '#EC4899', fontWeight: 500 }}>Loading...</div>}
       {error && <div style={{ padding: 16, color: '#EF4444', fontWeight: 500 }}>{error}</div>}
       {/* Stats Bar */}
-      <div style={styles.statsBar}>
-        <div style={styles.statItem}>
-          <Clock size={20} color="#3B82F6" />
-          <span style={styles.statLabel}>Open</span>
-          <span style={styles.statValue}>{stats.open}</span>
+      <div className={styles.statsBar}>
+        <div className={styles.statItem}>
+          <Clock size={20} className={styles.statIcon} color="#3B82F6" />
+          <span className={styles.statLabel}>Open</span>
+          <span className={styles.statValue}>{stats.open}</span>
         </div>
-        <div style={styles.statItem}>
-          <AlertCircle size={20} color="#F59E0B" />
-          <span style={styles.statLabel}>In Progress</span>
-          <span style={styles.statValue}>{stats.inProgress}</span>
+        <div className={styles.statItem}>
+          <AlertCircle size={20} className={styles.statIcon} color="#F59E0B" />
+          <span className={styles.statLabel}>In Progress</span>
+          <span className={styles.statValue}>{stats.inProgress}</span>
         </div>
-        <div style={styles.statItem}>
-          <CheckCircle size={20} color="#10B981" />
-          <span style={styles.statLabel}>Resolved</span>
-          <span style={styles.statValue}>{stats.resolved}</span>
+        <div className={styles.statItem}>
+          <CheckCircle size={20} className={styles.statIcon} color="#10B981" />
+          <span className={styles.statLabel}>Resolved</span>
+          <span className={styles.statValue}>{stats.resolved}</span>
         </div>
-        <div style={styles.statItem}>
-          <AlertCircle size={20} color="#EF4444" />
-          <span style={styles.statLabel}>High Priority</span>
-          <span style={styles.statValue}>{stats.urgent}</span>
+        <div className={styles.statItem}>
+          <AlertCircle size={20} className={styles.statIcon} color="#EF4444" />
+          <span className={styles.statLabel}>High Priority</span>
+          <span className={styles.statValue}>{stats.urgent}</span>
         </div>
       </div>
       {/* Main Content: BoardView replaces TicketList */}
-      <div style={styles.mainContent}>
+      <div className={styles.mainContent}>
         {selectedBoard && viewMode === 'kanban' && (
           <BoardView
             board={selectedBoard}

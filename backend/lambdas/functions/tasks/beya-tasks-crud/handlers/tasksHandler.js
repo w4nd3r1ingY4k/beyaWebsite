@@ -447,6 +447,24 @@ async function unfollowTask(taskId, userId) {
   return { operation: 'unfollowTask', result: result.Attributes, eventData: { taskId, userId } };
 }
 
+// Delete Task
+async function deleteTask(taskId, userId) {
+  if (!taskId) {
+    throw new Error('Missing required field: taskId');
+  }
+
+  // Delete the task from the table
+  await docClient.send(new DeleteCommand({
+    TableName: TASKS_TABLE,
+    Key: { taskId }
+  }));
+
+  // Emit task deleted event
+  await emitRawEvent('task_deleted', userId, { taskId });
+
+  return { operation: 'deleteTask', result: { taskId, deleted: true }, eventData: { taskId, userId } };
+}
+
 // ─── Main Handler ────────────────────────────────────────────────────────
 export async function handler(event) {
   console.log('📥 Tasks Handler Event:', JSON.stringify(event, null, 2));
@@ -490,6 +508,9 @@ export async function handler(event) {
       
       case 'unfollowTask':
         return await unfollowTask(payload.taskId, payload.userId);
+      
+      case 'deleteTask':
+        return await deleteTask(payload.taskId, payload.userId);
       
       default:
         throw new Error(`Unsupported operation: ${operation}`);

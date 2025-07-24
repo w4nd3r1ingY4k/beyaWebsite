@@ -199,7 +199,7 @@ class TasksService {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ userId, ...updates }),
+      body: JSON.stringify({ userId, updates }),
     });
 
     if (!response.ok) {

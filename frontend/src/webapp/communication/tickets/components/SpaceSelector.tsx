@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronDown } from 'lucide-react';
-import styles from '@/styles/SpaceSelector.module.css';
 import { Space } from '@/types/taskManagement';
+import styles from '@/styles/SpaceSelector.module.css';
 
 interface SpaceSelectorProps {
   spaces: Space[];
