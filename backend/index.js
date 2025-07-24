@@ -1,5 +1,3 @@
-// Environment variables are loaded from AWS Secrets Manager in production
-// Only use dotenv for local development
 import dotenv from "dotenv";
 if (process.env.NODE_ENV !== 'production') {
   dotenv.config({ path: "./.env" });
@@ -27,9 +25,7 @@ const pd = createBackendClient({
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Import Square SDK for native fallback
 import square from 'square';
-const { Client } = square;
 
 /**
  * Get connected account credentials from Pipedream
@@ -2487,58 +2483,6 @@ app.post("/api/hyros/journeys", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 2074;
-
-const server = app.listen(PORT, () => {
-  console.log("\n" + "=".repeat(60));
-  console.log("🚀 MCP WORKFLOW SERVER STARTED");
-  console.log("=".repeat(60));
-  console.log(`📍 URL: http://localhost:${PORT}`);
-  console.log(`📋 Environment: ${process.env.PIPEDREAM_PROJECT_ENVIRONMENT}`);
-  console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? '✓ Loaded' : '✗ Missing'}`);
-  console.log(`🔑 Pipedream Client ID: ${process.env.PIPEDREAM_CLIENT_ID ? '✓ Loaded' : '✗ Missing'}`);
-  console.log(`🔑 Pipedream Project ID: ${process.env.PIPEDREAM_PROJECT_ID ? '✓ Loaded' : '✗ Missing'}`);
-  console.log("\nCore Endpoints:");
-  console.log("  POST /workflow - Execute a workflow");
-  console.log("  POST /debug/list-tools - List available tools for an app");
-  console.log("  POST /shopify/connect - Shopify Connect integration");
-  console.log("  GET /health - Health check");
-  console.log("\nIntegration Polling API:");
-  console.log("  POST /api/integrations/setup-polling - Start polling for any service");
-  console.log("  POST /api/integrations/stop-polling - Stop polling for a service");
-  console.log("  GET /api/integrations/polling-status - Get all polling sessions status");
-  console.log("  GET /api/integrations/sessions/:userId - Get user's integration sessions");
-  console.log("\nGmail API (Legacy + New):");
-  console.log("  POST /api/gmail/complete-setup - Complete Gmail integration");
-  console.log("  POST /api/gmail/setup-polling - Start Gmail polling (backward compatible)");
-  console.log("  POST /api/gmail/stop-watch - Stop Gmail polling (backward compatible)");
-  console.log("  GET /api/gmail/watch-status/:userId - Gmail polling status");
-  console.log("\nContext Engine API:");
-  console.log("  POST /api/v1/search-context - Semantic search");
-  console.log("  POST /api/v1/query-with-ai - AI-powered context queries");
-  console.log("  GET /api/v1/customer-context/:threadId - Customer 360 view");
-  console.log("  GET /api/v1/thread/:threadId - Get all emails in thread");
-  console.log("  POST /api/v1/thread/:threadId/search - Semantic search within thread");
-  console.log("  POST /api/v1/analyze-draft - Draft message coaching");
-  console.log("  POST /api/v1/suggest-reply - AI reply suggestions");
-  console.log("=".repeat(60) + "\n");
-  console.log("✨ Server is running and waiting for requests...");
-});
-
-server.on('error', (error) => {
-  console.error('🔥 Server error:', error);
-});
-
-server.on('close', () => {
-  console.log('🔴 Server closed');
-});
-
-// Keep the process alive
-setInterval(() => {
-  // Do nothing, just keep the event loop alive
-}, 10000);
-
-
 /**
  * Real proactive insights endpoint
  * Returns a list of actionable insights for the user based on recent context
@@ -2617,28 +2561,182 @@ app.get("/api/v1/proactive-insights", async (req, res) => {
   }
 });
 
-// Add this before the server is started
+const PORT = process.env.PORT || 2074;
+
+const server = app.listen(PORT, () => {
+  console.log("\n" + "=".repeat(60));
+  console.log("🚀 MCP WORKFLOW SERVER STARTED");
+  console.log("=".repeat(60));
+  console.log(`📍 URL: http://localhost:${PORT}`);
+  console.log(`📋 Environment: ${process.env.PIPEDREAM_PROJECT_ENVIRONMENT}`);
+  console.log(`🔑 OpenAI API Key: ${process.env.OPENAI_API_KEY ? '✓ Loaded' : '✗ Missing'}`);
+  console.log(`🔑 Pipedream Client ID: ${process.env.PIPEDREAM_CLIENT_ID ? '✓ Loaded' : '✗ Missing'}`);
+  console.log(`🔑 Pipedream Project ID: ${process.env.PIPEDREAM_PROJECT_ID ? '✓ Loaded' : '✗ Missing'}`);
+  console.log("=".repeat(60) + "\n");
+  console.log("✨ Server is running and waiting for requests...");
+});
+
+server.on('error', (error) => {
+  console.error('🔥 Server error:', error);
+});
+
+server.on('close', () => {
+  console.log('🔴 Server closed');
+});
+
+// ===== TASKS API ROUTES =====
+
+// POST /api/v1/tasks
 app.post('/api/v1/tasks', async (req, res) => {
   try {
-    // The handler expects an event with { operation, payload }
     const { operation, payload } = req.body;
     if (!operation) {
       return res.status(400).json({ error: 'operation is required' });
     }
     const event = { operation, payload };
     const result = await tasksHandler(event);
-    // If the handler returns a statusCode, use it; otherwise, assume 200
     if (result && typeof result.statusCode === 'number') {
-      // If body is a string, try to parse as JSON
       let body = result.body;
-      try {
-        body = typeof body === 'string' ? JSON.parse(body) : body;
-      } catch {}
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
       return res.status(result.statusCode).json(body);
     }
     return res.status(200).json(result);
   } catch (error) {
-    console.error('Error in /api/v1/tasks:', error);
+    console.error('🔥 Tasks error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/v1/tasks/board/:boardId
+app.get('/api/v1/tasks/board/:boardId', async (req, res) => {
+  try {
+    const { boardId } = req.params;
+    const { userId } = req.query;
+    const event = { operation: 'getTasksByBoard', payload: { boardId, userId } };
+    const result = await tasksHandler(event);
+    if (result && typeof result.statusCode === 'number') {
+      let body = result.body;
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('🔥 Tasks board error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/v1/tasks/spaces
+app.post('/api/v1/tasks/spaces', async (req, res) => {
+  try {
+    const event = { operation: 'createSpace', payload: req.body };
+    const result = await tasksHandler(event);
+    if (result && typeof result.statusCode === 'number') {
+      let body = result.body;
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('🔥 Create space error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/v1/tasks/:taskId
+app.get('/api/v1/tasks/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { userId } = req.query;
+    const event = { operation: 'getTask', payload: { taskId, userId } };
+    const result = await tasksHandler(event);
+    if (result && typeof result.statusCode === 'number') {
+      let body = result.body;
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('🔥 Get task error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /api/v1/tasks/:taskId
+app.put('/api/v1/tasks/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { userId, ...updates } = req.body;
+    const event = { operation: 'updateTask', payload: { taskId, userId, ...updates } };
+    const result = await tasksHandler(event);
+    if (result && typeof result.statusCode === 'number') {
+      let body = result.body;
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('🔥 Update task error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/v1/tasks/:taskId
+app.delete('/api/v1/tasks/:taskId', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { userId } = req.query;
+    const event = { operation: 'deleteTask', payload: { taskId, userId } };
+    const result = await tasksHandler(event);
+    if (result && typeof result.statusCode === 'number') {
+      let body = result.body;
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('🔥 Delete task error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/v1/tasks/:taskId/subtasks
+app.get('/api/v1/tasks/:taskId/subtasks', async (req, res) => {
+  try {
+    const { taskId } = req.params;
+    const { userId } = req.query;
+    const event = { operation: 'getSubTasksByTask', payload: { taskId, userId } };
+    const result = await tasksHandler(event);
+    if (result && typeof result.statusCode === 'number') {
+      let body = result.body;
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('🔥 Get subtasks error:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/v1/sla/timers/check
+app.post('/api/v1/sla/timers/check', async (req, res) => {
+  try {
+    const { taskId } = req.body;
+    if (!taskId) {
+      return res.status(400).json({ error: 'taskId is required' });
+    }
+    // If you have a separate SLA handler, call it here. Otherwise, use tasksHandler with a special operation.
+    const event = { operation: 'checkSLACompliance', payload: { taskId } };
+    const result = await tasksHandler(event);
+    if (result && typeof result.statusCode === 'number') {
+      let body = result.body;
+      try { body = typeof body === 'string' ? JSON.parse(body) : body; } catch {}
+      return res.status(result.statusCode).json(body);
+    }
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('🔥 SLA check error:', error);
     return res.status(500).json({ error: error.message });
   }
 });

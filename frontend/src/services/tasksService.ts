@@ -147,7 +147,10 @@ class TasksService {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(taskData),
+      body: JSON.stringify({
+        operation: 'createTask',
+        payload: taskData,
+      }),
     });
 
     if (!response.ok) {
