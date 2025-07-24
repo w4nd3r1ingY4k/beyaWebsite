@@ -296,7 +296,6 @@ const TicketsHome: React.FC = () => {
         tags: newTask.tags || [],
       };
       setTickets(prev => [newTicket, ...prev]);
-      setSelectedTicket(newTicket);
       setShowCreateForm(false);
     } catch (err: any) {
       setError(err.message || 'Failed to create ticket');

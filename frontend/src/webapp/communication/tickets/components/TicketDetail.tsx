@@ -3,6 +3,7 @@ import { X, Clock, AlertCircle, CheckCircle, User, Calendar, MessageSquare, Tras
 import { Ticket, TicketComment } from '../TicketsHome';
 import { format } from 'date-fns';
 import { useAuth } from '../../../AuthContext';
+import modalStyles from '@/styles/TicketDetailModal.module.css';
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -358,193 +359,157 @@ const TicketDetail: React.FC<TicketDetailProps> = ({ ticket, onUpdateTicket, onD
   const priorityOptions: Ticket['priority'][] = ['low', 'medium', 'high', 'urgent'];
 
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={styles.ticketId}>{ticket.id}</span>
-          <span style={styles.statusBadge(ticket.status)}>
-            {getStatusIcon(ticket.status)}
-            {ticket.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-          </span>
-          <span style={styles.priorityBadge(ticket.priority)}>
-            {ticket.priority.toUpperCase()}
-          </span>
-        </div>
-        <div style={styles.headerActions}>
-          <button
-            style={styles.deleteButton}
-            onClick={() => {
-              if (window.confirm('Are you sure you want to delete this ticket?')) {
-                onDeleteTicket(ticket.id);
-              }
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#FEE2E2'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-          >
-            <Trash2 size={18} />
-          </button>
-          <button
-            style={styles.iconButton}
-            onClick={onClose}
-            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-          >
-            <X size={18} />
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div style={styles.content}>
-        {/* Title & Description */}
-        <div style={styles.section}>
-          <h2 style={styles.title}>{ticket.title}</h2>
-          <p style={styles.description}>{ticket.description}</p>
-        </div>
-
-        {/* Metadata */}
-        <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Details</h3>
-          <div style={styles.metaGrid}>
-            {/* Status */}
-            <div style={styles.metaItem}>
-              <span style={styles.metaLabel}>Status</span>
-              <div style={styles.dropdown}>
-                <button
-                  style={styles.dropdownButton}
-                  onClick={() => setShowStatusDropdown(!showStatusDropdown)}
-                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#EC4899'}
-                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#D1D5DB'}
-                >
-                  <span>{ticket.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
-                  <ChevronDown size={16} />
-                </button>
-                {showStatusDropdown && (
-                  <div style={styles.dropdownMenu}>
-                    {statusOptions.map(status => (
-                      <div
-                        key={status}
-                        style={styles.dropdownItem}
-                        onClick={() => handleStatusChange(status)}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                      >
-                        {status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Priority */}
-            <div style={styles.metaItem}>
-              <span style={styles.metaLabel}>Priority</span>
-              <div style={styles.dropdown}>
-                <button
-                  style={styles.dropdownButton}
-                  onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
-                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#EC4899'}
-                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#D1D5DB'}
-                >
-                  <span>{ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}</span>
-                  <ChevronDown size={16} />
-                </button>
-                {showPriorityDropdown && (
-                  <div style={styles.dropdownMenu}>
-                    {priorityOptions.map(priority => (
-                      <div
-                        key={priority}
-                        style={styles.dropdownItem}
-                        onClick={() => handlePriorityChange(priority)}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F3F4F6'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                      >
-                        {priority.charAt(0).toUpperCase() + priority.slice(1)}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Reporter */}
-            <div style={styles.metaItem}>
-              <span style={styles.metaLabel}>Reporter</span>
-              <span style={styles.metaValue}>{ticket.reporter}</span>
-            </div>
-
-            {/* Assignee */}
-            <div style={styles.metaItem}>
-              <span style={styles.metaLabel}>Assignee</span>
-              <span style={styles.metaValue}>{ticket.assignee || 'Unassigned'}</span>
-            </div>
-
-            {/* Created */}
-            <div style={styles.metaItem}>
-              <span style={styles.metaLabel}>Created</span>
-              <span style={styles.metaValue}>{format(new Date(ticket.created_at), 'MMM d, yyyy h:mm a')}</span>
-            </div>
-
-            {/* Due Date */}
-            <div style={styles.metaItem}>
-              <span style={styles.metaLabel}>Due Date</span>
-              <span style={styles.metaValue}>
-                {ticket.due_date ? format(new Date(ticket.due_date), 'MMM d, yyyy') : 'No due date'}
-              </span>
-            </div>
+    <div className={modalStyles.backdrop} onClick={onClose}>
+      <div className={modalStyles.modal} onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className={modalStyles.header}>
+          <div className={modalStyles.headerLeft}>
+            <span className={modalStyles.ticketId}>{ticket.id}</span>
+            <span className={modalStyles.statusBadge + ' ' + modalStyles[ticket.status]}>
+              {getStatusIcon(ticket.status)}
+              {ticket.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+            </span>
+            <span className={modalStyles.priorityBadge + ' ' + modalStyles[ticket.priority]}>
+              {ticket.priority.toUpperCase()}
+            </span>
           </div>
-        </div>
-
-        {/* Comments */}
-        <div style={styles.commentsSection}>
-          <h3 style={styles.sectionTitle}>
-            <MessageSquare size={18} style={{ display: 'inline', marginRight: '8px' }} />
-            Discussion ({comments.length})
-          </h3>
-
-          <div style={styles.commentsList}>
-            {comments.map(comment => (
-              <div key={comment.id} style={styles.comment}>
-                <div style={styles.commentHeader}>
-                  <span style={styles.commentAuthor}>{comment.user_name}</span>
-                  <span style={styles.commentTime}>{format(new Date(comment.created_at), 'MMM d, h:mm a')}</span>
-                </div>
-                <p style={styles.commentText}>{comment.comment}</p>
-              </div>
-            ))}
-          </div>
-
-          <div style={styles.commentInput}>
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              style={styles.textarea}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.metaKey) {
-                  handleAddComment();
+          <div className={modalStyles.headerActions}>
+            <button
+              className={modalStyles.deleteButton}
+              onClick={() => {
+                if (window.confirm('Are you sure you want to delete this ticket?')) {
+                  onDeleteTicket(ticket.id);
                 }
               }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = '#EC4899';
-                e.currentTarget.style.boxShadow = '0 0 0 3px rgba(236, 72, 153, 0.1)';
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = '#D1D5DB';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            />
-            <button
-              onClick={handleAddComment}
-              style={styles.sendButton}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#DB2777'}
-              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#EC4899'}
             >
-              <Send size={16} />
-              Send
+              <Trash2 size={18} />
             </button>
+            <button
+              className={modalStyles.iconButton}
+              onClick={onClose}
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        {/* Content */}
+        <div className={modalStyles.content}>
+          {/* Title & Description */}
+          <div className={modalStyles.section}>
+            <h2 className={modalStyles.title}>{ticket.title}</h2>
+            <p className={modalStyles.description}>{ticket.description}</p>
+          </div>
+          {/* Metadata */}
+          <div className={modalStyles.section}>
+            <h3 className={modalStyles.sectionTitle}>Details</h3>
+            <div className={modalStyles.metaGrid}>
+              {/* Status */}
+              <div className={modalStyles.metaItem}>
+                <span className={modalStyles.metaLabel}>Status</span>
+                <div className={modalStyles.dropdown}>
+                  <button
+                    className={modalStyles.dropdownButton}
+                    onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+                  >
+                    <span>{ticket.status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {showStatusDropdown && (
+                    <div className={modalStyles.dropdownMenu}>
+                      {statusOptions.map(status => (
+                        <div
+                          key={status}
+                          className={modalStyles.dropdownItem}
+                          onClick={() => handleStatusChange(status)}
+                        >
+                          {status.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Priority */}
+              <div className={modalStyles.metaItem}>
+                <span className={modalStyles.metaLabel}>Priority</span>
+                <div className={modalStyles.dropdown}>
+                  <button
+                    className={modalStyles.dropdownButton}
+                    onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
+                  >
+                    <span>{ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}</span>
+                    <ChevronDown size={16} />
+                  </button>
+                  {showPriorityDropdown && (
+                    <div className={modalStyles.dropdownMenu}>
+                      {priorityOptions.map(priority => (
+                        <div
+                          key={priority}
+                          className={modalStyles.dropdownItem}
+                          onClick={() => handlePriorityChange(priority)}
+                        >
+                          {priority.charAt(0).toUpperCase() + priority.slice(1)}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {/* Reporter */}
+              <div className={modalStyles.metaItem}>
+                <span className={modalStyles.metaLabel}>Reporter</span>
+                <span className={modalStyles.metaValue}>{ticket.reporter}</span>
+              </div>
+              {/* Assignee */}
+              <div className={modalStyles.metaItem}>
+                <span className={modalStyles.metaLabel}>Assignee</span>
+                <span className={modalStyles.metaValue}>{ticket.assignee || 'Unassigned'}</span>
+              </div>
+              {/* Created */}
+              <div className={modalStyles.metaItem}>
+                <span className={modalStyles.metaLabel}>Created</span>
+                <span className={modalStyles.metaValue}>{format(new Date(ticket.created_at), 'MMM d, yyyy h:mm a')}</span>
+              </div>
+              {/* Due Date */}
+              <div className={modalStyles.metaItem}>
+                <span className={modalStyles.metaLabel}>Due Date</span>
+                <span className={modalStyles.metaValue}>
+                  {ticket.due_date ? format(new Date(ticket.due_date), 'MMM d, yyyy') : 'No due date'}
+                </span>
+              </div>
+            </div>
+          </div>
+          {/* Comments */}
+          <div className={modalStyles.commentsSection}>
+            <h3 className={modalStyles.sectionTitle}>
+              <MessageSquare size={18} style={{ display: 'inline', marginRight: '8px' }} />
+              Discussion ({comments.length})
+            </h3>
+            <div className={modalStyles.commentsList}>
+              {comments.map(comment => (
+                <div key={comment.id} className={modalStyles.comment}>
+                  <div className={modalStyles.commentHeader}>
+                    <span className={modalStyles.commentAuthor}>{comment.user_name}</span>
+                    <span className={modalStyles.commentTime}>{format(new Date(comment.created_at), 'MMM d, h:mm a')}</span>
+                  </div>
+                  <p className={modalStyles.commentText}>{comment.comment}</p>
+                </div>
+              ))}
+            </div>
+            <div className={modalStyles.commentInput}>
+              <textarea
+                placeholder="Add a comment..."
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                className={modalStyles.textarea}
+              />
+              <button
+                className={modalStyles.sendButton}
+                onClick={handleAddComment}
+              >
+                <Send size={16} /> Send
+              </button>
+            </div>
           </div>
         </div>
       </div>
