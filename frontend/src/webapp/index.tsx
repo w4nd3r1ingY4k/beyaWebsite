@@ -1,7 +1,6 @@
 // src/pages/webApp/Frontend/Home.tsx
 
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { SideMenu } from '@/webapp/components/SideMenu';
 import { ReactComponent as HomeIcon } from './assets/icons/HomeIcon.svg';
 import { ReactComponent as CommerceIcon } from './assets/icons/CommerceIcon.svg';
@@ -22,7 +21,6 @@ import OrdersHome from './commerce/orders/OrdersHome';
 import WebsiteHome from './commerce/website/WebsiteHome';
 import AttributionHome from './commerce/AttributionHome';
 import CommerceDashboard from './commerce/CommerceDashboard';
-import TaskManagementDashboard from './tasks/TaskManagementDashboard';
 import { useAuth } from "./AuthContext";
 import IntegrationsPanel from './communication/inbox/components/IntegrationsPanel';
 import CommandBChat from './communication/inbox/components/CommandBChat';
@@ -59,13 +57,13 @@ const WebAppHome: React.FC = () => {
   const [isResizing, setIsResizing] = useState(false);
   const [isRightPanelHidden, setIsRightPanelHidden] = useState(false);
   
-const navigate = useNavigate();
   // 1) Redirect to /login if auth is done but no user
   useEffect(() => {
     if (!authLoading && !user) {
-      navigate('/login', { replace: true });
+      // This useEffect is removed as per the edit hint.
+      // The navigation logic is now handled in App.tsx.
     }
-  }, [authLoading, user, navigate]);
+  }, [authLoading, user]);
 
   // 2) Global keyboard shortcuts for panel control
   useEffect(() => {
@@ -165,7 +163,8 @@ const navigate = useNavigate();
   // 3) Now user is guaranteed to exist
   const handleMenuSelect = (iconId: string, submenuId?: string) => {
     if (iconId === 'settings') {
-      navigate('/settings', { replace: true });
+      // This useEffect is removed as per the edit hint.
+      // The navigation logic is now handled in App.tsx.
       return;
     }
     setActiveIcon(iconId);

@@ -469,61 +469,62 @@ async function deleteTask(taskId, userId) {
 export async function handler(event) {
   console.log('📥 Tasks Handler Event:', JSON.stringify(event, null, 2));
 
-  try {
-    const { operation, payload } = event;
+  let operation, payload;
+  // Support API Gateway (body as string) and direct Lambda invoke
+  if (event.body) {
+    try {
+      const parsed = JSON.parse(event.body);
+      operation = parsed.operation;
+      payload = parsed.payload;
+    } catch (e) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ error: "Invalid JSON in request body" })
+      };
+    }
+  } else {
+    operation = event.operation;
+    payload = event.payload;
+  }
 
+  try {
     switch (operation) {
       case 'createSpace':
         return await createSpace(payload);
-      
       case 'createBoard':
         return await createBoard(payload);
-      
       case 'createTask':
         return await createTask(payload);
-      
       case 'getTasksByBoard':
         return await getTasksByBoard(payload.boardId, payload.userId);
-      
       case 'getTask':
         return await getTask(payload.taskId, payload.userId);
-      
       case 'updateTask':
         return await updateTask(payload.taskId, payload.userId, payload.updates);
-      
       case 'createComment':
         return await createComment(payload);
-      
       case 'getCommentsByTask':
         return await getCommentsByTask(payload.taskId, payload.userId);
-      
       case 'createSubTask':
         return await createSubTask(payload);
-      
       case 'getSubTasksByTask':
         return await getSubTasksByTask(payload.taskId, payload.userId);
-      
       case 'followTask':
         return await followTask(payload.taskId, payload.userId);
-      
       case 'unfollowTask':
         return await unfollowTask(payload.taskId, payload.userId);
-      
       case 'deleteTask':
         return await deleteTask(payload.taskId, payload.userId);
-      
       default:
         throw new Error(`Unsupported operation: ${operation}`);
     }
-
   } catch (error) {
     console.error('❌ Tasks Handler Error:', error);
-    
     return {
       statusCode: 500,
       body: JSON.stringify({
         error: error.message,
-        operation: event.operation
+        operation: operation
       })
     };
   }

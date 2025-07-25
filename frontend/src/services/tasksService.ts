@@ -1,6 +1,6 @@
 // services/tasksService.ts
 
-import { API_ENDPOINTS } from '@/config/api';
+const API_BASE = process.env.REACT_APP_TASKS_API_URL;
 
 export interface Task {
   taskId: string;
@@ -101,315 +101,64 @@ export interface SLAPolicy {
   updatedAt: string;
 }
 
+// Helper for POST requests with error handling
+async function postToLambda(route: string, body: any) {
+  try {
+    const response = await fetch(`${API_BASE}/${route}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+      throw new Error(data.error || `Request failed with status ${response.status}`);
+    }
+    return data.result || data;
+  } catch (err: any) {
+    return Promise.reject({ message: err.message || 'Unknown error', status: err.status || 500 });
+  }
+}
+
 class TasksService {
-  private baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:2074';
-
-  // Spaces
-  async createSpace(spaceData: Partial<Space>): Promise<Space> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/spaces`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(spaceData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create space');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async createSpace(payload: Partial<Space>) {
+    return postToLambda('createSpace', { operation: 'createSpace', payload });
   }
-
-  // Boards
-  async createBoard(boardData: Partial<Board>): Promise<Board> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/boards`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(boardData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create board');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async createBoard(payload: Partial<Board>) {
+    return postToLambda('createBoard', { operation: 'createBoard', payload });
   }
-
-  // Tasks
-  async createTask(taskData: Partial<Task>): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        operation: 'createTask',
-        payload: taskData,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create task');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async createTask(payload: Partial<Task>) {
+    return postToLambda('createTask', { operation: 'createTask', payload });
   }
-
-  async getTasksByBoard(boardId: string, userId: string): Promise<Task[]> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/board/${boardId}?userId=${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get tasks');
-    }
-
-    const result = await response.json();
-    return result.result.tasks;
+  async getTasksByBoard(boardId: string, userId: string) {
+    const result = await postToLambda('getTasksByBoard', { operation: 'getTasksByBoard', payload: { boardId, userId } });
+    return result.tasks; // Return the array directly
   }
-
-  async getTask(taskId: string, userId: string): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}?userId=${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get task');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async getTask(taskId: string, userId: string) {
+    return postToLambda('getTask', { operation: 'getTask', payload: { taskId, userId } });
   }
-
-  async updateTask(taskId: string, userId: string, updates: Partial<Task>): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ userId, updates }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to update task');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async updateTask(taskId: string, userId: string, updates: Partial<Task>) {
+    return postToLambda('updateTask', { operation: 'updateTask', payload: { taskId, userId, updates } });
   }
-
-  // Comments
-  async createComment(commentData: Partial<Comment>): Promise<Comment> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${commentData.taskId}/comments`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(commentData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create comment');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async createComment(payload: Partial<Comment>) {
+    return postToLambda('createComment', { operation: 'createComment', payload });
   }
-
-  async getCommentsByTask(taskId: string, userId: string): Promise<Comment[]> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}/comments?userId=${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get comments');
-    }
-
-    const result = await response.json();
-    return result.result.comments;
+  async getCommentsByTask(taskId: string, userId: string) {
+    return postToLambda('getCommentsByTask', { operation: 'getCommentsByTask', payload: { taskId, userId } });
   }
-
-  // SubTasks
-  async createSubTask(subTaskData: Partial<SubTask>): Promise<SubTask> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${subTaskData.taskId}/subtasks`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(subTaskData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create subtask');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async createSubTask(payload: Partial<SubTask>) {
+    return postToLambda('createSubTask', { operation: 'createSubTask', payload });
   }
-
-  async getSubTasksByTask(taskId: string, userId: string): Promise<SubTask[]> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}/subtasks?userId=${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to get subtasks');
-    }
-
-    const result = await response.json();
-    return result.result.subTasks;
+  async getSubTasksByTask(taskId: string, userId: string) {
+    return postToLambda('getSubTasksByTask', { operation: 'getSubTasksByTask', payload: { taskId, userId } });
   }
-
-  // Follow/Unfollow
-  async followTask(taskId: string, userId: string): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}/follow`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ userId }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to follow task');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async followTask(taskId: string, userId: string) {
+    return postToLambda('followTask', { operation: 'followTask', payload: { taskId, userId } });
   }
-
-  async unfollowTask(taskId: string, userId: string): Promise<Task> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}/follow`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ userId }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to unfollow task');
-    }
-
-    const result = await response.json();
-    return result.result;
+  async unfollowTask(taskId: string, userId: string) {
+    return postToLambda('unfollowTask', { operation: 'unfollowTask', payload: { taskId, userId } });
   }
-
-  // SLA
-  async createSLAPolicy(slaData: Partial<SLAPolicy>): Promise<SLAPolicy> {
-    const response = await fetch(`${this.baseUrl}/api/v1/sla/policies`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(slaData),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to create SLA policy');
-    }
-
-    const result = await response.json();
-    return result.result;
-  }
-
-  async startSLATimer(taskId: string, slaId: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/api/v1/sla/timers/start`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ taskId, slaId }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to start SLA timer');
-    }
-
-    const result = await response.json();
-    return result.result;
-  }
-
-  async checkSLACompliance(taskId: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/api/v1/sla/timers/check`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ taskId }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to check SLA compliance');
-    }
-
-    const result = await response.json();
-    return result.result;
-  }
-
-  async pauseSLATimer(taskId: string, reason?: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/api/v1/sla/timers/pause`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ taskId, reason }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to pause SLA timer');
-    }
-
-    const result = await response.json();
-    return result.result;
-  }
-
-  async resumeSLATimer(taskId: string): Promise<any> {
-    const response = await fetch(`${this.baseUrl}/api/v1/sla/timers/resume`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ taskId }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to resume SLA timer');
-    }
-
-    const result = await response.json();
-    return result.result;
-  }
-
-  // Delete Task
-  async deleteTask(taskId: string, userId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/api/v1/tasks/${taskId}?userId=${userId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-    if (!response.ok) {
-      throw new Error('Failed to delete task');
-    }
+  async deleteTask(taskId: string, userId: string) {
+    return postToLambda('deleteTask', { operation: 'deleteTask', payload: { taskId, userId } });
   }
 }
 

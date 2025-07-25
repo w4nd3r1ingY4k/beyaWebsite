@@ -7,6 +7,7 @@ import SignUp from "@/webapp/components/Signup";
 import Confirm from "@/webapp/components/Confirm";
 import SettingsPage from "@/webapp/components/Settings";
 import WebAppHome from "./webapp";
+import TicketsHome from "@/webapp/communication/tickets/TicketsHome";
 export default function App() {
   return (
     <Routes>
@@ -20,6 +21,9 @@ export default function App() {
       {/* Protected webapp */}
       <Route path="/webapp" element={<WebAppHome />} />
       <Route path="/settings" element={<SettingsPage />} />
+      <Route path="/tickets" element={<TicketsHome />} />
+      <Route path="/tickets/board/:boardId" element={<TicketsHome />} />
+      <Route path="/tickets/board/:boardId/ticket/:ticketId" element={<TicketsHome />} />
 
       {/* Catch‐all */}
       <Route path="*" element={<Navigate to="/" replace />} />
