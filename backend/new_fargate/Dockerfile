@@ -1,7 +1,7 @@
 # Beya AI Service Dockerfile
 FROM node:18-alpine
 
-# Install curl for health checks
+# Install curl for debugging (health checks managed by ECS)
 RUN apk add --no-cache curl
 
 # Set working directory
@@ -23,9 +23,8 @@ ENV PORT=2075
 # Expose port
 EXPOSE 2075
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:2075/health || exit 1
+# Health checks are managed by ECS task definition
+# Removed Docker HEALTHCHECK to avoid conflicts with ECS health checks
 
 # Start the application
 CMD ["node", "index.js"] 

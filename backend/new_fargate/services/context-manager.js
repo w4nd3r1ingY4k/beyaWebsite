@@ -137,7 +137,9 @@ class ContextManager {
         sender: this.extractSender(email),
         timeAgo: this.getTimeAgo(email.Timestamp || email.timestamp),
         userInteraction: "discussed in conversation",
-        addedAt: new Date().toISOString()
+        addedAt: new Date().toISOString(),
+        Body: email.Body || '',  // Store full email content for follow-up queries
+        HtmlBody: email.HtmlBody || ''
       });
     }
 
@@ -249,9 +251,19 @@ class ContextManager {
     }
 
     if (context.context.recentEmails.length > 0) {
-      const emailList = context.context.recentEmails.slice(-5).map(email => 
-        `• "${email.subject}" from ${email.sender} (${email.timeAgo})`
-      ).join('\n');
+      const emailList = context.context.recentEmails.slice(-3).map(email => {
+        let emailInfo = `• "${email.subject}" from ${email.sender} (${email.timeAgo})`;
+        
+        // Include full email content if available (for recent queries)
+        if (email.Body && email.userInteraction === "discussed in conversation") {
+          const bodyPreview = email.Body.length > 500 
+            ? email.Body.substring(0, 500) + "..." 
+            : email.Body;
+          emailInfo += `\n  Content: ${bodyPreview}`;
+        }
+        
+        return emailInfo;
+      }).join('\n\n');
       sections.push(`**Recently Discussed Emails:**\n${emailList}`);
     }
 

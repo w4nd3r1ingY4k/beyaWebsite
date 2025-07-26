@@ -2,12 +2,11 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { v4 as uuidv4 } from 'uuid';
-import dotenv from 'dotenv';
-dotenv.config();
 
-const REGION = process.env.AWS_REGION;
-const MSG_TABLE = process.env.AWS_MSG_TABLE;
-const EVENT_BUS_NAME = process.env.EVENT_BUS_NAME;
+// Hardcoded environment variables
+const REGION = 'us-east-1';
+const MSG_TABLE = 'Messages';
+const EVENT_BUS_NAME = 'beya-platform-bus';
 
 const ddbClient = new DynamoDBClient({ region: REGION });
 const docClient = DynamoDBDocumentClient.from(ddbClient, { marshallOptions: { removeUndefinedValues: true } });

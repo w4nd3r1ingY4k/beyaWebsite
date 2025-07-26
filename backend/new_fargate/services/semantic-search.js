@@ -1,10 +1,19 @@
 import { Pinecone } from '@pinecone-database/pinecone';
 import OpenAI from 'openai';
 
+// Import modular email search functions
+import { executeEmailSearchFunctions } from './functions/index.js';
+import { 
+  shouldFetchThreadContext, 
+  fetchMultipleThreads, 
+  buildThreadContext 
+} from './functions/fetch-thread-context.js';
+
 // Initialize clients (will use environment variables from main app)
 let pineconeClient = null;
 let openaiClient = null;
 let pineconeIndex = null;
+let docClient = null;
 
 /**
  * Initialize the semantic search clients
@@ -21,6 +30,79 @@ function initializeClients() {
     openaiClient = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
+  }
+  
+  // DynamoDB client will be initialized when needed in fetchEmailContent function
+}
+
+/**
+ * Fetch full email content from database using threadId/messageId
+ * @param {Array} searchResults - Results from Pinecone with threadId/messageId
+ * @returns {Array} - Search results enriched with full email content
+ */
+async function fetchEmailContent(searchResults) {
+  try {
+    if (!docClient) {
+      const { DynamoDBDocumentClient } = await import('@aws-sdk/lib-dynamodb');
+      const { DynamoDBClient } = await import('@aws-sdk/client-dynamodb');
+      
+      const ddbClient = new DynamoDBClient({ region: 'us-east-1' });
+      docClient = DynamoDBDocumentClient.from(ddbClient, {
+        marshallOptions: { removeUndefinedValues: true }
+      });
+    }
+
+    // Extract unique event IDs to fetch
+    const eventIds = [...new Set(searchResults.map(r => r.eventId).filter(Boolean))];
+    
+    if (eventIds.length === 0) {
+      console.warn('No event IDs to fetch from database');
+      return searchResults.map(r => ({ ...r, fullContent: null }));
+    }
+
+    console.log(`📊 Fetching full content for ${eventIds.length} emails from database`);
+
+    // Batch get emails from database
+    const { BatchGetCommand } = await import('@aws-sdk/lib-dynamodb');
+    
+    const batchRequest = {
+      RequestItems: {
+        [process.env.MSG_TABLE || 'Messages']: {
+          Keys: eventIds.map(id => ({ EventId: id }))
+        }
+      }
+    };
+
+    const result = await docClient.send(new BatchGetCommand(batchRequest));
+    const emails = result.Responses?.[process.env.MSG_TABLE || 'Messages'] || [];
+    
+    console.log(`📧 Retrieved ${emails.length} full emails from database`);
+
+    // Merge search results with full email content
+    return searchResults.map(searchResult => {
+      const fullEmail = emails.find(email => 
+        email.EventId === searchResult.eventId ||
+        email.MessageId === searchResult.messageId
+      );
+      
+      return {
+        ...searchResult,
+        fullContent: fullEmail ? {
+          bodyText: fullEmail.Body || fullEmail.bodyText || '',
+          htmlBody: fullEmail.BodyHtml || fullEmail.bodyHtml || '',
+          subject: fullEmail.Subject || searchResult.subject,
+          from: fullEmail.From || fullEmail.from,
+          to: fullEmail.To || fullEmail.to,
+          timestamp: fullEmail.Timestamp || searchResult.timestamp,
+          headers: fullEmail.Headers || {},
+        } : null
+      };
+    });
+
+  } catch (error) {
+    console.error('❌ Database fetch failed:', error);
+    // Return original results without full content
+    return searchResults.map(r => ({ ...r, fullContent: null }));
   }
 }
 
@@ -78,12 +160,14 @@ export async function semanticSearch(query, filters = {}, topK = 5, userId = nul
     // Step 3: Search Pinecone
     const searchResults = await pineconeIndex.query(searchRequest);
     
-    // Step 4: Format results
+    // Step 4: Format results (no more chunk fields, content will be fetched from DB)
     const formattedResults = searchResults.matches.map(match => ({
       id: match.id,
       score: match.score,
       threadId: match.metadata.threadId,
       eventId: match.metadata.eventId,
+      messageId: match.metadata.messageId,
+      userId: match.metadata.userId, // ✅ Include userId from Pinecone metadata
       eventType: match.metadata.eventType,
       timestamp: match.metadata.timestamp,
       sentiment: match.metadata.sentiment,
@@ -92,16 +176,11 @@ export async function semanticSearch(query, filters = {}, topK = 5, userId = nul
       sentimentNegative: match.metadata.sentimentNegative,
       sentimentNeutral: match.metadata.sentimentNeutral,
       sentimentMixed: match.metadata.sentimentMixed,
-      chunkIndex: match.metadata.chunkIndex,
-      chunkCount: match.metadata.chunkCount,
-      // Add the actual content fields
-      content: match.metadata.content || match.metadata.chunkableContent || match.metadata.naturalLanguageDescription,
-      originalText: match.metadata.originalText || match.metadata.bodyText,
+      // Email metadata (lightweight)
       subject: match.metadata.subject,
-      messageId: match.metadata.messageId,
-      // Add sender/recipient information
       emailDirection: match.metadata.emailDirection,
       emailParticipant: match.metadata.emailParticipant,
+      // Note: content will be fetched from database using threadId/messageId
     }));
     
     console.log(`📊 Found ${formattedResults.length} relevant results`);
@@ -159,52 +238,9 @@ function analyzeUserIntent(userQuery) {
  * @param {string} userQuery - The user's question
  */
 async function shouldUseEmailContext(userQuery) {
-  try {
-    initializeClients();
-    
-    // First check if this is a personal email query - these always need email context
-    const emailIntent = analyzeEmailDirectionIntent(userQuery);
-    if (emailIntent.isPersonalEmailQuery) {
-      console.log(`✅ Personal email query detected, using email context`);
-      return true;
-    }
-    
-    const prompt = `Analyze this user query and determine if it would benefit from searching email/business context.
-
-    User Query: "${userQuery}"
-
-    Consider:
-    - Does this mention "emails", "messages", "sent", "received", "inbox", or email-related terms?
-    - Is this asking about business information, customers, or work-related topics?
-    - Would searching email history help answer this question?
-    - Or is this just casual conversation that doesn't need business context?
-
-    IMPORTANT: If the query mentions emails in ANY way (even with profanity), respond "YES".
-
-    Examples:
-    - "show me my emails" → YES
-    - "show me my fucking emails" → YES  
-    - "what emails did I get today" → YES
-    - "hello how are you" → NO
-    - "what's the weather" → NO
-
-    Respond with only "YES" if it needs email context, or "NO" if it's casual/doesn't need business data.`;
-
-    const response = await openaiClient.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 10,
-      temperature: 0.1,
-    });
-
-    const decision = response.choices[0].message.content.trim().toUpperCase();
-    return decision === 'YES';
-    
-  } catch (error) {
-    console.error('❌ Context decision failed, defaulting to search:', error);
-    // If LLM call fails, default to searching (better to over-search than miss relevant context)
-    return true;
-  }
+  // Always use email context - user wants all queries to search emails
+  console.log(`✅ Always using email context for all queries`);
+  return true;
 }
 
 /**
@@ -212,8 +248,22 @@ async function shouldUseEmailContext(userQuery) {
  * @param {Array} searchResults - Raw search results from Pinecone
  * @param {number} minScore - Minimum relevance score (default 0.7)
  */
-function filterByRelevance(searchResults, minScore = 0.7) {
-  return searchResults.filter(result => result.score >= minScore);
+function filterByRelevance(searchResults, minScore = 0.7, query = '') {
+  // Check if query contains email address - use lower threshold for exact matches
+  const hasEmailAddress = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/.test(query);
+  const effectiveThreshold = hasEmailAddress ? Math.min(minScore, 0.35) : minScore;
+  
+  const filtered = searchResults.filter(result => result.score >= effectiveThreshold);
+  
+  console.log(`📊 Relevance filtering: {
+    originalResults: ${searchResults.length},
+    relevantResults: ${filtered.length},
+    threshold: ${effectiveThreshold}${hasEmailAddress ? ' (lowered for email query)' : ''},
+    scores: [${searchResults.map(r => r.score || 0).slice(0, 5).join(', ')}],
+    emailQuery: ${hasEmailAddress}
+  }`);
+  
+  return filtered;
 }
 
 /**
@@ -267,7 +317,7 @@ function analyzeEmailDirectionIntent(userQuery) {
  * @param {Array} searchResults - Results from semantic search
  * @param {string} responseType - Type of response (summary, analysis, coaching, etc.)
  */
-export async function generateContextualResponse(userQuery, searchResults, responseType = 'summary', conversationHistory = []) {
+export async function generateContextualResponse(userQuery, searchResults, responseType = 'summary', conversationHistory = [], contextManagerContent = '') {
   try {
     initializeClients();
     
@@ -279,11 +329,11 @@ export async function generateContextualResponse(userQuery, searchResults, respo
     });
     
     // Filter results by relevance score (only keep high-relevance matches)
-    const relevantResults = filterByRelevance(searchResults, 0.08);
+    const relevantResults = filterByRelevance(searchResults, 0.48, userQuery);
     console.log(`📊 Relevance filtering:`, {
       originalResults: searchResults?.length || 0,
       relevantResults: relevantResults.length,
-      threshold: 0.08,
+      threshold: 0.48,
       scores: searchResults?.map(r => r.score) || []
     });
     
@@ -299,8 +349,50 @@ export async function generateContextualResponse(userQuery, searchResults, respo
         reason: !useEmailContext ? 'Query doesn\'t require email context' : 'No relevant results after filtering'
       });
       
-      // If we have conversation history, use it instead of going contextless
-      if (hasConversationHistory) {
+      // Prioritize context manager content (with stored emails) over conversation history
+      if (contextManagerContent && contextManagerContent.length > 0) {
+        console.log(`✅ Using context manager content with stored email context (${contextManagerContent.length} characters)`);
+        
+        let systemPrompt = `You are B, a personal assistant!
+
+        I've found relevant information from our previous conversation and the emails we discussed. Here's what I have:
+
+        **Context from Previous Queries:**
+        ${contextManagerContent}
+
+        **Guidelines:**
+        - Answer directly using the information above
+        - Reference specific details from the emails when relevant  
+        - Be conversational and helpful
+        - If the answer is in the context, provide it confidently
+        - Format nicely with **bold** and *italics* where appropriate`;
+        
+        let userPrompt = `Based on the context above, please answer: ${userQuery}`;
+        
+        const completion = await openaiClient.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 300,
+          temperature: 0.7,
+        });
+
+        const aiResponse = completion.choices[0].message.content;
+        
+        return {
+          userQuery,
+          aiResponse,
+          contextUsed: [],
+          responseType: 'context_manager',
+          contextSource: 'stored_emails',
+          contextLength: contextManagerContent.length
+        };
+      }
+      
+      // Fallback to conversation history if no context manager content
+      else if (hasConversationHistory) {
         console.log(`✅ Using conversation history context with ${conversationHistory.length} messages`);
         
         // Build conversation context
@@ -308,17 +400,21 @@ export async function generateContextualResponse(userQuery, searchResults, respo
           .map(msg => `${msg.role.toUpperCase()}: ${msg.content}`)
           .join('\n');
         
-        let systemPrompt = `You are B, a helpful and friendly assistant. The user is asking a follow-up question about something that was previously discussed in our conversation.
+        let systemPrompt = `You are B, a personal assistant!
 
-Your job is to:
-1. **Review the recent conversation** to understand what was discussed
-2. **Answer the user's follow-up question** directly and helpfully
-3. **Provide useful information** based on what was mentioned before
-4. **Be conversational and natural** - like you're chatting with a friend
+        Here's what I'll do:
+        **Review our conversation** to remember what we discussed
+        **Answer your question** with all the context from our chat
+        **Be specific and helpful** - no generic responses here!
+        **Keep it natural** - we're just having a conversation!
 
-IMPORTANT: You can discuss and provide details about anything that was mentioned in our previous conversation. If emails were discussed (like events, offers, or content), you can absolutely help explain those details or answer questions about them.
+        I remember everything we talked about, so feel free to reference emails, details, or anything else we discussed. I'm here to help you get exactly what you need!
 
-Be helpful, friendly, and informative. The user is asking about something we were just talking about, so use that context to give a great answer.`;
+        **Please format your response nicely:**
+        - Use **bold** for important details
+        - Use *italics* for emphasis or dates
+        - Use bullet points when listing things
+        - Keep it conversational but well-formatted!`;
         
         let userPrompt = `RECENT CONVERSATION:
           ${conversationContext}
@@ -331,7 +427,7 @@ Be helpful, friendly, and informative. The user is asking about something we wer
         
         console.log(`🤖 Generating conversation-aware response for: ${userQuery}`);
         const completion = await openaiClient.chat.completions.create({
-          model: 'gpt-4',
+          model: 'gpt-4o',
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt }
@@ -362,7 +458,13 @@ Be helpful, friendly, and informative. The user is asking about something we wer
         detectedIntent = analyzeUserIntent(userQuery);
       }
       
-      let systemPrompt = `You are B, a helpful business assistant. Respond naturally and helpfully to the user's query without forcing business context when it's not needed.`;
+      let systemPrompt = `You are B, a helpful business assistant. Respond in a friendly and personable manner to the user's request without forcing business context when it's not needed.
+
+**Format your responses nicely:**
+- Use **bold** for key points or important info
+- Use *italics* for emphasis
+- Use bullet points for lists when helpful
+- Keep it friendly and conversational!`;
       let userPrompt = `USER QUERY: ${userQuery}
 
 Respond naturally and appropriately to the user's query. If it's a casual greeting, respond warmly. If it's a business question but you don't have specific context, offer to help and suggest what kinds of information you can provide.
@@ -370,7 +472,7 @@ Respond naturally and appropriately to the user's query. If it's a casual greeti
 RESPONSE:`;
       
       const completion = await openaiClient.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -424,6 +526,10 @@ ${result.sentimentPositive ? `Positive: ${(result.sentimentPositive * 100).toFix
 ---`;
     }).join('\n');
     
+    // DEBUG: Log what context is being sent to AI
+    console.log(`🔍 DEBUG: Context chunks being sent to AI:`);
+    console.log(contextChunks.substring(0, 500) + '...');
+    
     // Analyze user intent dynamically if responseType is 'auto' or 'summary'
     let detectedIntent = responseType;
     if (responseType === 'auto' || responseType === 'summary') {
@@ -433,7 +539,11 @@ ${result.sentimentPositive ? `Positive: ${(result.sentimentPositive * 100).toFix
     // Define prompt templates to avoid DRY violations
     const promptTemplates = {
       draft: {
-        system: `You are B, a friendly customer service writing assistant. Help craft warm, empathetic responses based on conversation context. Keep responses CONCISE (2-3 sentences max).`,
+        system: `You are B, a friendly customer service writing assistant. Help craft warm, empathetic responses based on conversation context. Keep responses CONCISE (2-3 sentences max).
+
+**Format with markdown:**
+- Use **bold** for important points  
+- Use *italics* for emphasis`,
         user: `CONVERSATION CONTEXT:
 ${contextChunks}
 
@@ -451,7 +561,12 @@ SUGGESTED RESPONSE:`
       },
       
       analysis: {
-        system: `You are B, a friendly business insights analyst. Analyze conversation patterns and provide helpful insights in a conversational way. Keep responses CONCISE (2-3 sentences max).`,
+        system: `You are B, a friendly business insights analyst. Analyze conversation patterns and provide helpful insights in a conversational way. Keep responses CONCISE (2-3 sentences max).
+
+**Format with markdown:**
+- Use **bold** for key insights
+- Use *italics* for metrics/numbers  
+- Use bullet points for lists`,
         user: `CONVERSATION CONTEXT:
 ${contextChunks}
 
@@ -471,7 +586,11 @@ ANALYSIS:`
       },
       
       coaching: {
-        system: `You are B, a supportive business coach. Provide encouraging advice based on email patterns in a warm, helpful way. Keep responses CONCISE (2-3 sentences max).`,
+        system: `You are B, a supportive business coach. Provide encouraging advice based on email patterns in a warm, helpful way. Keep responses CONCISE (2-3 sentences max).
+
+**Format with markdown:**
+- Use **bold** for key advice
+- Use *italics* for encouragement`,
         user: `EMAIL CONTEXT:
 ${contextChunks}
 
@@ -495,7 +614,14 @@ IMPORTANT:
   - "email.sent" eventType = emails YOU sent
   - "email.received" eventType = emails sent TO you
 
-When users ask about "my emails", be clear about whether they're asking about emails they sent or received. Don't confuse who sent what. Be accurate about email direction.`,
+When users ask about "my emails", be clear about whether they're asking about emails they sent or received. Don't confuse who sent what. Be accurate about email direction.
+
+**Format your responses with markdown:**
+- Use **bold** for sender names, subjects, key findings
+- Use *italics* for dates, times, emphasis
+- Use bullet points for lists:
+  - Like this for multiple items
+  - Make it easy to scan`,
         user: `EMAIL CONTEXT:
 ${contextChunks}
 
@@ -521,9 +647,74 @@ RESPONSE:`
     const systemPrompt = template.system;
     const userPrompt = template.user;
     
+        // Check if we should fetch thread context automatically  
+    const contextCheck = shouldFetchThreadContext(topResults);
+    
+    if (contextCheck.shouldFetch) {
+      console.log(`🔍 Auto-fetching thread context: ${contextCheck.reason}`);
+      
+      // Fetch thread contexts
+      const threadData = await fetchMultipleThreads(contextCheck.threadData, 5);
+      
+      // Check if we actually got thread data
+      const hasThreadData = threadData.threads.some(thread => thread.messageCount > 0);
+      
+      if (!hasThreadData) {
+        console.log(`⚠️ No thread context found - continuing without thread enhancement`);
+        // Continue with regular response without thread context
+      } else {
+        // Build enriched context
+        let enrichedContext = contextChunks + '\n\n--- FULL THREAD CONTEXT ---\n\n';
+        
+        threadData.threads.forEach((thread, index) => {
+          enrichedContext += buildThreadContext(thread);
+          if (index < threadData.threads.length - 1) {
+            enrichedContext += '\n\n=== NEXT THREAD ===\n\n';
+          }
+        });
+        
+        // Update user prompt with enriched context
+        const enrichedUserPrompt = userPrompt.replace(contextChunks, enrichedContext);
+        
+        console.log(`🤖 Generating AI response with intent: ${detectedIntent}, ${topResults.length} relevant context items, and ${threadData.totalMessages} thread messages...`);
+        
+        const completion = await openaiClient.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: enrichedUserPrompt }
+          ],
+          max_tokens: 300, // Increased for thread context
+          temperature: 0.7,
+        });
+
+        const aiResponse = completion.choices[0].message.content;
+        console.log('✅ AI Response generated with thread context');
+
+        return {
+          userQuery,
+          aiResponse,
+          contextUsed: topResults,
+          threadContext: threadData,
+          responseType: `${detectedIntent}_with_threads`,
+          detectedIntent,
+          totalContextResults: searchResults.length,
+          relevantContextResults: relevantResults.length,
+          contextFiltered: false,
+          thinkingMessage: {
+            userQuery,
+            aiResponse: "Let me take a deeper look... 🔍",
+            isThinking: true,
+            subtext: `Analyzing full context for ${contextCheck.threadData.length} email threads...`,
+            responseType: 'thinking'
+          }
+        };
+      }
+    }
+    
     console.log(`🤖 Generating AI response with intent: ${detectedIntent} and ${topResults.length} relevant context items...`);
     const completion = await openaiClient.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -531,10 +722,10 @@ RESPONSE:`
       max_tokens: 150, // Reduced from 500 to enforce shorter responses
       temperature: 0.7,
     });
-    
+
     const aiResponse = completion.choices[0].message.content;
     console.log('✅ AI Response generated');
-    
+
     return {
       userQuery,
       aiResponse,
@@ -552,8 +743,14 @@ RESPONSE:`
   }
 }
 
+
+
+
+
+
+
 /**
- * Complete semantic search + AI response pipeline
+ * Complete semantic search + AI response pipeline with function calling
  * @param {string} userQuery - The user's question
  * @param {Object} options - Search and response options
  */
@@ -564,30 +761,93 @@ export async function queryWithAI(userQuery, options = {}) {
       topK = 5,
       userId = null,
       responseType = 'summary',
-      conversationHistory = []
+      conversationHistory = [],
+      contextManagerContent = ''
     } = options;
     
-    console.log('🚀 Starting AI pipeline with intent classification...');
+    initializeClients();
+    console.log('🚀 Starting AI pipeline...');
     
-    // STEP 1: Fast intent classification (no AI needed)
-    const intentResult = classifyUserIntent(userQuery, userId);
-    console.log(`🎯 Intent classification:`, intentResult);
-    
-    // STEP 2: Handle simple database queries first (avoid expensive operations)
-    if (intentResult.canUseDatabase) {
-      console.log(`📊 Using fast database query instead of semantic search`);
-      return await handleDatabaseQuery(userQuery, intentResult, userId, conversationHistory);
+    // Step 1: Check context manager first for stored email content
+    if (contextManagerContent && contextManagerContent.length > 50) {
+      console.log(`🧠 Checking if query can be answered from stored context (${contextManagerContent.length} characters)...`);
+      
+      // Use a simple heuristic: if query refers to previous context, use stored content
+      const contextualKeywords = ['that', 'this', 'the email', 'those', 'from the email', 'what', 'how much', 'details'];
+      const hasContextualReference = contextualKeywords.some(keyword => 
+        userQuery.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      if (hasContextualReference) {
+        console.log('✅ Query appears to reference previous context - using stored email content');
+        
+        let systemPrompt = `You are B, a personal assistant!
+
+        The user is asking a follow-up question about information from our previous conversation. I have the relevant email content and context available:
+
+        **Previous Context:**
+        ${contextManagerContent}
+
+        **Guidelines:**
+        - Answer directly using the information above
+        - Extract specific details from the email content when asked
+        - Be conversational and helpful
+        - If you find the answer in the context, provide it confidently
+        - Format nicely with **bold** and *italics* where appropriate`;
+        
+        let userPrompt = `Based on the context above, please answer: ${userQuery}`;
+        
+        const completion = await openaiClient.chat.completions.create({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt }
+          ],
+          max_tokens: 400,
+          temperature: 0.7,
+        });
+
+        const aiResponse = completion.choices[0].message.content;
+        
+        return {
+          userQuery,
+          aiResponse,
+          contextUsed: [],
+          responseType: 'context_manager_priority',
+          contextSource: 'stored_emails',
+          contextLength: contextManagerContent.length,
+          method: 'context_manager_first'
+        };
+      } else {
+        console.log('🔍 Query doesn\'t appear to reference previous context - proceeding with fresh search');
+      }
     }
     
-    // STEP 3: Only do expensive semantic search for complex queries
-    console.log('🔍 Complex query detected, using semantic search + AI pipeline...');
+    // Step 2: Use AI function calling to determine search strategy
+    console.log('🚀 Using function calling for fresh search...');
+    const functionCallResult = await executeEmailSearchFunctions(
+      userQuery, 
+      userId, 
+      conversationHistory,
+      { openaiClient },
+      semanticSearch
+    );
     
-    // Step 1: Semantic search
+    if (functionCallResult.success) {
+      console.log('✅ Function calling search completed');
+      return {
+        ...functionCallResult,
+        method: 'function_calling'
+      };
+    }
+    
+    // Step 3: Fallback to regular semantic search if function calling fails
+    console.log('🔄 Falling back to regular semantic search...');
+    
     const searchResults = await semanticSearch(userQuery, filters, topK, userId);
+    const aiResult = await generateContextualResponse(userQuery, searchResults.results, responseType, conversationHistory, contextManagerContent);
     
-    // Step 2: Generate AI response
-    const aiResult = await generateContextualResponse(userQuery, searchResults.results, responseType, conversationHistory);
-    
+    console.log('✅ Fallback search completed');
     return {
       ...aiResult,
       searchMetadata: {
@@ -595,12 +855,20 @@ export async function queryWithAI(userQuery, options = {}) {
         filters: searchResults.filters,
         topK,
       },
-      intentClassification: intentResult
+      method: 'fallback_semantic_search'
     };
     
   } catch (error) {
-    console.error('❌ Complete pipeline failed:', error);
-    throw error;
+    console.error('❌ AI pipeline failed:', error);
+    
+    return {
+      userQuery,
+      aiResponse: "I'm having trouble searching through your emails right now. Please try again in a moment.",
+      contextUsed: [],
+      responseType: 'error',
+      method: 'error_fallback',
+      error: error.message
+    };
   }
 }
 
@@ -1868,6 +2136,7 @@ export async function searchByThreadId(threadId, topK = 20) {
       score: match.score,
       threadId: match.metadata.threadId,
       eventId: match.metadata.eventId,
+      userId: match.metadata.userId, // ✅ Include userId from Pinecone metadata
       eventType: match.metadata.eventType,
       timestamp: match.metadata.timestamp,
       sentiment: match.metadata.sentiment,
@@ -1939,6 +2208,7 @@ export async function searchWithinThread(query, threadId, topK = 10) {
       score: match.score,
       threadId: match.metadata.threadId,
       eventId: match.metadata.eventId,
+      userId: match.metadata.userId, // ✅ Include userId from Pinecone metadata
       eventType: match.metadata.eventType,
       timestamp: match.metadata.timestamp,
       sentiment: match.metadata.sentiment,
